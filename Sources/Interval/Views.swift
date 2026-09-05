@@ -26,7 +26,9 @@ struct MainView: View {
           switch store.selection ?? .focus {
           case .focus:
             if let id = store.completionSessionID {
-              ReflectionView(store: store, sessionID: id).padding(24)
+              ReflectionView(store: store, sessionID: id)
+                .frame(maxWidth: 372).padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
               FocusView(store: store)
             }
@@ -57,8 +59,8 @@ struct MainView: View {
       }
     }
     .frame(
-      width: store.selection == .history ? 640 : 420,
-      height: 520
+      minWidth: store.selection == .history ? 640 : 420, maxWidth: .infinity,
+      minHeight: 520, maxHeight: .infinity
     )
     .tint(IntervalTheme.accent).preferredColorScheme(.dark)
     .safeAreaInset(edge: .bottom) {
@@ -76,38 +78,16 @@ struct FocusView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var confirmingAbandon = false
   var body: some View {
-    VStack(spacing: 0) {
-      ScrollView {
-        VStack(spacing: 12) {
-          VStack(spacing: 4) {
-            Text(store.timer.kind.title).font(.callout).foregroundStyle(.secondary)
-            Text(durationString(store.remaining)).font(
-              .system(
-                size: 68, weight: .light, design: .rounded)
-            )
-            .monospacedDigit().contentTransition(reduceMotion ? .identity : .numericText())
-            .accessibilityLabel(timerAccessibilityLabel)
-            if store.timer.status == .paused {
-              Text("Paused").font(.caption).foregroundStyle(.secondary)
-            }
-          }
-          ProgressView(value: progress).progressViewStyle(.linear)
-            .tint(.white.opacity(0.55)).frame(width: 160)
-            .accessibilityLabel("Session progress")
-          HStack(spacing: 12) {
-            Button(action: store.startOrToggle) {
-              Label(primaryTitle, systemImage: primaryIcon)
-            }
-            .buttonStyle(IntervalPrimaryButton())
-          }
-          .overlay(alignment: .trailing) { cycleActions.offset(x: 38) }
-          messageStack.font(.caption)
-        }.padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 16)
-          .frame(maxWidth: .infinity)
+    GeometryReader { geometry in
+      let wide = geometry.size.width >= 720
+      let layout = wide ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
+      layout {
+        timerPane
+          .frame(width: wide ? 420 : nil, height: wide ? nil : 294)
+          .frame(maxHeight: wide ? .infinity : nil)
+        notesPane
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
-      .defaultScrollAnchor(.center, for: .alignment)
-      .frame(maxHeight: .infinity)
-      notesPane.frame(height: 180)
     }
     .alert("Abandon this interval?", isPresented: $confirmingAbandon) {
       Button("Keep Going", role: .cancel) {}
@@ -115,6 +95,37 @@ struct FocusView: View {
     } message: {
       Text("Elapsed active time will be kept in Stats.")
     }
+  }
+  private var timerPane: some View {
+    ScrollView {
+      VStack(spacing: 12) {
+        VStack(spacing: 4) {
+          Text(store.timer.kind.title).font(.callout).foregroundStyle(.secondary)
+          Text(durationString(store.remaining)).font(
+            .system(
+              size: 68, weight: .light, design: .rounded)
+          )
+          .monospacedDigit().contentTransition(reduceMotion ? .identity : .numericText())
+          .accessibilityLabel(timerAccessibilityLabel)
+          if store.timer.status == .paused {
+            Text("Paused").font(.caption).foregroundStyle(.secondary)
+          }
+        }
+        ProgressView(value: progress).progressViewStyle(.linear)
+          .tint(.white.opacity(0.55)).frame(width: 160)
+          .accessibilityLabel("Session progress")
+        HStack(spacing: 12) {
+          Button(action: store.startOrToggle) {
+            Label(primaryTitle, systemImage: primaryIcon)
+          }
+          .buttonStyle(IntervalPrimaryButton())
+        }
+        .overlay(alignment: .trailing) { cycleActions.offset(x: 38) }
+        messageStack.font(.caption)
+      }.padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 16)
+        .frame(maxWidth: .infinity)
+    }
+    .defaultScrollAnchor(.center, for: .alignment)
   }
   @ViewBuilder private var cycleActions: some View {
     if store.timer.status == .running || store.timer.status == .paused {

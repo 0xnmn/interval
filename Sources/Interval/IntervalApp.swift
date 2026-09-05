@@ -55,7 +55,7 @@ struct IntervalApp: App {
     Window("Interval", id: "main") { MainView(store: store) }
       .defaultSize(width: 420, height: 520)
       .windowStyle(.hiddenTitleBar)
-      .windowResizability(.contentSize)
+      .windowResizability(.contentMinSize)
     MenuBarExtra {
       MenuBarView(store: store)
     } label: {

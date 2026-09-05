@@ -165,6 +165,18 @@ struct SnapshotRequest {
       store.selection = .focus
       size = NSSize(width: 420, height: 520)
       view = AnyView(MainView(store: store))
+    case "focus-wide":
+      store.selection = .focus
+      size = NSSize(width: 800, height: 520)
+      view = AnyView(MainView(store: store))
+    case "focus-expanded":
+      store.selection = .focus
+      size = NSSize(width: 1_100, height: 700)
+      view = AnyView(MainView(store: store))
+    case "focus-tall":
+      store.selection = .focus
+      size = NSSize(width: 420, height: 800)
+      view = AnyView(MainView(store: store))
     default:
       store.selection = .focus
       size = NSSize(width: 420, height: 520)
