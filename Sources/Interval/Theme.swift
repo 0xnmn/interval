@@ -3,8 +3,8 @@ import SwiftUI
 
 enum IntervalTheme {
   static let accent = Color(red: 0.65, green: 0.88, blue: 0.76)
-  static let surface = Color(red: 0.115, green: 0.12, blue: 0.13)
-  static let border = Color.white.opacity(0.10)
+  static let surface = Color(red: 0.065, green: 0.068, blue: 0.075)
+  static let border = Color.white.opacity(0.07)
 }
 
 struct GlassBackground: View {
@@ -12,7 +12,7 @@ struct GlassBackground: View {
   var body: some View {
     ZStack {
       NativeGlass(reduceTransparency: reduceTransparency)
-      IntervalTheme.surface.opacity(reduceTransparency ? 1 : 0.72)
+      IntervalTheme.surface.opacity(reduceTransparency ? 1 : 0.86)
     }.ignoresSafeArea()
   }
 }
@@ -44,16 +44,12 @@ struct IntervalPrimaryButton: ButtonStyle {
     configuration.label
       .font(.callout.weight(.semibold))
       .foregroundStyle(Color.black.opacity(isEnabled ? 0.9 : 0.45))
-      .padding(.horizontal, 16).padding(.vertical, 9)
-      .background(IntervalTheme.accent.opacity(configuration.isPressed ? 0.75 : 1), in: Capsule())
+      .padding(.horizontal, 14).padding(.vertical, 7)
+      .background(
+        IntervalTheme.accent.opacity(configuration.isPressed ? 0.75 : 1),
+        in: RoundedRectangle(cornerRadius: 8)
+      )
       .opacity(isEnabled ? 1 : 0.5)
-      .contentShape(Capsule())
-  }
-}
-
-extension View {
-  func intervalPanel() -> some View {
-    self.background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 14))
-      .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(IntervalTheme.border))
+      .contentShape(RoundedRectangle(cornerRadius: 8))
   }
 }

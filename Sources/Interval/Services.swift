@@ -25,7 +25,7 @@ import UserNotifications
     let content = UNMutableNotificationContent()
     content.title = "\(timer.kind.title) complete"
     content.body =
-      timer.kind == .focus ? "Your work is saved. Take a break when ready." : "Ready to focus?"
+      timer.kind == .focus ? "Time for a break." : "Time to focus."
     content.sound = .default
     center.add(
       UNNotificationRequest(

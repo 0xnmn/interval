@@ -17,15 +17,11 @@ struct RemindersView: View {
     HStack(spacing: 0) {
       VStack(spacing: 0) {
         HStack {
-          VStack(alignment: .leading, spacing: 3) {
-            Text("REMINDERS").font(.caption2.weight(.semibold)).tracking(1.4)
-              .foregroundStyle(IntervalTheme.accent)
-            Text("Your thoughtful interruptions").font(.headline)
-          }
+          Text("Reminders").font(.headline)
           Spacer()
-          addMenu(compact: true)
+          addMenu
         }
-        .padding(16)
+        .padding(14)
 
         if store.data.reminders.isEmpty {
           emptyTemplates
@@ -40,20 +36,19 @@ struct RemindersView: View {
           }
         }
 
-        Divider().overlay(Color.white.opacity(0.06))
-        HStack {
-          addMenu(compact: false)
-          Spacer()
-          if let selection,
-            let reminder = store.data.reminders.first(where: { $0.id == selection })
-          {
+        if let selection,
+          let reminder = store.data.reminders.first(where: { $0.id == selection })
+        {
+          Divider().overlay(Color.white.opacity(0.06))
+          HStack {
+            Spacer()
             Button("Delete", role: .destructive) { deleting = reminder }
               .buttonStyle(.plain).foregroundStyle(.red.opacity(0.85))
           }
+          .padding(12)
         }
-        .padding(12)
       }
-      .frame(width: 300)
+      .frame(width: 280)
       .frame(maxHeight: .infinity, alignment: .top)
       .background(GlassBackground())
       Rectangle().fill(IntervalTheme.border).frame(width: 1)
@@ -64,9 +59,9 @@ struct RemindersView: View {
       } else if store.data.reminders.isEmpty {
         emptyDetail
       } else {
-        ContentUnavailableView(
-          "Choose a reminder", systemImage: "bell.badge",
-          description: Text("Select one to shape when and how it appears."))
+        Text("Select a reminder")
+          .font(.callout).foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
     }
     .navigationTitle("Reminders")
@@ -129,12 +124,9 @@ struct RemindersView: View {
       selection == reminder.id ? IntervalTheme.accent.opacity(0.11) : Color.white.opacity(0.025),
       in: RoundedRectangle(cornerRadius: 11)
     )
-    .overlay(
-      RoundedRectangle(cornerRadius: 11).stroke(
-        selection == reminder.id ? IntervalTheme.accent.opacity(0.28) : IntervalTheme.border))
   }
 
-  private func addMenu(compact: Bool) -> some View {
+  private var addMenu: some View {
     Menu {
       Button("Blank Reminder") { selection = store.addReminder() }
       Divider()
@@ -144,56 +136,46 @@ struct RemindersView: View {
         }
       }
     } label: {
-      if compact {
-        Image(systemName: "plus").frame(width: 24, height: 24)
-      } else {
-        Label("Add reminder", systemImage: "plus")
-      }
+      Image(systemName: "plus").frame(width: 24, height: 24)
     }
     .menuStyle(.borderlessButton).fixedSize()
     .accessibilityLabel("Add reminder")
+    .help("Add reminder or template")
   }
 
   private var emptyTemplates: some View {
     VStack(alignment: .leading, spacing: 10) {
-      Text("START WITH AN INTENTION").font(.caption2.weight(.semibold)).tracking(1.1)
-        .foregroundStyle(.secondary)
+      Text("Templates").font(.caption).foregroundStyle(.secondary)
       ForEach(Reminder.templates(startingAt: store.now)) { template in
         Button {
           selection = store.addReminder(template: template)
         } label: {
           HStack(spacing: 10) {
             Text(template.emoji).font(.title3)
-            VStack(alignment: .leading, spacing: 2) {
-              Text(template.title).font(.subheadline.weight(.medium))
-              Text(template.message).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            }
+            Text(template.title).font(.subheadline.weight(.medium))
             Spacer()
-            Image(systemName: "arrow.up.right").font(.caption).foregroundStyle(.tertiary)
           }
           .padding(10).contentShape(Rectangle())
         }
-        .buttonStyle(.plain).intervalPanel()
+        .buttonStyle(.plain)
       }
     }
     .padding(14).frame(maxHeight: .infinity, alignment: .top)
   }
 
   private var emptyDetail: some View {
-    VStack(spacing: 12) {
-      Image(systemName: "bell.badge").font(.system(size: 30)).foregroundStyle(IntervalTheme.accent)
-      Text("Make space for what matters").font(.title2.weight(.semibold))
-      Text("Choose a gentle starting point on the left, or create a blank reminder.")
-        .foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 380)
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity).background(GlassBackground())
+    Text("Add or choose a template")
+      .font(.callout).foregroundStyle(.secondary)
+      .frame(maxWidth: .infinity, maxHeight: .infinity).background(GlassBackground())
   }
 
   private func status(_ reminder: Reminder) -> String {
     guard reminder.isEnabled else { return "Off" }
     guard let due = reminder.effectiveDueAt else { return "Not scheduled" }
-    return (reminder.snoozedUntil == nil ? "Next " : "Snoozed until ")
-      + due.formatted(date: .abbreviated, time: .shortened)
+    let time = due.formatted(date: .omitted, time: .shortened)
+    let day = Calendar.current.isDate(due, inSameDayAs: store.now)
+      ? "" : due.formatted(.dateTime.month(.abbreviated).day()) + " · "
+    return (reminder.snoozedUntil == nil ? "" : "Snoozed · ") + day + time
   }
 }
 
@@ -217,32 +199,24 @@ private struct ReminderEditor: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 18) {
+      VStack(alignment: .leading, spacing: 12) {
         HStack(alignment: .top) {
-          VStack(alignment: .leading, spacing: 3) {
-            Text("REMINDER DESIGN").font(.caption2.weight(.semibold)).tracking(1.4)
-              .foregroundStyle(IntervalTheme.accent)
-            Text(binding(\.title).wrappedValue).font(.title2.weight(.semibold)).lineLimit(1)
-          }
+          Text("Reminder").font(.headline)
           Spacer()
           Button("Preview") { store.previewReminder(reminder.id) }
             .buttonStyle(IntervalPrimaryButton())
         }
 
-        preview
-
-        editorSection("MESSAGE", systemImage: "text.alignleft") {
+        editorSection("Content") {
           TextField("Title", text: binding(\.title))
           TextField("Message", text: binding(\.message), axis: .vertical).lineLimit(2...5)
-          HStack {
-            Text("Emoji").foregroundStyle(.secondary)
-            Spacer()
+          LabeledContent("Emoji") {
             TextField("Emoji", text: binding(\.emoji)).frame(width: 90)
               .multilineTextAlignment(.trailing)
           }
         }
 
-        editorSection("TIMING & APPEARANCE", systemImage: "clock") {
+        editorSection("Schedule") {
           Stepper(
             "Every \(Int(binding(\.intervalSeconds).wrappedValue / 60)) minutes",
             value: binding(\.intervalSeconds), in: 60...86_400, step: 60)
@@ -253,7 +227,7 @@ private struct ReminderEditor: View {
         }
 
         DisclosureGroup(isExpanded: $advanced) {
-          VStack(spacing: 14) {
+          VStack(spacing: 10) {
             Divider()
             Stepper(
               "Display for \(Int(binding(\.displaySeconds).wrappedValue)) seconds",
@@ -264,48 +238,33 @@ private struct ReminderEditor: View {
               Text("\(Int(binding(\.emojiSize).wrappedValue)) pt").monospacedDigit().frame(
                 width: 48)
             }
-            Toggle("Suppress during focus or paused focus", isOn: binding(\.suppressDuringFocus))
+            Toggle("Hide during focus", isOn: binding(\.suppressDuringFocus))
+              .help("Includes paused focus")
             Toggle(
-              "Suppress during selected calendar events", isOn: binding(\.suppressDuringCalendar))
+              "Hide during calendar events", isOn: binding(\.suppressDuringCalendar)
+            )
+            .help("Uses selected calendars")
           }
           .padding(.top, 8)
         } label: {
-          Label("Advanced behavior", systemImage: "slider.horizontal.3")
+          Label("Options", systemImage: "slider.horizontal.3")
             .font(.subheadline.weight(.semibold))
         }
-        .padding(16).intervalPanel()
-
-        Text("Changes save automatically.").font(.caption).foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.vertical, 8)
       }
-      .padding(24).frame(maxWidth: 720)
+      .padding(20).frame(maxWidth: 720)
     }
     .frame(minWidth: 410).background(GlassBackground()).preferredColorScheme(.dark)
   }
 
-  private var preview: some View {
-    HStack(spacing: 16) {
-      Text(binding(\.emoji).wrappedValue).font(.system(size: 38)).frame(width: 58, height: 58)
-        .background(IntervalTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
-      VStack(alignment: .leading, spacing: 5) {
-        Text(binding(\.title).wrappedValue).font(.headline).lineLimit(1)
-        Text(binding(\.message).wrappedValue).font(.subheadline).foregroundStyle(.secondary)
-          .lineLimit(2)
-      }
-      Spacer()
-    }
-    .padding(18).intervalPanel()
-  }
-
   private func editorSection<Content: View>(
-    _ title: String, systemImage: String, @ViewBuilder content: () -> Content
+    _ title: String, @ViewBuilder content: () -> Content
   ) -> some View {
-    VStack(alignment: .leading, spacing: 14) {
-      Label(title, systemImage: systemImage).font(.caption.weight(.semibold)).tracking(0.8)
-        .foregroundStyle(.secondary)
+    VStack(alignment: .leading, spacing: 10) {
+      Text(title).font(.headline)
       content()
     }
-    .padding(16).intervalPanel()
+    .padding(.vertical, 6)
   }
 }
 
@@ -325,8 +284,8 @@ struct ReminderWarningView: View {
         Text(reminder.title).font(.subheadline.weight(.semibold)).lineLimit(1)
         Text(
           warning.paused
-            ? "Paused — \(warning.remaining)s idle time remaining"
-            : "Ready in \(warning.remaining)s of idle time"
+            ? "Paused · \(warning.remaining)s idle"
+            : "In \(warning.remaining)s"
         )
         .font(.caption).foregroundStyle(.secondary).lineLimit(2)
       }
@@ -338,6 +297,9 @@ struct ReminderWarningView: View {
     .overlay(RoundedRectangle(cornerRadius: 16).stroke(IntervalTheme.border))
     .preferredColorScheme(.dark)
     .accessibilityElement(children: .combine)
+    .accessibilityLabel(
+      "\(reminder.title). \(warning.paused ? "Paused, \(warning.remaining) seconds of idle time remaining" : "Ready in \(warning.remaining) seconds of idle time")"
+    )
   }
 }
 
@@ -375,13 +337,11 @@ struct ReminderTakeoverView: View {
         Spacer(minLength: 28)
 
         HStack(spacing: 22) {
-          Button("Remind me in 5 min", action: snooze).buttonStyle(.bordered)
+          Button("Snooze 5 min", action: snooze).buttonStyle(.bordered)
           Button("Dismiss", action: dismiss).buttonStyle(.bordered)
             .tint(IntervalTheme.accent).keyboardShortcut(.cancelAction)
         }
         .font(.subheadline.weight(.medium))
-        Text("Closes after \(Int(reminder.displaySeconds)) seconds. Escape dismisses it.")
-          .font(.caption2).foregroundStyle(.secondary).padding(.top, 12)
       }
       .padding(34)
     }

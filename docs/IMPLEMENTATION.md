@@ -59,6 +59,14 @@ Implementation separates semantic styling in `Theme.swift` from existing state/e
 
 An independent plan critique preceded implementation. Separate implementation agents owned reminder, settings, and workspace presentation. Adversarial code and rendered design reviews caught minimum-height regression, motion preference handling, transient settings message loss, unreliable native split-view rendering, and low-contrast buttons. Corrections restored the 940×540 minimum, preserved General settings messages across navigation, replaced problematic splits, and provided a consistently legible primary action style. Expanded reminder scrolling was exercised in a normal-height native viewport, not hidden by an oversized screenshot.
 
+## Minimal workspace and automatic cycle
+
+The subsequent simplification removes manual timer-kind selection: one Start authorizes an automatic focus → break → focus loop. Only completed focus sessions advance long-break cadence. Each next phase begins at the observed completion time; the app never synthesizes catch-up records. Pause at a deadline produces a paused next phase; Abandon at a deadline preserves the completed record but stops the cycle. Reflection and notes never gate progression.
+
+Lifecycle handling now pauses both focus and breaks on sleep, lock, screensaver, user switching, or quit; both phase types checkpoint for paused crash recovery. Resume is explicit after returning. This supersedes the initial break-deadline continuation behavior above.
+
+All surfaces were simplified: darker smoked background, narrow navigation, no timer mode tabs or enclosing cards, plain persistent notes, concise reflection, calendar beside the day timeline, compact reminder editor, flat settings rows, and a smaller menu and cursor warning. Essential permissions and errors remain. Independent plan, adversarial code, and rendered design reviews accompanied the work; targeted tests cover automatic cadence, deadline actions, lifecycle pauses, late observations, and reflection during running breaks.
+
 ## Release boundary
 
 The source and local app are implemented. Production distribution is a separate credentialed step: this machine has no Developer ID Application signing identity, and no notarization profile or production update feed/key was supplied. Therefore the local app truthfully disables unconfigured updates. The guarded release script prepares notarized, Sparkle-signed artifacts once those external requirements exist; it does not invent credentials or silently publish an ad-hoc release.

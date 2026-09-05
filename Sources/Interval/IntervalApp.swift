@@ -53,7 +53,7 @@ struct IntervalApp: App {
   }
   var body: some Scene {
     Window("Interval", id: "main") { MainView(store: store) }
-      .defaultSize(width: 1000, height: 660)
+      .defaultSize(width: 860, height: 520)
       .windowResizability(.contentMinSize)
     MenuBarExtra {
       MenuBarView(store: store)
@@ -65,7 +65,7 @@ struct IntervalApp: App {
     Settings { SettingsView(store: store) }
       .commands {
         CommandGroup(after: .newItem) {
-          Button("Start or Pause Focus") { store.startOrToggle() }.keyboardShortcut(
+          Button("Start or Pause Cycle") { store.startOrToggle() }.keyboardShortcut(
             "s", modifiers: [.command, .shift])
           Divider()
           Button("Focus") { store.selection = .focus }.keyboardShortcut("1")

@@ -8,22 +8,15 @@ struct SettingsView: View {
   private struct Destination: Identifiable {
     let id: Int
     let title: String
-    let subtitle: String
     let systemImage: String
   }
 
   private let destinations = [
-    Destination(id: 0, title: "Timer", subtitle: "Durations and cadence", systemImage: "timer"),
-    Destination(
-      id: 1, title: "Sound & Alerts", subtitle: "Ambient audio and completions",
-      systemImage: "speaker.wave.2"),
-    Destination(
-      id: 2, title: "Calendar", subtitle: "Calendar access and visibility", systemImage: "calendar"),
-    Destination(
-      id: 3, title: "General", subtitle: "Startup, data, and privacy", systemImage: "gearshape"),
-    Destination(
-      id: 4, title: "Updates", subtitle: "Automatic update preferences",
-      systemImage: "arrow.triangle.2.circlepath"),
+    Destination(id: 0, title: "Timer", systemImage: "timer"),
+    Destination(id: 1, title: "Sound", systemImage: "speaker.wave.2"),
+    Destination(id: 2, title: "Calendar", systemImage: "calendar"),
+    Destination(id: 3, title: "General", systemImage: "gearshape"),
+    Destination(id: 4, title: "Updates", systemImage: "arrow.triangle.2.circlepath"),
   ]
 
   @Bindable var store: AppStore
@@ -54,12 +47,11 @@ struct SettingsView: View {
           }
           selectedContent
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .intervalPanel()
         }
         .padding(20)
       }
     }
-    .frame(width: 760, height: 560)
+    .frame(width: 720, height: 500)
     .tint(IntervalTheme.accent)
     .preferredColorScheme(.dark)
     .task {
@@ -69,10 +61,9 @@ struct SettingsView: View {
 
   private var sidebar: some View {
     VStack(alignment: .leading, spacing: 4) {
-      Text("INTERVAL")
-        .font(.caption.weight(.semibold))
+      Text("Interval")
+        .font(.headline)
         .foregroundStyle(.secondary)
-        .tracking(1.4)
         .padding(.horizontal, 12)
         .padding(.bottom, 10)
 
@@ -103,23 +94,20 @@ struct SettingsView: View {
       }
       Spacer()
     }
-    .padding(14)
-    .frame(width: 160)
+    .padding(10)
+    .frame(width: 145)
   }
 
   private var sectionHeader: some View {
     let destination = destinations.first(where: { $0.id == selectedTab }) ?? destinations[0]
-    return VStack(alignment: .leading, spacing: 3) {
-      Text(destination.title).font(.title2.weight(.semibold))
-      Text(destination.subtitle).font(.callout).foregroundStyle(.secondary)
-    }
+    return Text(destination.title).font(.headline)
   }
 
   @ViewBuilder private var selectedContent: some View {
     switch selectedTab {
     case 0:
-      Form {
-        Section("Durations") {
+      SettingsPage {
+        SettingsSection("Durations") {
           Stepper(
             "Focus: \(store.data.settings.focusMinutes) minutes", value: setting(\.focusMinutes),
             in: 1...180)
@@ -130,28 +118,42 @@ struct SettingsView: View {
             "Long break: \(store.data.settings.longBreakMinutes) minutes",
             value: setting(\.longBreakMinutes), in: 1...90)
         }
-        Section("Cadence") {
+        SettingsSection("Cadence", divided: true) {
           Stepper(
             "Long break every \(store.data.settings.longBreakEvery) focus completions",
             value: setting(\.longBreakEvery), in: 1...12)
-          Text("Cadence changes apply to future completions and do not reset the current timer.")
+          Text("Focus and breaks advance automatically.")
             .font(.caption).foregroundStyle(.secondary)
         }
       }
-      .formStyle(.grouped)
-      .scrollContentBackground(.hidden)
     case 1:
-      Form {
-        Section("Ambient sound") {
-          Picker("Focus", selection: soundSetting(\.focusSound)) {
-            ForEach(AmbientSound.allCases, id: \.self) { Text($0.title).tag($0) }
+      SettingsPage {
+        SettingsSection("Ambient sound") {
+          HStack {
+            Text("Focus")
+            Spacer()
+            Picker("Focus", selection: soundSetting(\.focusSound)) {
+              ForEach(AmbientSound.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            .labelsHidden()
+            .frame(width: 180)
           }
-          Picker("Break", selection: soundSetting(\.breakSound)) {
-            ForEach(AmbientSound.allCases, id: \.self) { Text($0.title).tag($0) }
+          HStack {
+            Text("Break")
+            Spacer()
+            Picker("Break", selection: soundSetting(\.breakSound)) {
+              ForEach(AmbientSound.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            .labelsHidden()
+            .frame(width: 180)
           }
-          Slider(value: volumeSetting, in: 0...1) { Text("Volume") }
+          HStack(spacing: 14) {
+            Text("Volume")
+            Slider(value: volumeSetting, in: 0...1)
+              .accessibilityLabel("Volume")
+          }
         }
-        Section("Completions") {
+        SettingsSection("Alerts", divided: true) {
           if notificationStatus == .authorized {
             Label("Notifications enabled", systemImage: "checkmark.circle.fill").foregroundStyle(
               .green)
@@ -181,8 +183,6 @@ struct SettingsView: View {
           }
         }
       }
-      .formStyle(.grouped)
-      .scrollContentBackground(.hidden)
     case 2:
       CalendarSettingsView(store: store)
     case 3:
@@ -226,14 +226,52 @@ struct SettingsView: View {
   }
 }
 
+private struct SettingsPage<Content: View>: View {
+  @ViewBuilder let content: Content
+
+  var body: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 16) { content }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.trailing, 6)
+    }
+  }
+}
+
+private struct SettingsSection<Content: View>: View {
+  let title: String
+  let divided: Bool
+  @ViewBuilder let content: Content
+
+  init(_ title: String, divided: Bool = false, @ViewBuilder content: () -> Content) {
+    self.title = title
+    self.divided = divided
+    self.content = content()
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      if divided {
+        Divider().overlay(IntervalTheme.border)
+          .padding(.bottom, 2)
+      }
+      Text(title.uppercased())
+        .font(.caption2.weight(.semibold))
+        .foregroundStyle(.secondary)
+      VStack(alignment: .leading, spacing: 10) { content }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+}
+
 private struct GeneralSettingsView: View {
   @Bindable var store: AppStore
   @Binding var loginEnabled: Bool
   @Binding var loginMessage: String?
   @Binding var exportMessage: String?
   var body: some View {
-    Form {
-      Section("Startup") {
+    SettingsPage {
+      SettingsSection("Startup") {
         Toggle("Launch Interval at login", isOn: Binding(get: { loginEnabled }, set: setLogin))
         if SMAppService.mainApp.status == .requiresApproval {
           Label(
@@ -242,23 +280,20 @@ private struct GeneralSettingsView: View {
         }
         if let loginMessage { Text(loginMessage).font(.caption).foregroundStyle(.red) }
       }
-      Section("Local data") {
-        LabeledContent("Storage", value: store.storageURL.path(percentEncoded: false))
+      SettingsSection("Local data", divided: true) {
+        DisclosureGroup("Storage location") {
+          Text(store.storageURL.path(percentEncoded: false))
+            .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+        }
         Button("Export Data…", action: exportData)
         if let exportMessage { Text(exportMessage).font(.caption).foregroundStyle(.secondary) }
-        Text(
-          "The export contains Interval settings, timer/session history, reminders, reflections, and scratchpad. Calendar event contents are never stored or exported."
-        )
-        .font(.caption).foregroundStyle(.secondary)
+        Text("Exports local settings and activity; calendar event contents are excluded.")
+          .font(.caption).foregroundStyle(.secondary)
       }
-      Section("Privacy") {
-        Text(
-          "Interval has no analytics and makes no cloud writes. Your data stays in the local file shown above; network access is used only for a configured update feed."
-        )
+      SettingsSection("Privacy", divided: true) {
+        Text("No analytics or cloud storage; network access is only for updates.")
       }
     }
-    .formStyle(.grouped)
-    .scrollContentBackground(.hidden)
   }
   private func setLogin(_ enabled: Bool) {
     do {
@@ -289,8 +324,8 @@ private struct GeneralSettingsView: View {
 private struct UpdatesSettingsView: View {
   @Bindable var store: AppStore
   var body: some View {
-    Form {
-      Section("Sparkle updates") {
+    SettingsPage {
+      SettingsSection("Sparkle updates") {
         Text(store.updates.configurationMessage).foregroundStyle(
           store.updates.isConfigured ? Color.secondary : Color.orange)
         Toggle(
@@ -310,16 +345,14 @@ private struct UpdatesSettingsView: View {
         Button("Check Now") { store.updates.checkNow() }.disabled(!store.updates.isConfigured)
       }
     }
-    .formStyle(.grouped)
-    .scrollContentBackground(.hidden)
   }
 }
 
 private struct CalendarSettingsView: View {
   @Bindable var store: AppStore
   var body: some View {
-    Form {
-      Section("Apple Calendar") {
+    SettingsPage {
+      SettingsSection("Apple Calendar") {
         switch store.calendarService.authorizationState {
         case .notDetermined:
           Text("Calendar access is off. Interval continues to work without it.").foregroundStyle(
@@ -331,13 +364,8 @@ private struct CalendarSettingsView: View {
           )
           .font(.caption).foregroundStyle(.secondary)
         case .fullAccess:
-          LabeledContent(
-            "Integration",
-            value: store.data.settings.calendarIntegrationEnabled ? "Enabled" : "Disabled")
-          LabeledContent(
-            "Selected calendars", value: "\(store.data.settings.selectedCalendarIDs.count)")
           Toggle(
-            "Enable Calendar Integration",
+            "Calendar integration",
             isOn: Binding(
               get: { store.data.settings.calendarIntegrationEnabled },
               set: { enabled in
@@ -377,8 +405,6 @@ private struct CalendarSettingsView: View {
         }
       }
     }
-    .formStyle(.grouped)
-    .scrollContentBackground(.hidden)
   }
 
   @ViewBuilder private func accessUnavailable(_ message: String) -> some View {

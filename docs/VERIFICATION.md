@@ -4,7 +4,7 @@
 
 Environment: Apple silicon, macOS 26.6.2, Xcode 26.6, Swift 6.3.3.
 
-- `swift test`: 35 tests pass across timer, reminder, calendar/persistence, and AppStore workflows, including early-version migration with original-file backup and future-version rejection.
+- `swift test`: 41 tests pass across timer, reminder, calendar/persistence, and AppStore workflows, including automatic phase transitions, lifecycle pauses, deadline actions, early-version migration with original-file backup, and future-version rejection.
 - `scripts/build.sh`: builds the production executable and app bundle under macOS's bundled Bash.
 - `codesign --verify --deep --strict .build/Interval.app`: validates the local ad-hoc app and embedded Sparkle code.
 - `bash -n scripts/build.sh scripts/release.sh`: validates shell syntax.
@@ -26,12 +26,12 @@ Tests execute real state transitions and storage, including pause/resume/abandon
 
 ## Acceptance checks for a signed distribution
 
-Redesign-specific layout checks rendered and inspected focus/paused/reflection, history, reminder list/empty templates/editor, floating/full-screen/max-emoji reminders, paused warning, menu, and settings. The 940×540 focus fixture keeps timer and notes usable. `reminder-editor-bottom` scrolls the actual native editor within a 900×650 viewport and exposes both suppression toggles. `focus-no-animation` disables transactions for a static fixture; it is not a claim of end-to-end Reduce Motion or Reduce Transparency testing.
+Redesign-specific layout checks cover focus/paused/reflection, history, reminder list/empty templates/editor, floating/full-screen/max-emoji reminders, paused warning, menu, and all five settings pages. Main fixtures use the 860×520 default; `focus-compact` uses the 860×500 minimum. `reminder-editor-bottom` scrolls the actual native editor within a 790×512 viewport and exposes both suppression toggles. `focus-no-animation` disables transactions for a static fixture; it is not a claim of end-to-end Reduce Motion or Reduce Transparency testing.
 
 Example: `.build/Interval.app/Contents/MacOS/Interval --snapshot .build/focus.png --snapshot-scene focus --snapshot-composited`. This creates isolated fixture data, never edits the user's stored sessions, and requires macOS screen-capture access. Omit the final flag for native bitmap layout rendering.
 
 1. Grant Calendar and Notifications access explicitly, then revoke each while running; confirm clear degraded states and no stale suppression.
-2. Complete a focus from the menu bar, start the suggested break, and add feedback/journal without losing either state.
+2. Complete a focus from the menu bar, confirm the break starts automatically, and add feedback/journal without interrupting it. Confirm break completion automatically starts focus; Pause and Abandon must stop progression.
 3. Type, scroll, and drag through a reminder deadline; the warning pauses and no takeover appears until idle. Postpone and confirm future recurrence is unchanged.
 4. Preview/dismiss every template, edit emoji size/message/duration, and verify both floating and full-screen controls remain reachable.
 5. Test sleep, lock/unlock, fast user switching, full-screen apps, display removal, and mixed-DPI/notched displays. Verify no reminder storm or keyboard trap.

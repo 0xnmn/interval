@@ -19,20 +19,33 @@ struct AppStoreTests {
   @Test func fourCompletionsOfferLongBreakExactlyOnce() throws {
     try withStore { store, persistence in
       for count in 1...4 {
-        let deadline = Date().addingTimeInterval(-1)
+        let deadline = Date(timeIntervalSince1970: TimeInterval(count * 10_000))
         store.data.activeTimer = TimerState(
           kind: .focus, duration: 1500, status: .running,
           startedAt: deadline.addingTimeInterval(-1500), deadline: deadline)
-        store.startOrToggle()  // Reconciles before acting, and never starts the next phase.
+        store.reconcile(at: deadline)
         #expect(store.data.completedFocusCount == count)
-        #expect(store.timer.status == .ready)
+        #expect(store.timer.status == .running)
         #expect(store.timer.kind == (count == 4 ? .longBreak : .shortBreak))
-        #expect(store.data.sessions.count == count)
+        #expect(store.timer.startedAt == deadline)
+        #expect(store.data.sessions.count == count * 2 - 1)
         #expect(store.data.sessions.last?.endedAt == deadline)
         #expect(store.data.sessions.last?.activeDuration == 1500)
+
+        let breakDeadline = deadline.addingTimeInterval(store.timer.duration)
+        store.reconcile(at: breakDeadline)
+        #expect(store.timer.status == .running)
+        #expect(store.timer.kind == .focus)
+        #expect(store.timer.startedAt == breakDeadline)
+        #expect(store.data.sessions.count == count * 2)
+        #expect(store.data.sessions.last?.kind == (count == 4 ? .longBreak : .shortBreak))
       }
       let saved = try persistence.load()
       #expect(saved.completedFocusCount == 4)
+      #expect(saved.sessions.count == 8)
+      #expect(saved.settings.longBreakEvery == 4)
+      #expect(saved.activeTimer?.kind == .focus)
+      #expect(saved.activeTimer?.status == .running)
     }
   }
 
@@ -42,7 +55,6 @@ struct AppStoreTests {
       let id = store.timer.id
       store.startOrToggle()
       #expect(store.timer.status == .paused)
-      store.choose(.longBreak)
       #expect(store.timer.id == id)
       store.abandon()
       #expect(store.data.sessions.count == 1)
@@ -50,6 +62,124 @@ struct AppStoreTests {
       #expect(store.data.completedFocusCount == 0)
       store.abandon()
       #expect(store.data.sessions.count == 1)
+    }
+  }
+
+  @Test func lifecyclePausePausesFocusAndBreakWithoutAdvancingLater() throws {
+    try withStore { store, _ in
+      for kind in [TimerKind.focus, .shortBreak] {
+        let startedAt = Date(timeIntervalSince1970: kind == .focus ? 10_000 : 20_000)
+        let duration: TimeInterval = kind == .focus ? 1500 : 300
+        store.data.activeTimer = TimerState(
+          kind: kind, duration: duration, status: .running, startedAt: startedAt,
+          deadline: startedAt.addingTimeInterval(duration))
+        let pauseDate = startedAt.addingTimeInterval(30)
+
+        store.pauseCycle(at: pauseDate)
+
+        let paused = store.timer
+        #expect(paused.kind == kind)
+        #expect(paused.status == .paused)
+        #expect(paused.elapsedBeforePause == 30)
+        #expect(paused.deadline == nil)
+        #expect(!store.reconcile(at: startedAt.addingTimeInterval(duration * 10)))
+        #expect(store.timer == paused)
+        #expect(store.data.sessions.isEmpty)
+      }
+    }
+  }
+
+  @Test func pauseAtBoundaryCompletesButDoesNotRunNextPhase() throws {
+    try withStore { store, _ in
+      let deadline = Date().addingTimeInterval(-1)
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 1500, status: .running,
+        startedAt: deadline.addingTimeInterval(-1500), deadline: deadline)
+
+      store.startOrToggle()
+
+      #expect(store.data.sessions.count == 1)
+      #expect(store.data.sessions[0].outcome == .completed)
+      #expect(store.timer.kind == .shortBreak)
+      #expect(store.timer.status == .paused)
+      #expect(store.timer.elapsedBeforePause == 0)
+    }
+  }
+
+  @Test func abandonAtBoundaryCompletesThenResetsToReadyFocus() throws {
+    try withStore { store, _ in
+      let deadline = Date().addingTimeInterval(-1)
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 1500, status: .running,
+        startedAt: deadline.addingTimeInterval(-1500), deadline: deadline)
+
+      store.abandon()
+
+      #expect(store.data.sessions.count == 1)
+      #expect(store.data.sessions[0].outcome == .completed)
+      #expect(store.data.completedFocusCount == 1)
+      #expect(store.timer.kind == .focus)
+      #expect(store.timer.status == .ready)
+    }
+  }
+
+  @Test func abandoningBreakResetsReadyFocusWithoutChangingCadence() throws {
+    try withStore { store, _ in
+      store.data.completedFocusCount = 3
+      let startedAt = Date().addingTimeInterval(-30)
+      store.data.activeTimer = TimerState(
+        kind: .longBreak, duration: 600, status: .running, startedAt: startedAt,
+        deadline: startedAt.addingTimeInterval(600))
+
+      store.abandon()
+
+      #expect(store.data.completedFocusCount == 3)
+      #expect(store.data.sessions.count == 1)
+      #expect(store.data.sessions[0].kind == .longBreak)
+      #expect(store.data.sessions[0].outcome == .abandoned)
+      #expect(store.timer.kind == .focus)
+      #expect(store.timer.status == .ready)
+    }
+  }
+
+  @Test func lateTransitionRecordsOnceAndStartsNextAtObservationDate() throws {
+    try withStore { store, _ in
+      let deadline = Date(timeIntervalSince1970: 10_000)
+      let observedAt = deadline.addingTimeInterval(86_400)
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 1500, status: .running,
+        startedAt: deadline.addingTimeInterval(-1500), deadline: deadline)
+
+      #expect(store.reconcile(at: observedAt))
+      #expect(store.data.sessions.count == 1)
+      #expect(store.data.sessions[0].endedAt == deadline)
+      #expect(store.timer.kind == .shortBreak)
+      #expect(store.timer.status == .running)
+      #expect(store.timer.startedAt == observedAt)
+      #expect(store.timer.deadline == observedAt.addingTimeInterval(300))
+      #expect(!store.reconcile(at: observedAt))
+      #expect(store.data.sessions.count == 1)
+    }
+  }
+
+  @Test func savingReflectionDoesNotPauseRunningBreak() throws {
+    try withStore { store, _ in
+      let endedAt = Date(timeIntervalSince1970: 10_000)
+      let session = SessionRecord(
+        timerID: UUID(), kind: .focus, startedAt: endedAt.addingTimeInterval(-1500),
+        endedAt: endedAt, plannedDuration: 1500, activeDuration: 1500, outcome: .completed)
+      store.data.sessions = [session]
+      let startedAt = endedAt.addingTimeInterval(1)
+      store.data.activeTimer = TimerState(
+        kind: .shortBreak, duration: 300, status: .running, startedAt: startedAt,
+        deadline: startedAt.addingTimeInterval(300))
+      let runningBreak = store.timer
+
+      store.updateSession(id: session.id, feedback: .focused, journal: "Done")
+
+      #expect(store.timer == runningBreak)
+      #expect(store.data.sessions[0].feedback == "focused")
+      #expect(store.data.sessions[0].journal == "Done")
     }
   }
 

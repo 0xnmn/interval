@@ -18,7 +18,7 @@ The default build targets the build Mac's architecture. It is a local developmen
 
 ## Use Interval
 
-- **Focus:** 25-minute sessions, 5-minute short breaks, and a 10-minute long break after every four completed focus sessions. All four values are configurable. Start, pause, resume, or abandon either kind of interval. Breaks are offered rather than started without consent.
+- **Focus cycle:** Start once. Interval automatically alternates 25-minute focus sessions and 5-minute breaks, with a 10-minute long break after every four completed focus sessions. All four values are configurable. Pause/Resume controls the current phase; Abandon stops the cycle. There is no manual mode picker.
 - **Reflect:** completed focus sessions are saved immediately. Choose Distracted, Neutral, or Focused and optionally journal without delaying your break. Edit reflections later in History.
 - **Scratchpad:** one autosaved note across every session. The menu-bar quick-note field appends to it.
 - **History:** month calendar and chronological daily sessions, with active duration and outcome. Calendar events are a separate visual category, not fabricated focus records.
@@ -32,7 +32,7 @@ The default build targets the build Mac's architecture. It is a local developmen
 ### Deliberate behavior
 
 - Closing the window leaves the timer and reminders in the menu bar. Quit explicitly to exit.
-- Focus pauses on sleep or intentional quit. Crash recovery restores the most recent checkpoint as paused (up to approximately five seconds of active progress may be lost). Break deadlines continue across sleep/quit; no next focus starts automatically.
+- The whole cycle pauses on sleep, screen lock, screensaver, user switching, or intentional quit. Resume explicitly when ready. Crash recovery restores either phase from its last checkpoint as paused (up to approximately five seconds of progress may be lost). Automatic transitions start at observation time and never replay missed phases.
 - Only completed focus sessions advance the long-break cadence. Abandoned intervals remain in History but do not advance it.
 - Settings changes affect the next timer, not a running/paused timer.
 - Paused focus still suppresses reminders when that reminder's focus exclusion is enabled.
@@ -42,7 +42,7 @@ The default build targets the build Mac's architecture. It is a local developmen
 
 ## Keyboard and accessibility
 
-- `⌘⇧S`: start/pause/resume the selected interval.
+- `⌘⇧S`: start/pause/resume the cycle.
 - `⌘1`, `⌘2`, `⌘3`: Focus, History, Reminders.
 - `⌘,`: Settings. `⌘Q`: Quit.
 - Native controls, text editing, semantic materials, descriptive accessibility labels, and selected-state semantics. Motion is restrained; there are no flashing reminders.

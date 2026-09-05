@@ -45,14 +45,14 @@ final class AppStore {
     self.notifications = NotificationService(enabled: runtimeEnabled)
     self.calendarService = calendarService ?? CalendarService()
     self.updates = UpdateService(enabled: runtimeEnabled)
-    var recoveredRunningFocus = false
+    var recoveredRunningTimer = false
     do { data = try persistence.load() } catch {
       data = PersistedData()
       persistenceError =
         "Couldn’t read your saved data. Interval is read-only to protect the original file: \(error.localizedDescription)"
       persistenceLocked = true
     }
-    if runtimeEnabled, var restored = data.activeTimer, restored.kind == .focus,
+    if runtimeEnabled, var restored = data.activeTimer,
       restored.status == .running
     {
       notifications.cancel(restored)
@@ -60,8 +60,8 @@ final class AppStore {
       restored.deadline = nil
       data.activeTimer = restored
       recoveryMessage =
-        "A focus interval was running when Interval closed. It was paused without counting time away."
-      recoveredRunningFocus = true
+        "Cycle paused while Interval was closed."
+      recoveredRunningTimer = true
     }
     if data.activeTimer == nil { data.activeTimer = timer(for: .focus) }
     if runtimeEnabled {
@@ -83,12 +83,9 @@ final class AppStore {
     updates.start()
     notifications.fallback = { [weak self] message in self?.inAppNotification = message }
     audio.failure = { [weak self] message in self?.audioError = message }
-    if recoveredRunningFocus { save() }
+    if recoveredRunningTimer { save() }
     reconcileReminderBacklog(at: now)
-    reconcile(at: now)
-    if data.activeTimer?.kind != .focus, data.activeTimer?.status == .running {
-      syncServices(for: timer)
-    }
+    reconcile(at: now, autoStart: false)
     workspaceSessionIsActive = true
     refreshSessionState()
     ticker = Task { [weak self] in
@@ -271,11 +268,13 @@ final class AppStore {
   func startOrToggle() {
     let actionDate = Date()
     now = actionDate
-    if reconcile(at: actionDate) { return }
+    // A Pause click at the deadline must pause the cycle, not start another phase.
+    if reconcile(at: actionDate, autoStart: false) { return }
     guard var value = data.activeTimer else { return }
+    inAppNotification = nil
+    recoveryMessage = nil
     switch value.status {
     case .ready:
-      inAppNotification = nil
       TimerEngine.start(&value, now: actionDate)
     case .running: TimerEngine.pause(&value, now: actionDate)
     case .paused: TimerEngine.resume(&value, now: actionDate)
@@ -290,7 +289,11 @@ final class AppStore {
   func abandon() {
     let actionDate = Date()
     now = actionDate
-    if reconcile(at: actionDate) { return }
+    if reconcile(at: actionDate, autoStart: false) {
+      data.activeTimer = timer(for: .focus)
+      save()
+      return
+    }
     guard var value = data.activeTimer, value.status == .running || value.status == .paused else {
       return
     }
@@ -300,12 +303,6 @@ final class AppStore {
     audio.stop()
     record(value, outcome: .abandoned, endedAt: actionDate, activeDuration: activeDuration)
     data.activeTimer = timer(for: .focus)
-    save()
-  }
-
-  func choose(_ kind: TimerKind) {
-    guard data.activeTimer?.status == .ready else { return }
-    data.activeTimer = timer(for: kind)
     save()
   }
 
@@ -385,11 +382,14 @@ final class AppStore {
 
   func checkpointForTermination() {
     guard runtimeEnabled else { return }
-    let actionDate = Date()
-    now = actionDate
-    reconcile(at: actionDate)
-    if var value = data.activeTimer, value.kind == .focus, value.status == .running {
-      TimerEngine.pause(&value, now: actionDate)
+    pauseCycle(at: Date())
+  }
+
+  func pauseCycle(at date: Date) {
+    now = date
+    reconcile(at: date, autoStart: false)
+    if var value = data.activeTimer, value.status == .running {
+      TimerEngine.pause(&value, now: date)
       data.activeTimer = value
       notifications.cancel(value)
       save()
@@ -400,16 +400,6 @@ final class AppStore {
   private func prepareForSleep() {
     systemIsSleeping = true
     sessionBecameUnavailable()
-    now = Date()
-    reconcile(at: now)
-    audio.stop()
-    guard var value = data.activeTimer, value.kind == .focus, value.status == .running else {
-      return
-    }
-    TimerEngine.pause(&value, now: now)
-    data.activeTimer = value
-    save()
-    notifications.cancel(value)
   }
 
   private var sessionIsActive: Bool {
@@ -424,6 +414,7 @@ final class AppStore {
     sessionIsOnConsole = dictionary[kCGSessionOnConsoleKey as String] as? Bool ?? false
   }
   private func sessionBecameUnavailable() {
+    pauseCycle(at: Date())
     reminderEngine.cancel()
     reminderOverlay = nil
     previewReminderID = nil
@@ -485,7 +476,8 @@ final class AppStore {
     overlayController.close()
   }
 
-  @discardableResult private func reconcile(at date: Date) -> Bool {
+  @discardableResult func reconcile(at date: Date, autoStart: Bool = true) -> Bool {
+    now = date
     guard var value = data.activeTimer else { return false }
     let priorDeadline = value.deadline
     guard TimerEngine.reconcile(&value, now: date) else { return false }
@@ -501,7 +493,15 @@ final class AppStore {
     } else {
       data.activeTimer = timer(for: .focus)
     }
+    // Start at the observed transition, never replay phases during time away.
+    var next = timer
+    TimerEngine.start(&next, now: date)
+    if !autoStart || (runtimeEnabled && !sessionIsActive) {
+      TimerEngine.pause(&next, now: date)
+    }
+    data.activeTimer = next
     save()
+    syncServices(for: next)
     return true
   }
 
@@ -522,7 +522,7 @@ final class AppStore {
     TimerState(kind: kind, duration: data.settings.duration(for: kind))
   }
   private func checkpoint(force: Bool = false) {
-    guard var value = data.activeTimer, value.kind == .focus, value.status == .running else {
+    guard var value = data.activeTimer, value.status == .running else {
       return
     }
     let elapsed = TimerEngine.activeDuration(value, now: now)

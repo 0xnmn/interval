@@ -45,7 +45,9 @@ struct SnapshotRequest {
     let timerID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
     var timer = TimerState(id: timerID, kind: .focus, duration: 1_500, status: .ready)
     if scene == "reflection" {
-      timer = TimerState(id: timerID, kind: .shortBreak, duration: 300, status: .ready)
+      timer = TimerState(
+        id: timerID, kind: .shortBreak, duration: 300, status: .running,
+        startedAt: fixtureNow, deadline: fixtureNow.addingTimeInterval(300))
     }
     if scene == "paused" || scene == "menu" {
       timer.status = .paused
@@ -97,7 +99,7 @@ struct SnapshotRequest {
     switch request.scene {
     case "history", "history-disabled", "history-no-selection":
       store.selection = .history
-      size = NSSize(width: 1000, height: 740)
+      size = NSSize(width: 860, height: 520)
       view = AnyView(MainView(store: store))
     case "history-legacy":
       size = NSSize(width: 580, height: 650)
@@ -108,17 +110,17 @@ struct SnapshotRequest {
         })
     case "reminders", "reminders-empty":
       store.selection = .reminders
-      size = NSSize(width: 1000, height: 740)
+      size = NSSize(width: 860, height: 520)
       view = AnyView(MainView(store: store))
     case "reminder-editor", "reminder-editor-expanded", "reminder-editor-bottom":
-      size = NSSize(width: 900, height: 650)
+      size = NSSize(width: 790, height: 512)
       view = AnyView(
         RemindersView(
           store: store, selection: store.data.reminders[0].id,
           advanced: request.scene != "reminder-editor"))
     case "reminder-countdown", "reminder-countdown-paused":
       let reminder = store.data.reminders[0]
-      size = NSSize(width: 290, height: 118)
+      size = NSSize(width: 250, height: 84)
       view = AnyView(
         ReminderWarningView(
           reminder: reminder,
@@ -134,34 +136,34 @@ struct SnapshotRequest {
       view = AnyView(
         ReminderTakeoverView(reminder: store.data.reminders[1], dismiss: {}, snooze: {}))
     case "settings":
-      size = NSSize(width: 760, height: 560)
+      size = NSSize(width: 720, height: 500)
       view = AnyView(SettingsView(store: store))
     case "sound-settings":
-      size = NSSize(width: 760, height: 560)
+      size = NSSize(width: 720, height: 500)
       view = AnyView(SettingsView(store: store, showSound: true))
     case "calendar-settings":
-      size = NSSize(width: 760, height: 560)
+      size = NSSize(width: 720, height: 500)
       view = AnyView(SettingsView(store: store, showCalendar: true))
     case "general-settings":
-      size = NSSize(width: 760, height: 560)
+      size = NSSize(width: 720, height: 500)
       view = AnyView(SettingsView(store: store, selectedTab: 3))
     case "updates-settings":
-      size = NSSize(width: 760, height: 560)
+      size = NSSize(width: 720, height: 500)
       view = AnyView(SettingsView(store: store, selectedTab: 4))
     case "reflection":
       store.completionSessionID = store.data.sessions.first?.id
-      size = NSSize(width: 1000, height: 740)
+      size = NSSize(width: 860, height: 520)
       view = AnyView(MainView(store: store))
     case "menu":
-      size = NSSize(width: 320, height: 460)
+      size = NSSize(width: 320, height: 260)
       view = AnyView(MenuBarView(store: store))
-    case "focus-compact940x540":
+    case "focus-compact":
       store.selection = .focus
-      size = NSSize(width: 940, height: 540)
+      size = NSSize(width: 860, height: 500)
       view = AnyView(MainView(store: store))
     default:
       store.selection = .focus
-      size = NSSize(width: 1000, height: 660)
+      size = NSSize(width: 860, height: 520)
       view = AnyView(MainView(store: store))
     }
 

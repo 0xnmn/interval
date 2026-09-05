@@ -43,7 +43,7 @@ enum UserIdleMonitor {
     switch overlay {
     case .warning:
       let panel = NSPanel(
-        contentRect: NSRect(x: 0, y: 0, width: 290, height: 118),
+        contentRect: NSRect(x: 0, y: 0, width: 250, height: 84),
         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
       configure(panel)
       panel.level = .floating
