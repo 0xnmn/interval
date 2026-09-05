@@ -51,6 +51,8 @@ The default build targets the build Mac's architecture. It is a local developmen
 
 Local state lives at `~/Library/Application Support/Interval/data-v1.json`. Writes are atomic; an unreadable or unsupported file is not silently replaced. A visible read-only warning protects the original. Export local data from Settings → General. Calendar event content is held in memory and excluded from exports.
 
+Early-development ISO-date files are read with a preserved `data-v1.json.pre-migration` backup. Sessions without recorded pause-aware durations are clearly marked as estimates when necessary.
+
 Activity detection reads system idle durations and pointer position, not key contents. It uses no key logger or global event tap. Cloud synchronization is intentionally not implemented; settings are plain versioned Codable values rather than tied to a cloud provider.
 
 ## Source layout

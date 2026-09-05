@@ -4,7 +4,7 @@
 
 Environment: Apple silicon, macOS 26.6.2, Xcode 26.6, Swift 6.3.3.
 
-- `swift test`: 33 tests pass across timer, reminder, calendar/persistence, and AppStore workflows.
+- `swift test`: 35 tests pass across timer, reminder, calendar/persistence, and AppStore workflows, including early-version migration with original-file backup and future-version rejection.
 - `scripts/build.sh`: builds the production executable and app bundle under macOS's bundled Bash.
 - `codesign --verify --deep --strict .build/Interval.app`: validates the local ad-hoc app and embedded Sparkle code.
 - `bash -n scripts/build.sh scripts/release.sh`: validates shell syntax.

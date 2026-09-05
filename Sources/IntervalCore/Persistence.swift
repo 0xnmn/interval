@@ -18,12 +18,28 @@ public struct JSONStore: Sendable {
     let data = try Data(contentsOf: fileURL)
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .secondsSince1970
-    var result = try decoder.decode(PersistedData.self, from: data)
+    var result: PersistedData
+    var legacyDates = false
+    do {
+      result = try decoder.decode(PersistedData.self, from: data)
+    } catch {
+      // Initial development builds used whole-second ISO dates. Decode fully before
+      // creating a backup; malformed or future-version files remain untouched.
+      decoder.dateDecodingStrategy = .iso8601
+      result = try decoder.decode(PersistedData.self, from: data)
+      legacyDates = true
+    }
     guard result.version == PersistedData.currentVersion else {
       throw CocoaError(.fileReadCorruptFile)
     }
     result.settings = result.settings.clamped()
     result.reminders = result.reminders.map { $0.clamped() }
+    if legacyDates {
+      let backup = fileURL.appendingPathExtension("pre-migration")
+      if !FileManager.default.fileExists(atPath: backup.path) {
+        try FileManager.default.copyItem(at: fileURL, to: backup)
+      }
+    }
     return result
   }
 

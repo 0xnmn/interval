@@ -351,8 +351,11 @@ struct SessionRow: View {
         Text(session.kind.title).font(.headline)
         Text("Interval session").font(.caption.weight(.medium)).foregroundStyle(.teal)
         Text(
-          "\(session.startedAt.formatted(date: .omitted, time: .shortened))–\(session.endedAt.formatted(date: .omitted, time: .shortened)) · \(durationString(session.activeDuration)) · \(session.outcome.rawValue.capitalized)"
+          "\(session.startedAt.formatted(date: .omitted, time: .shortened))–\(session.endedAt.formatted(date: .omitted, time: .shortened)) · \(session.isDurationEstimated ? "≈ " : "")\(durationString(session.activeDuration)) · \(session.outcome.rawValue.capitalized)"
         ).font(.caption).foregroundStyle(.secondary)
+        if session.isDurationEstimated {
+          Text("Estimated duration · early version").font(.caption).foregroundStyle(.secondary)
+        }
         if let feedback = session.feedback { Text(feedback.capitalized).font(.caption) }
       }
     }.padding(.vertical, 3)
@@ -411,7 +414,13 @@ struct SessionInspector: View {
     Form {
       Section("Session") {
         LabeledContent("Started", value: session.startedAt.formatted())
-        LabeledContent("Active", value: durationString(session.activeDuration))
+        LabeledContent(
+          session.isDurationEstimated ? "Estimated active" : "Active",
+          value: (session.isDurationEstimated ? "≈ " : "") + durationString(session.activeDuration))
+        if session.isDurationEstimated {
+          Text("Estimated from the recorded time range; this early version did not record pauses.")
+            .font(.caption).foregroundStyle(.secondary)
+        }
         LabeledContent("Outcome", value: session.outcome.rawValue.capitalized)
       }
       Section("Reflection") {

@@ -180,6 +180,7 @@ public struct SessionRecord: Identifiable, Codable, Equatable, Sendable {
   public var endedAt: Date
   public var plannedDuration: TimeInterval
   public var activeDuration: TimeInterval
+  public var isDurationEstimated = false
   public var outcome: TimerStatus
   public var feedback: String?
   public var journal: String?
@@ -199,6 +200,32 @@ public struct SessionRecord: Identifiable, Codable, Equatable, Sendable {
     self.outcome = outcome
     self.feedback = feedback
     self.journal = journal
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case id, timerID, kind, startedAt, endedAt, plannedDuration, activeDuration
+    case isDurationEstimated, outcome, feedback, journal
+  }
+
+  public init(from decoder: Decoder) throws {
+    let values = try decoder.container(keyedBy: CodingKeys.self)
+    id = try values.decode(UUID.self, forKey: .id)
+    timerID = try values.decode(UUID.self, forKey: .timerID)
+    kind = try values.decode(TimerKind.self, forKey: .kind)
+    startedAt = try values.decode(Date.self, forKey: .startedAt)
+    endedAt = try values.decode(Date.self, forKey: .endedAt)
+    plannedDuration = try values.decode(TimeInterval.self, forKey: .plannedDuration)
+    outcome = try values.decode(TimerStatus.self, forKey: .outcome)
+    let storedDuration = try values.decodeIfPresent(TimeInterval.self, forKey: .activeDuration)
+    activeDuration =
+      storedDuration
+      ?? (outcome == .completed
+        ? plannedDuration : max(0, min(plannedDuration, endedAt.timeIntervalSince(startedAt))))
+    isDurationEstimated =
+      try values.decodeIfPresent(Bool.self, forKey: .isDurationEstimated)
+      ?? (storedDuration == nil && outcome != .completed)
+    feedback = try values.decodeIfPresent(String.self, forKey: .feedback)
+    journal = try values.decodeIfPresent(String.self, forKey: .journal)
   }
 }
 

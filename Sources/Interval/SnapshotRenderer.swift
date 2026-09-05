@@ -50,7 +50,7 @@ struct SnapshotRequest {
       timer.startedAt = fixtureNow.addingTimeInterval(-510)
       timer.elapsedBeforePause = 420
     }
-    let session = SessionRecord(
+    var session = SessionRecord(
       id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
       timerID: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!, kind: .focus,
       startedAt: fixtureNow.addingTimeInterval(-3_600),
@@ -58,6 +58,10 @@ struct SnapshotRequest {
       plannedDuration: 1_500, activeDuration: 1_500, outcome: .completed,
       feedback: scene == "reflection" ? nil : "focused",
       journal: "Clear progress on the launch plan.")
+    if scene == "history-legacy" {
+      session.outcome = .abandoned
+      session.isDurationEstimated = true
+    }
     var settings = IntervalSettings()
     if scene == "history" || scene == "calendar-settings" || scene == "history-no-selection" {
       settings.calendarIntegrationEnabled = true
@@ -90,6 +94,13 @@ struct SnapshotRequest {
       store.selection = .history
       size = NSSize(width: 1000, height: 740)
       view = AnyView(MainView(store: store))
+    case "history-legacy":
+      size = NSSize(width: 580, height: 650)
+      view = AnyView(
+        VStack {
+          SessionRow(session: store.data.sessions[0]).padding()
+          SessionInspector(store: store, session: store.data.sessions[0])
+        })
     case "reminders":
       store.selection = .reminders
       size = NSSize(width: 1000, height: 740)
