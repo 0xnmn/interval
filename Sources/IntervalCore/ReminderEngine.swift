@@ -83,7 +83,9 @@ public struct ReminderEngine: Equatable, Sendable {
 
     public mutating func snooze(_ id: UUID, reminders: inout [Reminder], now: Date, seconds: TimeInterval = 300) {
         guard let index = reminders.firstIndex(where: { $0.id == id }) else { return }
-        reminders[index].snoozedUntil = now.addingTimeInterval(max(1, seconds)); cancel(reminderID: id)
+        let originalDue = reminders[index].effectiveDueAt ?? now
+        reminders[index].snoozedUntil = max(now, originalDue).addingTimeInterval(max(1, seconds))
+        cancel(reminderID: id)
     }
 
     public mutating func dismiss(_ id: UUID, reminders: inout [Reminder], now: Date) {

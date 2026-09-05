@@ -37,6 +37,7 @@ final class CalendarService {
             authorizationState = .fullAccess
             calendars = Array(Set(fixtureEvents.map(\.calendarName))).sorted().map { CalendarChoice(id: $0, title: $0) }
             historyEvents = fixtureEvents
+            return
         }
         updateAuthorizationState()
         observer = NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: store, queue: .main) { [weak self] _ in
@@ -49,7 +50,8 @@ final class CalendarService {
         minuteTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
-                self?.refreshAuthorizationAndToday()
+                guard !Task.isCancelled, let self else { return }
+                self.refreshAuthorizationAndToday()
             }
         }
     }
@@ -80,7 +82,7 @@ final class CalendarService {
     }
 
     func hasEvent(at date: Date) -> Bool {
-        refreshAuthorization()
+        updateAuthorizationStatusOnly()
         guard isEnabled, authorizationState == .fullAccess else { return false }
         if todayInterval == nil || date < todayInterval!.start || date >= todayInterval!.end {
             refreshToday(containing: date)
@@ -111,6 +113,23 @@ final class CalendarService {
             todayInterval = nil
         }
         loadCalendars()
+    }
+
+    /// Cheap permission check for the 250 ms reminder ticker; calendar enumeration is done
+    /// only by refresh events, activation, and the minute task.
+    private func updateAuthorizationStatusOnly() {
+        guard fixtureEvents == nil else { return }
+        let previous = authorizationState
+        switch EKEventStore.authorizationStatus(for: .event) {
+        case .notDetermined: authorizationState = .notDetermined
+        case .fullAccess: authorizationState = .fullAccess
+        case .denied, .writeOnly: authorizationState = .denied
+        case .restricted: authorizationState = .restricted
+        @unknown default: authorizationState = .restricted
+        }
+        if previous == .fullAccess, authorizationState != .fullAccess {
+            historyEvents = []; todayEvents = []; todayInterval = nil; calendars = []
+        }
     }
 
     private func updateAuthorizationState() { refreshAuthorization() }

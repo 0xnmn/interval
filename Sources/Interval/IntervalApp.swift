@@ -50,11 +50,23 @@ struct IntervalApp: App {
     }
     var body: some Scene {
         Window("Interval", id: "main") { MainView(store: store) }
-            .defaultSize(width: 900, height: 650)
+            .defaultSize(width: 1000, height: 740)
             .windowResizability(.contentMinSize)
         MenuBarExtra { MenuBarView(store: store) } label: {
             Label(durationString(store.remaining), systemImage: store.timer.status == .running ? "timer" : "timer.circle")
         }.menuBarExtraStyle(.window)
         Settings { SettingsView(store: store) }
+        .commands {
+            CommandGroup(after: .newItem) {
+                Button("Start or Pause Focus") { store.startOrToggle() }.keyboardShortcut("s", modifiers: [.command, .shift])
+                Divider()
+                Button("Focus") { store.selection = .focus }.keyboardShortcut("1")
+                Button("History") { store.selection = .history }.keyboardShortcut("2")
+                Button("Reminders") { store.selection = .reminders }.keyboardShortcut("3")
+            }
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { store.updates.checkNow() }.disabled(!store.updates.isConfigured)
+            }
+        }
     }
 }

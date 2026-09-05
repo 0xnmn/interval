@@ -9,27 +9,30 @@ enum Destination: String, CaseIterable, Identifiable {
 
 struct MainView: View {
     @Bindable var store: AppStore
-    @State private var selection: Destination?
 
-    init(store: AppStore, selection: Destination = .focus) {
-        self.store = store
-        _selection = State(initialValue: selection)
-    }
+    init(store: AppStore) { self.store = store }
 
     var body: some View {
         NavigationSplitView {
-            List(Destination.allCases, selection: $selection) { item in Label(item.rawValue, systemImage: item.icon).tag(item) }
+            List(Destination.allCases, selection: $store.selection) { item in Label(item.rawValue, systemImage: item.icon).tag(item) }
                 .navigationTitle("Interval")
         } detail: {
-            switch selection ?? .focus {
+            switch store.selection ?? .focus {
             case .focus: FocusView(store: store)
             case .history: HistoryView(store: store)
             case .reminders: RemindersView(store: store)
             }
         }
         .navigationSplitViewColumnWidth(min: 180, ideal: 205)
-        .frame(minWidth: 780, minHeight: 540)
+        .frame(minWidth: 940, minHeight: 540)
         .tint(.teal)
+        .safeAreaInset(edge: .bottom) {
+            if let error = store.persistenceError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout).foregroundStyle(.red).padding(12)
+                    .frame(maxWidth: .infinity).background(.regularMaterial)
+            }
+        }
     }
 }
 
@@ -37,6 +40,7 @@ struct FocusView: View {
     @Bindable var store: AppStore
     @State private var confirmingAbandon = false
     var body: some View {
+        ScrollView {
         VStack(spacing: 0) {
             VStack(spacing: 18) {
                 Picker("Interval type", selection: Binding(get: { store.timer.kind }, set: store.choose)) {
@@ -52,6 +56,7 @@ struct FocusView: View {
                 HStack(spacing: 12) {
                     Button(action: store.startOrToggle) { Label(primaryTitle, systemImage: primaryIcon).frame(minWidth: 105) }
                         .buttonStyle(.borderedProminent).controlSize(.large)
+                        .glassEffect(.regular.interactive(), in: .capsule)
                     if store.timer.status == .running || store.timer.status == .paused {
                         Button("Abandon", role: .destructive) { confirmingAbandon = true }.buttonStyle(.bordered).controlSize(.large)
                     }
@@ -65,6 +70,7 @@ struct FocusView: View {
                 Label("Scratchpad", systemImage: "square.and.pencil").font(.headline)
                 TextEditor(text: Binding(get: { store.data.scratchpad }, set: store.updateScratchpad))
                     .font(.body).scrollContentBackground(.hidden).padding(10)
+                    .frame(minHeight: 140)
                     .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 9))
                     .accessibilityLabel("Global scratchpad")
                 if let error = store.persistenceError {
@@ -78,8 +84,8 @@ struct FocusView: View {
                     Label(recovery, systemImage: "pause.circle").font(.caption).foregroundStyle(.secondary)
                 }
                 if let error = store.audioError { Label(error, systemImage: "speaker.slash").font(.caption).foregroundStyle(.orange) }
-            }.padding(28).frame(maxWidth: 680, maxHeight: .infinity)
-        }.background(Color(nsColor: .windowBackgroundColor))
+            }.padding(28).frame(maxWidth: 680, minHeight: 180)
+        }}.background(Color(nsColor: .windowBackgroundColor))
             .alert("Abandon this interval?", isPresented: $confirmingAbandon) {
                 Button("Keep Going", role: .cancel) {}
                 Button("Abandon", role: .destructive, action: store.abandon)
@@ -303,7 +309,7 @@ struct MenuBarView: View {
             if store.timer.kind == .focus { Text("Cycle \(store.data.completedFocusCount % max(1, store.data.settings.longBreakEvery) + 1) of \(max(1, store.data.settings.longBreakEvery))").font(.caption).foregroundStyle(.secondary) }
             HStack { Button(primaryTitle, action: store.startOrToggle).buttonStyle(.borderedProminent); if store.timer.status == .running || store.timer.status == .paused { Button("Abandon", role: .destructive) { confirmingAbandon = true } } }
             if store.completionSessionID != nil {
-                Button("Open Reflection") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
+                Button("Open Reflection") { store.showFocus(); openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
             }
             Divider()
             if let warningReminder {

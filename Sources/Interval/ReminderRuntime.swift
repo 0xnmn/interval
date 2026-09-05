@@ -15,15 +15,19 @@ enum UserIdleMonitor {
 @MainActor final class ReminderOverlayController {
     private var panels: [NSPanel] = []
     private var shown: ReminderOverlay?
+    private var shownReminder: Reminder?
 
     func update(_ overlay: ReminderOverlay?, reminder: Reminder?, store: AppStore) {
         guard let overlay, let reminder else { close(); return }
         if case .warning = overlay, case .warning = shown {
-            panels.first?.contentView = NSHostingView(rootView: ReminderWarningView(reminder: reminder, overlay: overlay))
-            positionWarning(); shown = overlay; return
+            if reminder != shownReminder || overlay != shown {
+                panels.first?.contentView = NSHostingView(rootView: ReminderWarningView(reminder: reminder, overlay: overlay))
+                shown = overlay; shownReminder = reminder
+            }
+            positionWarning(); return
         }
         guard overlay != shown else { return }
-        close(); shown = overlay
+        close(); shown = overlay; shownReminder = reminder
         switch overlay {
         case .warning:
             let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 290, height: 118),
@@ -50,7 +54,7 @@ enum UserIdleMonitor {
         }
     }
 
-    func close() { panels.forEach { $0.orderOut(nil); $0.close() }; panels = []; shown = nil }
+    func close() { panels.forEach { $0.orderOut(nil); $0.close() }; panels = []; shown = nil; shownReminder = nil }
     private func configure(_ panel: NSPanel) {
         panel.isReleasedWhenClosed = false; panel.isOpaque = false; panel.backgroundColor = .clear
         panel.hasShadow = true; panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]

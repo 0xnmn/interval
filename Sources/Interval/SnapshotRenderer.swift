@@ -63,8 +63,8 @@ struct SnapshotRequest {
         let view: AnyView
         switch request.scene {
         case "history", "history-disabled", "history-no-selection":
-            size = NSSize(width: 900, height: 650); view = AnyView(MainView(store: store, selection: .history))
-        case "reminders": size = NSSize(width: 900, height: 650); view = AnyView(MainView(store: store, selection: .reminders))
+            store.selection = .history; size = NSSize(width: 1000, height: 740); view = AnyView(MainView(store: store))
+        case "reminders": store.selection = .reminders; size = NSSize(width: 1000, height: 740); view = AnyView(MainView(store: store))
         case "reminder-editor", "reminder-editor-expanded": size = NSSize(width: 900, height: 650); view = AnyView(RemindersView(store: store, selection: store.data.reminders[0].id, advanced: request.scene.hasSuffix("expanded")))
         case "reminder-countdown", "reminder-countdown-paused":
             let reminder = store.data.reminders[0]; size = NSSize(width: 290, height: 118)
@@ -73,12 +73,14 @@ struct SnapshotRequest {
             size = NSSize(width: 520, height: 480); view = AnyView(ReminderTakeoverView(reminder: store.data.reminders[0], dismiss: {}, snooze: {}))
         case "reminder-fullscreen":
             size = NSSize(width: 900, height: 650); view = AnyView(ReminderTakeoverView(reminder: store.data.reminders[1], dismiss: {}, snooze: {}))
-        case "settings": size = NSSize(width: 480, height: 320); view = AnyView(SettingsView(store: store))
-        case "sound-settings": size = NSSize(width: 500, height: 370); view = AnyView(SettingsView(store: store, showSound: true))
-        case "calendar-settings": size = NSSize(width: 520, height: 430); view = AnyView(SettingsView(store: store, showCalendar: true))
-        case "reflection": store.completionSessionID = store.data.sessions.first?.id; size = NSSize(width: 900, height: 650); view = AnyView(MainView(store: store))
-        case "menu": size = NSSize(width: 310, height: 280); view = AnyView(MenuBarView(store: store))
-        default: size = NSSize(width: 900, height: 650); view = AnyView(MainView(store: store))
+        case "settings": size = NSSize(width: 520, height: 500); view = AnyView(SettingsView(store: store))
+        case "sound-settings": size = NSSize(width: 520, height: 500); view = AnyView(SettingsView(store: store, showSound: true))
+        case "calendar-settings": size = NSSize(width: 520, height: 500); view = AnyView(SettingsView(store: store, showCalendar: true))
+        case "general-settings": size = NSSize(width: 520, height: 500); view = AnyView(SettingsView(store: store, selectedTab: 3))
+        case "updates-settings": size = NSSize(width: 520, height: 500); view = AnyView(SettingsView(store: store, selectedTab: 4))
+        case "reflection": store.completionSessionID = store.data.sessions.first?.id; size = NSSize(width: 1000, height: 740); view = AnyView(MainView(store: store))
+        case "menu": size = NSSize(width: 310, height: 420); view = AnyView(MenuBarView(store: store))
+        default: store.selection = .focus; size = NSSize(width: 1000, height: 740); view = AnyView(MainView(store: store))
         }
 
         let hostingView = NSHostingView(rootView: view.background(Color(nsColor: .windowBackgroundColor)))

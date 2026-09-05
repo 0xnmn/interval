@@ -52,18 +52,15 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
     public var calendarIntegrationEnabled: Bool
     public var selectedCalendarIDs: Set<String>
     public var didChooseInitialCalendars: Bool
-    public var didSeedReminderTemplates: Bool
 
     public init(focusMinutes: Int = 25, shortBreakMinutes: Int = 5, longBreakMinutes: Int = 10, longBreakEvery: Int = 4,
                 focusSound: AmbientSound = .silence, breakSound: AmbientSound = .silence, soundVolume: Double = 0.35,
-                calendarIntegrationEnabled: Bool = false, selectedCalendarIDs: Set<String> = [], didChooseInitialCalendars: Bool = false,
-                didSeedReminderTemplates: Bool = false) {
+                calendarIntegrationEnabled: Bool = false, selectedCalendarIDs: Set<String> = [], didChooseInitialCalendars: Bool = false) {
         self.focusMinutes = focusMinutes; self.shortBreakMinutes = shortBreakMinutes
         self.longBreakMinutes = longBreakMinutes; self.longBreakEvery = longBreakEvery
         self.focusSound = focusSound; self.breakSound = breakSound; self.soundVolume = soundVolume
         self.calendarIntegrationEnabled = calendarIntegrationEnabled; self.selectedCalendarIDs = selectedCalendarIDs
         self.didChooseInitialCalendars = didChooseInitialCalendars
-        self.didSeedReminderTemplates = didSeedReminderTemplates
     }
 
     public func duration(for kind: TimerKind) -> TimeInterval {
@@ -76,11 +73,10 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
               longBreakMinutes: longBreakMinutes.clamped(to: 1...90),
               longBreakEvery: longBreakEvery.clamped(to: 1...12), focusSound: focusSound, breakSound: breakSound,
               soundVolume: soundVolume.clamped(to: 0...1), calendarIntegrationEnabled: calendarIntegrationEnabled,
-              selectedCalendarIDs: selectedCalendarIDs, didChooseInitialCalendars: didChooseInitialCalendars,
-              didSeedReminderTemplates: didSeedReminderTemplates)
+              selectedCalendarIDs: selectedCalendarIDs, didChooseInitialCalendars: didChooseInitialCalendars)
     }
 
-    private enum CodingKeys: String, CodingKey { case focusMinutes, shortBreakMinutes, longBreakMinutes, longBreakEvery, focusSound, breakSound, soundVolume, calendarIntegrationEnabled, selectedCalendarIDs, didChooseInitialCalendars, didSeedReminderTemplates }
+    private enum CodingKeys: String, CodingKey { case focusMinutes, shortBreakMinutes, longBreakMinutes, longBreakEvery, focusSound, breakSound, soundVolume, calendarIntegrationEnabled, selectedCalendarIDs, didChooseInitialCalendars }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         focusMinutes = try c.decode(Int.self, forKey: .focusMinutes); shortBreakMinutes = try c.decode(Int.self, forKey: .shortBreakMinutes)
@@ -91,7 +87,6 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
         calendarIntegrationEnabled = try c.decodeIfPresent(Bool.self, forKey: .calendarIntegrationEnabled) ?? false
         selectedCalendarIDs = try c.decodeIfPresent(Set<String>.self, forKey: .selectedCalendarIDs) ?? []
         didChooseInitialCalendars = try c.decodeIfPresent(Bool.self, forKey: .didChooseInitialCalendars) ?? false
-        didSeedReminderTemplates = try c.decodeIfPresent(Bool.self, forKey: .didSeedReminderTemplates) ?? false
     }
 }
 

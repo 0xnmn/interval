@@ -29,9 +29,9 @@ import Testing
     @Test func snoozeIsRepeatableAndDoesNotMutateAnchor() {
         var values = [reminder()]; var engine = ReminderEngine(); let anchor = values[0].dueAt
         engine.snooze(values[0].id, reminders: &values, now: zero, seconds: 300)
-        #expect(values[0].dueAt == anchor); #expect(values[0].snoozedUntil == zero.addingTimeInterval(300))
+        #expect(values[0].dueAt == anchor); #expect(values[0].snoozedUntil == zero.addingTimeInterval(310))
         engine.snooze(values[0].id, reminders: &values, now: zero.addingTimeInterval(100), seconds: 300)
-        #expect(values[0].snoozedUntil == zero.addingTimeInterval(400))
+        #expect(values[0].snoozedUntil == zero.addingTimeInterval(610))
     }
 
     @Test func suppressionAndInactiveSessionSkipAndCoalesce() {

@@ -17,6 +17,7 @@ final class AppStore {
     var reminderOverlay: ReminderOverlay?
     let notifications: NotificationService
     let calendarService: CalendarService
+    let updates: UpdateService
     private let audio = AmbientAudio()
     private let persistence: JSONStore
     private var persistenceLocked = false
@@ -32,12 +33,15 @@ final class AppStore {
     private var previewReminderID: UUID?
     private var previewExpiresAt: Date?
     private let runtimeEnabled: Bool
+    var selection: Destination? = .focus
+    var storageURL: URL { persistence.fileURL }
 
     init(persistence: JSONStore = JSONStore(), calendarService: CalendarService? = nil, runtimeEnabled: Bool = true) {
         self.persistence = persistence
         self.runtimeEnabled = runtimeEnabled
         self.notifications = NotificationService(enabled: runtimeEnabled)
         self.calendarService = calendarService ?? CalendarService()
+        self.updates = UpdateService(enabled: runtimeEnabled)
         var recoveredRunningFocus = false
         do { data = try persistence.load() } catch {
             data = PersistedData()
@@ -59,6 +63,12 @@ final class AppStore {
         }
         completionSessionID = data.sessions.last(where: { $0.kind == .focus && $0.outcome == .completed && $0.feedback == nil })?.id
         guard runtimeEnabled else { return }
+        updates.shouldDeferInstall = { [weak self] in
+            guard let self else { return false }
+            return self.timer.status == .running || self.timer.status == .paused || self.reminderOverlay != nil
+        }
+        updates.prepareForInstall = { [weak self] in self?.checkpointForTermination() }
+        updates.start()
         notifications.fallback = { [weak self] message in self?.inAppNotification = message }
         audio.failure = { [weak self] message in self?.audioError = message }
         if recoveredRunningFocus { save() }
@@ -165,7 +175,7 @@ final class AppStore {
         cancelCurrentOverlay()
         let shownAt = Date(); previewReminderID = id; previewExpiresAt = shownAt.addingTimeInterval(reminder.displaySeconds)
         reminderOverlay = .reminder(reminderID: id, shownAt: shownAt)
-        overlayController.update(reminderOverlay, reminder: reminder, store: self)
+        if runtimeEnabled { overlayController.update(reminderOverlay, reminder: reminder, store: self) }
     }
 
     func startOrToggle() {
@@ -210,11 +220,22 @@ final class AppStore {
         data.sessions[index].feedback = feedback?.rawValue; data.sessions[index].journal = journal.isEmpty ? nil : journal; save()
     }
     func deferReflection() { completionSessionID = nil }
+    func showFocus() { selection = .focus }
+    func exportData(to url: URL) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(data).write(to: url, options: .atomic)
+    }
     func updateSettings(_ settings: IntervalSettings) {
-        data.settings = settings
+        let old = data.settings
+        data.settings = settings.clamped()
         if data.activeTimer?.status == .ready { data.activeTimer = timer(for: data.activeTimer?.kind ?? .focus) }
         save()
-        if data.activeTimer?.status == .running { syncServices(for: timer) }
+        if data.activeTimer?.status == .running,
+           old.focusSound != settings.focusSound || old.breakSound != settings.breakSound || old.soundVolume != settings.soundVolume {
+            syncAudio(for: timer)
+        }
     }
 
     func enableCalendarIntegration() async {
@@ -350,9 +371,13 @@ final class AppStore {
     private func syncServices(for value: TimerState) {
         if value.status == .running {
             notifications.schedule(timer: value)
-            do { try audio.play(value.kind == .focus ? data.settings.focusSound : data.settings.breakSound, volume: data.settings.soundVolume); audioError = nil }
-            catch { audioError = "Ambient sound unavailable: \(error.localizedDescription)" }
+            syncAudio(for: value)
         } else { notifications.cancel(value); audio.stop() }
+    }
+    private func syncAudio(for value: TimerState) {
+        guard runtimeEnabled else { return }
+        do { try audio.play(value.kind == .focus ? data.settings.focusSound : data.settings.breakSound, volume: data.settings.soundVolume); audioError = nil }
+        catch { audioError = "Ambient sound unavailable: \(error.localizedDescription)" }
     }
     private func save() {
         guard !persistenceLocked else { return }

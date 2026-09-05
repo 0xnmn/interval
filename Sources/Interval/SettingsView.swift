@@ -2,15 +2,21 @@ import SwiftUI
 import IntervalCore
 import UserNotifications
 import AppKit
+import ServiceManagement
 
 struct SettingsView: View {
     @Bindable var store: AppStore
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var selectedTab: Int
-    init(store: AppStore, showSound: Bool = false, showCalendar: Bool = false) {
-        self.store = store; _selectedTab = State(initialValue: showCalendar ? 2 : showSound ? 1 : 0)
+    init(store: AppStore, showSound: Bool = false, showCalendar: Bool = false, selectedTab: Int? = nil) {
+        self.store = store; _selectedTab = State(initialValue: selectedTab ?? (showCalendar ? 2 : showSound ? 1 : 0))
     }
     var body: some View {
+        VStack(spacing: 0) {
+            if let error = store.persistenceError ?? store.notificationError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption).foregroundStyle(.red).padding(.horizontal).padding(.top, 8)
+            }
         TabView(selection: $selectedTab) {
             Form {
                 Section("Durations") {
@@ -34,19 +40,75 @@ struct SettingsView: View {
                         catch { store.notificationError = "Couldn’t request notification access: \(error.localizedDescription)" }
                         notificationStatus = await store.notifications.status()
                     } } }
-                    if let error = store.notificationError {
-                        Label(error, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.red)
-                    }
                 }
             }.formStyle(.grouped).padding().tabItem { Label("Sound & Alerts", systemImage: "speaker.wave.2") }.tag(1)
             CalendarSettingsView(store: store).padding().tabItem { Label("Calendar", systemImage: "calendar") }.tag(2)
-        }.frame(width: 520, height: 430).tint(.teal).task { notificationStatus = await store.notifications.status() }
+            GeneralSettingsView(store: store).padding().tabItem { Label("General", systemImage: "gear") }.tag(3)
+            UpdatesSettingsView(store: store).padding().tabItem { Label("Updates", systemImage: "arrow.triangle.2.circlepath") }.tag(4)
+        }}.frame(width: 520, height: 500).tint(.teal).task { notificationStatus = await store.notifications.status() }
     }
     private func setting(_ keyPath: WritableKeyPath<IntervalSettings, Int>) -> Binding<Int> {
         Binding(get: { store.data.settings[keyPath: keyPath] }, set: { value in var settings = store.data.settings; settings[keyPath: keyPath] = value; store.updateSettings(settings) })
     }
     private func soundSetting(_ keyPath: WritableKeyPath<IntervalSettings, AmbientSound>) -> Binding<AmbientSound> { Binding(get: { store.data.settings[keyPath: keyPath] }, set: { var value = store.data.settings; value[keyPath: keyPath] = $0; store.updateSettings(value) }) }
     private var volumeSetting: Binding<Double> { Binding(get: { store.data.settings.soundVolume }, set: { var value = store.data.settings; value.soundVolume = $0; store.updateSettings(value) }) }
+}
+
+private struct GeneralSettingsView: View {
+    @Bindable var store: AppStore
+    @State private var loginEnabled = SMAppService.mainApp.status == .enabled
+    @State private var loginMessage: String?
+    @State private var exportMessage: String?
+    var body: some View {
+        Form {
+            Section("Startup") {
+                Toggle("Launch Interval at login", isOn: Binding(get: { loginEnabled }, set: setLogin))
+                if SMAppService.mainApp.status == .requiresApproval {
+                    Label("Approval is required in System Settings → General → Login Items.", systemImage: "exclamationmark.circle")
+                }
+                if let loginMessage { Text(loginMessage).font(.caption).foregroundStyle(.red) }
+            }
+            Section("Local data") {
+                LabeledContent("Storage", value: store.storageURL.path(percentEncoded: false))
+                Button("Export Data…", action: exportData)
+                if let exportMessage { Text(exportMessage).font(.caption).foregroundStyle(.secondary) }
+                Text("The export contains Interval settings, timer/session history, reminders, reflections, and scratchpad. Calendar event contents are never stored or exported.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Privacy") {
+                Text("Interval has no analytics and makes no cloud writes. Your data stays in the local file shown above; network access is used only for a configured update feed.")
+            }
+        }.formStyle(.grouped)
+    }
+    private func setLogin(_ enabled: Bool) {
+        do {
+            if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+            loginEnabled = SMAppService.mainApp.status == .enabled
+            loginMessage = nil
+        } catch { loginEnabled = SMAppService.mainApp.status == .enabled; loginMessage = error.localizedDescription }
+    }
+    private func exportData() {
+        let panel = NSSavePanel(); panel.nameFieldStringValue = "Interval-data.json"; panel.allowedContentTypes = [.json]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do { try store.exportData(to: url); exportMessage = "Exported to \(url.path(percentEncoded: false))." }
+        catch { exportMessage = "Export failed: \(error.localizedDescription)" }
+    }
+}
+
+private struct UpdatesSettingsView: View {
+    @Bindable var store: AppStore
+    var body: some View {
+        Form {
+            Section("Sparkle updates") {
+                Text(store.updates.configurationMessage).foregroundStyle(store.updates.isConfigured ? Color.secondary : Color.orange)
+                Toggle("Automatically check for updates", isOn: Binding(get: { store.updates.automaticallyChecks }, set: { store.updates.automaticallyChecks = $0 }))
+                    .disabled(!store.updates.isConfigured)
+                Toggle("Automatically download updates", isOn: Binding(get: { store.updates.automaticallyDownloads }, set: { store.updates.automaticallyDownloads = $0 }))
+                    .disabled(!store.updates.isConfigured)
+                Button("Check Now") { store.updates.checkNow() }.disabled(!store.updates.isConfigured)
+            }
+        }.formStyle(.grouped)
+    }
 }
 
 private struct CalendarSettingsView: View {
