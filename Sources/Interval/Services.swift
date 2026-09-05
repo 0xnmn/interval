@@ -6,11 +6,15 @@ import UserNotifications
 
 @MainActor final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     var fallback: ((String) -> Void)?
-    private let center = UNUserNotificationCenter.current()
-    override init() { super.init(); center.delegate = self }
-    func status() async -> UNAuthorizationStatus { await center.notificationSettings().authorizationStatus }
-    func request() async throws -> Bool { try await center.requestAuthorization(options: [.alert, .sound]) }
+    private let center: UNUserNotificationCenter?
+    init(enabled: Bool = true) {
+        center = enabled ? UNUserNotificationCenter.current() : nil
+        super.init(); center?.delegate = self
+    }
+    func status() async -> UNAuthorizationStatus { await center?.notificationSettings().authorizationStatus ?? .notDetermined }
+    func request() async throws -> Bool { try await center?.requestAuthorization(options: [.alert, .sound]) ?? false }
     func schedule(timer: TimerState) {
+        guard let center else { return }
         center.removePendingNotificationRequests(withIdentifiers: [timer.id.uuidString])
         guard timer.status == .running, let deadline = timer.deadline else { return }
         let content = UNMutableNotificationContent(); content.title = "\(timer.kind.title) complete"
@@ -22,7 +26,7 @@ import UserNotifications
                 Task { @MainActor in self?.fallback?("Couldn’t schedule the completion alert: \(error.localizedDescription)") }
             }
     }
-    func cancel(_ timer: TimerState) { center.removePendingNotificationRequests(withIdentifiers: [timer.id.uuidString]) }
+    func cancel(_ timer: TimerState) { center?.removePendingNotificationRequests(withIdentifiers: [timer.id.uuidString]) }
     func completed(_ timer: TimerState) {
         // Do not remove the pending request here: completion can race the notification daemon.
         // The in-app completion is independent of system notification authorization.

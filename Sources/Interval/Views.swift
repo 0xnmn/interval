@@ -24,7 +24,7 @@ struct MainView: View {
             switch selection ?? .focus {
             case .focus: FocusView(store: store)
             case .history: HistoryView(store: store)
-            case .reminders: PlaceholderView(title: "Reminders", icon: "checklist", message: "Calendar-aware reminders arrive in a later phase.")
+            case .reminders: RemindersView(store: store)
             }
         }
         .navigationSplitViewColumnWidth(min: 180, ideal: 205)
@@ -306,6 +306,24 @@ struct MenuBarView: View {
                 Button("Open Reflection") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
             }
             Divider()
+            if let warningReminder {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Warning: \(warningReminder.title)").font(.caption.weight(.semibold))
+                    HStack {
+                        Button("Postpone this time · 5min") { store.snoozeReminder(warningReminder.id) }
+                        Button("Skip") { store.dismissReminder(warningReminder.id) }
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                Divider()
+            }
+            if let reminder = store.nextReminder {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Next: \(reminder.title)").font(.caption.weight(.semibold))
+                    Text(reminder.effectiveDueAt?.formatted(date: .omitted, time: .shortened) ?? "Not scheduled").font(.caption).foregroundStyle(.secondary)
+                    Button("Postpone this time · 5min") { store.snoozeReminder(reminder.id) }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                Divider()
+            }
             HStack { TextField("Quick note", text: $quickNote).onSubmit { store.appendQuickNote(quickNote); quickNote = "" }; Button("Add") { store.appendQuickNote(quickNote); quickNote = "" }.disabled(quickNote.isEmpty) }
             HStack { Button("Open Interval") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }; SettingsLink { Text("Settings") }; Spacer(); Button("Quit") { NSApp.terminate(nil) } }
         }.padding(16).frame(width: 310).tint(.teal)
@@ -317,6 +335,10 @@ struct MenuBarView: View {
             } message: { Text("Elapsed active time will be kept in History.") }
     }
     private var primaryTitle: String { store.timer.status == .running ? "Pause" : store.timer.status == .paused ? "Resume" : store.timer.kind == .focus ? "Start Focus" : "Start Break" }
+    private var warningReminder: Reminder? {
+        guard case .warning(let id, _, _) = store.reminderOverlay else { return nil }
+        return store.data.reminders.first { $0.id == id }
+    }
 }
 
 func durationString(_ seconds: TimeInterval) -> String {

@@ -17,6 +17,7 @@ public struct JSONStore: Sendable {
         var result = try decoder.decode(PersistedData.self, from: data)
         guard result.version == PersistedData.currentVersion else { throw CocoaError(.fileReadCorruptFile) }
         result.settings = result.settings.clamped()
+        result.reminders = result.reminders.map { $0.clamped() }
         return result
     }
 

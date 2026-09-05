@@ -54,7 +54,7 @@ struct SnapshotRequest {
         if scene == "history-no-selection" { settings.selectedCalendarIDs = [] }
         let sessions = scene == "history-disabled" || scene == "history-no-selection" ? [] : [session]
         return PersistedData(settings: settings, activeTimer: timer, scratchpad: "Outline the launch notes\nReview accessibility labels",
-            sessions: sessions, reminders: [Reminder(title: "Plan tomorrow", dueAt: fixtureNow.addingTimeInterval(3_600))],
+            sessions: sessions, reminders: [Reminder(title: "Look away", message: "Look at something far away for 20 seconds.", emoji: "👀", intervalSeconds: 600, displaySeconds: 20, dueAt: fixtureNow.addingTimeInterval(600)), Reminder(title: "Water", message: "Take a moment to drink some water.", emoji: "💧", intervalSeconds: 3_600, displaySeconds: 60, presentation: .fullscreen, dueAt: fixtureNow.addingTimeInterval(3_600))],
             completedFocusCount: 3)
     }
 
@@ -65,6 +65,14 @@ struct SnapshotRequest {
         case "history", "history-disabled", "history-no-selection":
             size = NSSize(width: 900, height: 650); view = AnyView(MainView(store: store, selection: .history))
         case "reminders": size = NSSize(width: 900, height: 650); view = AnyView(MainView(store: store, selection: .reminders))
+        case "reminder-editor", "reminder-editor-expanded": size = NSSize(width: 900, height: 650); view = AnyView(RemindersView(store: store, selection: store.data.reminders[0].id, advanced: request.scene.hasSuffix("expanded")))
+        case "reminder-countdown", "reminder-countdown-paused":
+            let reminder = store.data.reminders[0]; size = NSSize(width: 290, height: 118)
+            view = AnyView(ReminderWarningView(reminder: reminder, overlay: .warning(reminderID: reminder.id, remaining: 7, isPaused: request.scene == "reminder-countdown-paused")))
+        case "reminder-floating":
+            size = NSSize(width: 520, height: 480); view = AnyView(ReminderTakeoverView(reminder: store.data.reminders[0], dismiss: {}, snooze: {}))
+        case "reminder-fullscreen":
+            size = NSSize(width: 900, height: 650); view = AnyView(ReminderTakeoverView(reminder: store.data.reminders[1], dismiss: {}, snooze: {}))
         case "settings": size = NSSize(width: 480, height: 320); view = AnyView(SettingsView(store: store))
         case "sound-settings": size = NSSize(width: 500, height: 370); view = AnyView(SettingsView(store: store, showSound: true))
         case "calendar-settings": size = NSSize(width: 520, height: 430); view = AnyView(SettingsView(store: store, showCalendar: true))

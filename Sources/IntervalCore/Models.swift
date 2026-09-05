@@ -52,15 +52,18 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
     public var calendarIntegrationEnabled: Bool
     public var selectedCalendarIDs: Set<String>
     public var didChooseInitialCalendars: Bool
+    public var didSeedReminderTemplates: Bool
 
     public init(focusMinutes: Int = 25, shortBreakMinutes: Int = 5, longBreakMinutes: Int = 10, longBreakEvery: Int = 4,
                 focusSound: AmbientSound = .silence, breakSound: AmbientSound = .silence, soundVolume: Double = 0.35,
-                calendarIntegrationEnabled: Bool = false, selectedCalendarIDs: Set<String> = [], didChooseInitialCalendars: Bool = false) {
+                calendarIntegrationEnabled: Bool = false, selectedCalendarIDs: Set<String> = [], didChooseInitialCalendars: Bool = false,
+                didSeedReminderTemplates: Bool = false) {
         self.focusMinutes = focusMinutes; self.shortBreakMinutes = shortBreakMinutes
         self.longBreakMinutes = longBreakMinutes; self.longBreakEvery = longBreakEvery
         self.focusSound = focusSound; self.breakSound = breakSound; self.soundVolume = soundVolume
         self.calendarIntegrationEnabled = calendarIntegrationEnabled; self.selectedCalendarIDs = selectedCalendarIDs
         self.didChooseInitialCalendars = didChooseInitialCalendars
+        self.didSeedReminderTemplates = didSeedReminderTemplates
     }
 
     public func duration(for kind: TimerKind) -> TimeInterval {
@@ -73,10 +76,11 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
               longBreakMinutes: longBreakMinutes.clamped(to: 1...90),
               longBreakEvery: longBreakEvery.clamped(to: 1...12), focusSound: focusSound, breakSound: breakSound,
               soundVolume: soundVolume.clamped(to: 0...1), calendarIntegrationEnabled: calendarIntegrationEnabled,
-              selectedCalendarIDs: selectedCalendarIDs, didChooseInitialCalendars: didChooseInitialCalendars)
+              selectedCalendarIDs: selectedCalendarIDs, didChooseInitialCalendars: didChooseInitialCalendars,
+              didSeedReminderTemplates: didSeedReminderTemplates)
     }
 
-    private enum CodingKeys: String, CodingKey { case focusMinutes, shortBreakMinutes, longBreakMinutes, longBreakEvery, focusSound, breakSound, soundVolume, calendarIntegrationEnabled, selectedCalendarIDs, didChooseInitialCalendars }
+    private enum CodingKeys: String, CodingKey { case focusMinutes, shortBreakMinutes, longBreakMinutes, longBreakEvery, focusSound, breakSound, soundVolume, calendarIntegrationEnabled, selectedCalendarIDs, didChooseInitialCalendars, didSeedReminderTemplates }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         focusMinutes = try c.decode(Int.self, forKey: .focusMinutes); shortBreakMinutes = try c.decode(Int.self, forKey: .shortBreakMinutes)
@@ -87,6 +91,7 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
         calendarIntegrationEnabled = try c.decodeIfPresent(Bool.self, forKey: .calendarIntegrationEnabled) ?? false
         selectedCalendarIDs = try c.decodeIfPresent(Set<String>.self, forKey: .selectedCalendarIDs) ?? []
         didChooseInitialCalendars = try c.decodeIfPresent(Bool.self, forKey: .didChooseInitialCalendars) ?? false
+        didSeedReminderTemplates = try c.decodeIfPresent(Bool.self, forKey: .didSeedReminderTemplates) ?? false
     }
 }
 
@@ -166,13 +171,76 @@ private extension Comparable {
     func clamped(to range: ClosedRange<Self>) -> Self { min(max(self, range.lowerBound), range.upperBound) }
 }
 
+public enum ReminderPresentation: String, Codable, CaseIterable, Sendable {
+    case fullscreen, floating
+    public var title: String { rawValue.capitalized }
+}
+
 public struct Reminder: Identifiable, Codable, Equatable, Sendable {
     public var id: UUID
     public var title: String
+    public var message: String
+    public var emoji: String
+    public var emojiSize: Double
+    public var intervalSeconds: TimeInterval
+    public var displaySeconds: TimeInterval
+    public var presentation: ReminderPresentation
+    public var suppressDuringFocus: Bool
+    public var suppressDuringCalendar: Bool
     public var dueAt: Date?
+    /// A temporary due date for the current occurrence. It never changes the recurrence anchor.
+    public var snoozedUntil: Date?
     public var isEnabled: Bool
-    public init(id: UUID = UUID(), title: String, dueAt: Date? = nil, isEnabled: Bool = true) {
-        self.id = id; self.title = title; self.dueAt = dueAt; self.isEnabled = isEnabled
+
+    public init(id: UUID = UUID(), title: String, message: String = "Time for a short break.", emoji: String = "⏱️",
+                emojiSize: Double = 72, intervalSeconds: TimeInterval = 1_200, displaySeconds: TimeInterval = 10,
+                presentation: ReminderPresentation = .floating, suppressDuringFocus: Bool = true,
+                suppressDuringCalendar: Bool = true, dueAt: Date? = nil, snoozedUntil: Date? = nil,
+                isEnabled: Bool = true) {
+        self.id = id; self.title = title; self.message = message; self.emoji = emoji; self.emojiSize = emojiSize
+        self.intervalSeconds = intervalSeconds; self.displaySeconds = displaySeconds; self.presentation = presentation
+        self.suppressDuringFocus = suppressDuringFocus; self.suppressDuringCalendar = suppressDuringCalendar
+        self.dueAt = dueAt; self.snoozedUntil = snoozedUntil; self.isEnabled = isEnabled
+    }
+
+    public var effectiveDueAt: Date? { snoozedUntil ?? dueAt }
+
+    public func clamped() -> Self {
+        var value = self
+        value.title = String(title.prefix(120))
+        value.message = String(message.prefix(2_000))
+        value.emoji = String(emoji.prefix(8))
+        value.emojiSize = emojiSize.isFinite ? emojiSize.clamped(to: 32...180) : 72
+        value.intervalSeconds = intervalSeconds.isFinite ? intervalSeconds.clamped(to: 60...86_400) : 1_200
+        value.displaySeconds = displaySeconds.isFinite ? displaySeconds.clamped(to: 3...600) : 10
+        return value
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, title, message, emoji, emojiSize, intervalSeconds, displaySeconds, presentation, suppressDuringFocus, suppressDuringCalendar, dueAt, snoozedUntil, isEnabled }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Reminder"
+        message = try c.decodeIfPresent(String.self, forKey: .message) ?? "Time for a short break."
+        emoji = try c.decodeIfPresent(String.self, forKey: .emoji) ?? "⏱️"
+        emojiSize = try c.decodeIfPresent(Double.self, forKey: .emojiSize) ?? 72
+        intervalSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .intervalSeconds) ?? 1_200
+        displaySeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .displaySeconds) ?? 10
+        presentation = try c.decodeIfPresent(ReminderPresentation.self, forKey: .presentation) ?? .floating
+        suppressDuringFocus = try c.decodeIfPresent(Bool.self, forKey: .suppressDuringFocus) ?? true
+        suppressDuringCalendar = try c.decodeIfPresent(Bool.self, forKey: .suppressDuringCalendar) ?? true
+        dueAt = try c.decodeIfPresent(Date.self, forKey: .dueAt)
+        snoozedUntil = try c.decodeIfPresent(Date.self, forKey: .snoozedUntil)
+        isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+    }
+
+    public static func templates(startingAt date: Date = Date()) -> [Reminder] {
+        [
+            Reminder(title: "Look away", message: "Look at something far away for 20 seconds.", emoji: "👀", intervalSeconds: 600, displaySeconds: 20, dueAt: date.addingTimeInterval(600)),
+            Reminder(title: "Posture", message: "Relax your shoulders and reset your posture.", emoji: "🪑", intervalSeconds: 1_200, displaySeconds: 10, dueAt: date.addingTimeInterval(1_200)),
+            Reminder(title: "Stretch", message: "Stand up and stretch gently.", emoji: "🙆", intervalSeconds: 1_800, displaySeconds: 60, dueAt: date.addingTimeInterval(1_800)),
+            Reminder(title: "Water", message: "Take a moment to drink some water.", emoji: "💧", intervalSeconds: 3_600, displaySeconds: 60, dueAt: date.addingTimeInterval(3_600)),
+        ]
     }
 }
 
