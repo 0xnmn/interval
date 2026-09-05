@@ -44,4 +44,17 @@ import Testing
     TimerEngine.pause(&timer, now: origin.addingTimeInterval(1_050))
     #expect(timer.elapsedBeforePause == 150)
   }
+
+  @Test func adjustingRemainingPreservesElapsedAndClamps() {
+    var timer = TimerState(kind: .focus, duration: 1_500)
+    TimerEngine.start(&timer, now: origin)
+    TimerEngine.adjustRemaining(&timer, by: 300, now: origin.addingTimeInterval(100))
+    #expect(timer.duration == 1_800)
+    #expect(timer.deadline == origin.addingTimeInterval(1_800))
+    TimerEngine.pause(&timer, now: origin.addingTimeInterval(200))
+    TimerEngine.adjustRemaining(&timer, by: -10_000, now: origin.addingTimeInterval(300))
+    #expect(timer.elapsedBeforePause == 200)
+    #expect(timer.duration == 260)
+    #expect(TimerEngine.remaining(timer, now: origin.addingTimeInterval(300)) == 60)
+  }
 }

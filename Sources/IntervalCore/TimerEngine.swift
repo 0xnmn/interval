@@ -41,6 +41,21 @@ public enum TimerEngine {
     state.status = .running
   }
 
+  public static func adjustRemaining(
+    _ state: inout TimerState, by seconds: TimeInterval, now: Date,
+    minimum: TimeInterval = 60, maximum: TimeInterval = 10_800
+  ) {
+    guard state.status == .ready || state.status == .running || state.status == .paused else {
+      return
+    }
+    let elapsed = activeDuration(state, now: now)
+    let adjustedRemaining = min(maximum, max(minimum, remaining(state, now: now) + seconds))
+    state.duration = elapsed + adjustedRemaining
+    if state.status == .running {
+      state.deadline = now.addingTimeInterval(adjustedRemaining)
+    }
+  }
+
   public static func abandon(_ state: inout TimerState) {
     guard state.status == .running || state.status == .paused else { return }
     state.status = .abandoned

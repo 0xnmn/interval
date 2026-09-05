@@ -312,6 +312,44 @@ final class AppStore {
     save()
   }
 
+  func adjustCurrentTime(by seconds: TimeInterval, at date: Date = Date()) {
+    now = date
+    if reconcile(at: date, autoStart: false) { return }
+    guard completionSessionID == nil, var value = data.activeTimer,
+      value.status == .ready || value.status == .running || value.status == .paused
+    else { return }
+    TimerEngine.adjustRemaining(&value, by: seconds, now: date)
+    data.activeTimer = value
+    save()
+    syncServices(for: value)
+  }
+
+  func startBreakNow(at date: Date = Date()) {
+    now = date
+    if reconcile(at: date, autoStart: false) { return }
+    guard completionSessionID == nil, var focus = data.activeTimer, focus.kind == .focus else {
+      return
+    }
+    if focus.status == .running || focus.status == .paused {
+      let activeDuration = TimerEngine.activeDuration(focus, now: date)
+      TimerEngine.abandon(&focus)
+      notifications.cancel(focus)
+      audio.stop()
+      record(focus, outcome: .abandoned, endedAt: date, activeDuration: activeDuration)
+    } else {
+      guard focus.status == .ready else { return }
+    }
+    // Manual breaks do not consume or repeat the completed-focus cadence.
+    var next = timer(for: .shortBreak)
+    TimerEngine.start(&next, now: date)
+    data.activeTimer = next
+    inAppNotification = nil
+    recoveryMessage = nil
+    save()
+    syncServices(for: next)
+    tickReminders(at: date)
+  }
+
   func updateScratchpad(_ text: String) {
     data.scratchpad = text
     save()

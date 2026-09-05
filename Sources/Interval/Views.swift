@@ -21,7 +21,29 @@ struct MainView: View {
   var body: some View {
     ZStack {
       GlassBackground()
-      VStack(spacing: 0) {
+      HStack(spacing: 0) {
+        VStack(spacing: 12) {
+          ForEach(Destination.allCases) { item in
+            Button {
+              store.selection = item
+            } label: {
+              Image(systemName: item.icon)
+                .font(.system(size: 18, weight: .medium)).frame(width: 38, height: 38)
+                .background(
+                  (store.selection ?? .focus) == item ? .white.opacity(0.10) : .clear,
+                  in: RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle((store.selection ?? .focus) == item ? .primary : .secondary)
+            .help(item.rawValue).accessibilityLabel(item.rawValue)
+            .accessibilityAddTraits((store.selection ?? .focus) == item ? .isSelected : [])
+          }
+          Spacer(minLength: 20)
+          SettingsLink {
+            Image(systemName: "gearshape").font(.system(size: 18)).frame(width: 38, height: 38)
+          }.buttonStyle(.plain).help("Settings · ⌘,").accessibilityLabel("Settings")
+        }.padding(.vertical, 20).frame(width: 60).foregroundStyle(.secondary)
+        Rectangle().fill(IntervalTheme.border).frame(width: 1)
         Group {
           switch store.selection ?? .focus {
           case .focus:
@@ -36,31 +58,11 @@ struct MainView: View {
           case .reminders: RemindersView(store: store)
           }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
-        Rectangle().fill(IntervalTheme.border).frame(height: 1)
-        HStack(spacing: 18) {
-          ForEach(Destination.allCases) { item in
-            Button {
-              store.selection = item
-            } label: {
-              Label(item.rawValue, systemImage: item.icon)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle((store.selection ?? .focus) == item ? .primary : .secondary)
-            .accessibilityAddTraits((store.selection ?? .focus) == item ? .isSelected : [])
-          }
-          Spacer(minLength: 4)
-          SettingsLink {
-            Image(systemName: "gearshape").font(.system(size: 15)).frame(width: 28, height: 28)
-          }
-          .buttonStyle(.plain).help("Settings · ⌘,")
-          .accessibilityLabel("Settings")
-        }.font(.caption).foregroundStyle(.secondary)
-          .padding(.horizontal, 18).frame(height: 46)
       }
     }
     .frame(
-      minWidth: store.selection == .history ? 640 : 420, maxWidth: .infinity,
-      minHeight: 520, maxHeight: .infinity
+      minWidth: 780, maxWidth: .infinity,
+      minHeight: 620, maxHeight: .infinity
     )
     .tint(IntervalTheme.accent).preferredColorScheme(.dark)
     .safeAreaInset(edge: .bottom) {
@@ -75,101 +77,12 @@ struct MainView: View {
 
 struct FocusView: View {
   @Bindable var store: AppStore
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @State private var confirmingAbandon = false
   var body: some View {
-    GeometryReader { geometry in
-      let wide = geometry.size.width >= 720
-      let layout = wide ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
-      layout {
-        timerPane
-          .frame(width: wide ? 420 : nil, height: wide ? nil : 294)
-          .frame(maxHeight: wide ? .infinity : nil)
-        notesPane
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-      }
+    HStack(spacing: 0) {
+      FocusControls(store: store).frame(width: 360)
+      Rectangle().fill(IntervalTheme.border).frame(width: 1)
+      FocusDayPanel(store: store).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    .alert("Abandon this interval?", isPresented: $confirmingAbandon) {
-      Button("Keep Going", role: .cancel) {}
-      Button("Abandon", role: .destructive, action: store.abandon)
-    } message: {
-      Text("Elapsed active time will be kept in Stats.")
-    }
-  }
-  private var timerPane: some View {
-    ScrollView {
-      VStack(spacing: 12) {
-        VStack(spacing: 4) {
-          Text(store.timer.kind.title).font(.callout).foregroundStyle(.secondary)
-          Text(durationString(store.remaining)).font(
-            .system(
-              size: 68, weight: .light, design: .rounded)
-          )
-          .monospacedDigit().contentTransition(reduceMotion ? .identity : .numericText())
-          .accessibilityLabel(timerAccessibilityLabel)
-          if store.timer.status == .paused {
-            Text("Paused").font(.caption).foregroundStyle(.secondary)
-          }
-        }
-        ProgressView(value: progress).progressViewStyle(.linear)
-          .tint(.white.opacity(0.55)).frame(width: 160)
-          .accessibilityLabel("Session progress")
-        HStack(spacing: 12) {
-          Button(action: store.startOrToggle) {
-            Label(primaryTitle, systemImage: primaryIcon)
-          }
-          .buttonStyle(IntervalPrimaryButton())
-        }
-        .overlay(alignment: .trailing) { cycleActions.offset(x: 38) }
-        messageStack.font(.caption)
-      }.padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 16)
-        .frame(maxWidth: .infinity)
-    }
-    .defaultScrollAnchor(.center, for: .alignment)
-  }
-  @ViewBuilder private var cycleActions: some View {
-    if store.timer.status == .running || store.timer.status == .paused {
-      Button {
-        confirmingAbandon = true
-      } label: {
-        Image(systemName: "stop.fill").font(.system(size: 11)).frame(width: 26, height: 26)
-      }.buttonStyle(.plain).foregroundStyle(.secondary)
-        .accessibilityLabel("Abandon cycle").help("Abandon cycle")
-    }
-  }
-  private var progress: Double {
-    guard store.timer.duration > 0 else { return 0 }
-    return min(1, max(0, 1 - store.remaining / store.timer.duration))
-  }
-  private var notesPane: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text("Notes").font(.caption).foregroundStyle(.secondary)
-      WritingArea(
-        text: Binding(get: { store.data.scratchpad }, set: store.updateScratchpad),
-        placeholder: "Add a note…", label: "Global scratchpad")
-    }.padding(.horizontal, 24).padding(.vertical, 14).frame(maxHeight: .infinity)
-  }
-  @ViewBuilder private var messageStack: some View {
-    if let notice = store.inAppNotification {
-      Label(notice, systemImage: "bell.fill").foregroundStyle(IntervalTheme.accent)
-    }
-    if let recovery = store.recoveryMessage {
-      Label(recovery, systemImage: "pause.circle").foregroundStyle(.secondary)
-    }
-    if let error = store.audioError {
-      Label(error, systemImage: "speaker.slash").foregroundStyle(.orange)
-    }
-  }
-  private var primaryTitle: String {
-    switch store.timer.status {
-    case .running: "Pause"
-    case .paused: "Resume"
-    default: "Start"
-    }
-  }
-  private var primaryIcon: String { store.timer.status == .running ? "pause.fill" : "play.fill" }
-  private var timerAccessibilityLabel: String {
-    "\(store.timer.kind.title), \(store.timer.status.rawValue), \(spokenDuration(store.remaining)) remaining"
   }
 }
 
@@ -491,7 +404,7 @@ struct ReflectionView: View {
   private func setFeedback(_ value: SessionFeedback) { feedback.wrappedValue = value }
 }
 
-private struct WritingArea: View {
+struct WritingArea: View {
   @Binding var text: String
   let placeholder: String
   let label: String

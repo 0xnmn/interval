@@ -346,6 +346,100 @@ struct AppStoreTests {
     }
   }
 
+  @Test func adjustCurrentTimeHandlesReadyRunningAndPausedWithoutChangingSettings() throws {
+    try withStore { store, _ in
+      let settings = store.data.settings
+      let start = Date(timeIntervalSince1970: 10_000)
+
+      store.adjustCurrentTime(by: -10_000, at: start)
+      #expect(store.timer.status == .ready)
+      #expect(store.timer.duration == 60)
+
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 1_500, status: .running, startedAt: start,
+        deadline: start.addingTimeInterval(1_500))
+      store.adjustCurrentTime(by: 300, at: start.addingTimeInterval(100))
+      #expect(store.timer.duration == 1_800)
+      #expect(store.timer.deadline == start.addingTimeInterval(1_800))
+      #expect(TimerEngine.activeDuration(store.timer, now: start.addingTimeInterval(100)) == 100)
+
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 1_500, status: .paused, startedAt: start,
+        elapsedBeforePause: 400)
+      store.adjustCurrentTime(by: 20_000, at: start.addingTimeInterval(500))
+      #expect(store.timer.duration == 11_200)
+      #expect(store.timer.elapsedBeforePause == 400)
+      #expect(store.remaining == 10_800)
+      #expect(store.data.settings == settings)
+    }
+  }
+
+  @Test func adjustAtDeadlineCompletesAndDoesNotBypassReflection() throws {
+    try withStore { store, _ in
+      let deadline = Date(timeIntervalSince1970: 10_000)
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 1_500, status: .running,
+        startedAt: deadline.addingTimeInterval(-1_500), deadline: deadline)
+
+      store.adjustCurrentTime(by: 300, at: deadline)
+
+      #expect(store.data.sessions.count == 1)
+      #expect(store.completionSessionID == store.data.sessions[0].id)
+      #expect(store.timer.kind == .shortBreak)
+      #expect(store.timer.status == .ready)
+      #expect(store.timer.duration == 300)
+    }
+  }
+
+  @Test func startBreakNowAccountsForActiveAndPausedFocusWithoutChangingCadence() throws {
+    try withStore { store, _ in
+      let start = Date(timeIntervalSince1970: 10_000)
+      store.data.completedFocusCount = 3
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 1_500, status: .running, startedAt: start,
+        deadline: start.addingTimeInterval(1_500))
+      store.startBreakNow(at: start.addingTimeInterval(125))
+      #expect(store.data.sessions.count == 1)
+      #expect(store.data.sessions[0].outcome == .abandoned)
+      #expect(store.data.sessions[0].activeDuration == 125)
+      #expect(store.data.completedFocusCount == 3)
+      #expect(store.timer.kind == .shortBreak)
+      #expect(store.timer.status == .running)
+
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 1_500, status: .paused, startedAt: start,
+        elapsedBeforePause: 240)
+      store.startBreakNow(at: start.addingTimeInterval(1_000))
+      #expect(store.data.sessions.count == 2)
+      #expect(store.data.sessions[1].activeDuration == 240)
+      #expect(store.data.completedFocusCount == 3)
+    }
+  }
+
+  @Test func readyFocusStartsBreakWithoutRecordAndDeadlineStillRequiresReflection() throws {
+    try withStore { store, _ in
+      let date = Date(timeIntervalSince1970: 10_000)
+      store.data.completedFocusCount = 4
+      store.startBreakNow(at: date)
+      #expect(store.data.sessions.isEmpty)
+      #expect(store.timer.kind == .shortBreak)
+      #expect(store.data.completedFocusCount == 4)
+      #expect(store.timer.status == .running)
+      #expect(store.timer.startedAt == date)
+
+      let deadline = date.addingTimeInterval(2_000)
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 1_500, status: .running,
+        startedAt: deadline.addingTimeInterval(-1_500), deadline: deadline)
+      store.startBreakNow(at: deadline)
+      #expect(store.data.sessions.count == 1)
+      #expect(store.data.sessions[0].outcome == .completed)
+      #expect(store.completionSessionID == store.data.sessions[0].id)
+      #expect(store.timer.kind == .shortBreak)
+      #expect(store.timer.status == .ready)
+    }
+  }
+
   @Test func previewDismissAndPostponeNeverChangeSchedule() throws {
     try withStore { store, _ in
       let id = store.addReminder()

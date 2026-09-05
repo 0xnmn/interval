@@ -53,7 +53,7 @@ struct IntervalApp: App {
   }
   var body: some Scene {
     Window("Interval", id: "main") { MainView(store: store) }
-      .defaultSize(width: 420, height: 520)
+      .defaultSize(width: 880, height: 680)
       .windowStyle(.hiddenTitleBar)
       .windowResizability(.contentMinSize)
     MenuBarExtra {

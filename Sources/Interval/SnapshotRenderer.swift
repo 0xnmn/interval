@@ -53,6 +53,17 @@ struct SnapshotRequest {
       timer.startedAt = fixtureNow.addingTimeInterval(-510)
       timer.elapsedBeforePause = 420
     }
+    if scene == "dashboard-running" {
+      timer.status = .running
+      timer.startedAt = fixtureNow.addingTimeInterval(-420)
+      timer.deadline = fixtureNow.addingTimeInterval(1_080)
+    }
+    if scene == "dashboard-break" {
+      timer = TimerState(
+        id: timerID, kind: .shortBreak, duration: 300, status: .running,
+        startedAt: fixtureNow.addingTimeInterval(-60),
+        deadline: fixtureNow.addingTimeInterval(240))
+    }
     var session = SessionRecord(
       id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
       timerID: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!, kind: .focus,
@@ -66,7 +77,9 @@ struct SnapshotRequest {
       session.isDurationEstimated = true
     }
     var settings = IntervalSettings()
-    if scene == "history" || scene == "calendar-settings" || scene == "history-no-selection" {
+    if scene == "history" || scene == "calendar-settings" || scene == "history-no-selection"
+      || scene == "dashboard-calendar"
+    {
       settings.calendarIntegrationEnabled = true
       settings.selectedCalendarIDs = ["Work", "Personal"]
       settings.didChooseInitialCalendars = true
@@ -95,10 +108,15 @@ struct SnapshotRequest {
   static func render(request: SnapshotRequest, store: AppStore) async throws {
     let size: NSSize
     let view: AnyView
+    if request.scene == "dashboard-calendar" {
+      store.calendarService.configure(
+        enabled: true, selectedCalendarIDs: store.data.settings.selectedCalendarIDs)
+      _ = store.calendarService.hasEvent(at: fixtureNow)
+    }
     switch request.scene {
     case "history", "history-disabled", "history-no-selection":
       store.selection = .history
-      size = NSSize(width: 640, height: 520)
+      size = NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))
     case "history-legacy":
       size = NSSize(width: 580, height: 650)
@@ -109,7 +127,7 @@ struct SnapshotRequest {
         })
     case "reminders", "reminders-empty":
       store.selection = .reminders
-      size = NSSize(width: 420, height: 520)
+      size = NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))
     case "reminder-editor", "reminder-editor-expanded", "reminder-editor-bottom":
       size = NSSize(width: 420, height: 474)
@@ -151,7 +169,7 @@ struct SnapshotRequest {
       view = AnyView(SettingsView(store: store, selectedTab: 4))
     case "reflection", "reflection-selected":
       store.completionSessionID = store.data.sessions.first?.id
-      size = NSSize(width: 420, height: 520)
+      size = NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))
     case "menu":
       size = NSSize(width: 320, height: 260)
@@ -159,15 +177,15 @@ struct SnapshotRequest {
     case "notes", "notes-empty":
       store.selection = .focus
       if request.scene == "notes-empty" { store.data.scratchpad = "" }
-      size = NSSize(width: 420, height: 520)
+      size = NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))
     case "focus-compact":
       store.selection = .focus
-      size = NSSize(width: 420, height: 520)
+      size = NSSize(width: 780, height: 620)
       view = AnyView(MainView(store: store))
     case "focus-wide":
       store.selection = .focus
-      size = NSSize(width: 800, height: 520)
+      size = NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))
     case "focus-expanded":
       store.selection = .focus
@@ -175,11 +193,15 @@ struct SnapshotRequest {
       view = AnyView(MainView(store: store))
     case "focus-tall":
       store.selection = .focus
-      size = NSSize(width: 420, height: 800)
+      size = NSSize(width: 780, height: 900)
+      view = AnyView(MainView(store: store))
+    case "dashboard-running", "dashboard-break", "dashboard-calendar":
+      store.selection = .focus
+      size = NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))
     default:
       store.selection = .focus
-      size = NSSize(width: 420, height: 520)
+      size = NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))
     }
 
