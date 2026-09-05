@@ -99,7 +99,7 @@ struct SnapshotRequest {
     switch request.scene {
     case "history", "history-disabled", "history-no-selection":
       store.selection = .history
-      size = NSSize(width: 620, height: 450)
+      size = NSSize(width: 640, height: 520)
       view = AnyView(MainView(store: store))
     case "history-legacy":
       size = NSSize(width: 580, height: 650)
@@ -110,17 +110,17 @@ struct SnapshotRequest {
         })
     case "reminders", "reminders-empty":
       store.selection = .reminders
-      size = NSSize(width: 620, height: 450)
+      size = NSSize(width: 420, height: 520)
       view = AnyView(MainView(store: store))
     case "reminder-editor", "reminder-editor-expanded", "reminder-editor-bottom":
-      size = NSSize(width: 620, height: 407)
+      size = NSSize(width: 420, height: 474)
       view = AnyView(
         RemindersView(
           store: store, selection: store.data.reminders[0].id,
           advanced: request.scene != "reminder-editor"))
-    case "reminder-countdown", "reminder-countdown-paused":
+    case "reminder-countdown", "reminder-countdown-paused", "reminder-countdown-light":
       let reminder = store.data.reminders[0]
-      size = NSSize(width: 250, height: 84)
+      size = NSSize(width: 250, height: 64)
       view = AnyView(
         ReminderWarningView(
           reminder: reminder,
@@ -136,23 +136,23 @@ struct SnapshotRequest {
       view = AnyView(
         ReminderTakeoverView(reminder: store.data.reminders[1], dismiss: {}, snooze: {}))
     case "settings":
-      size = NSSize(width: 620, height: 450)
+      size = NSSize(width: 560, height: 450)
       view = AnyView(SettingsView(store: store))
     case "sound-settings":
-      size = NSSize(width: 620, height: 450)
+      size = NSSize(width: 560, height: 450)
       view = AnyView(SettingsView(store: store, showSound: true))
     case "calendar-settings":
-      size = NSSize(width: 620, height: 450)
+      size = NSSize(width: 560, height: 450)
       view = AnyView(SettingsView(store: store, showCalendar: true))
     case "general-settings":
-      size = NSSize(width: 620, height: 450)
+      size = NSSize(width: 560, height: 450)
       view = AnyView(SettingsView(store: store, selectedTab: 3))
     case "updates-settings":
-      size = NSSize(width: 620, height: 450)
+      size = NSSize(width: 560, height: 450)
       view = AnyView(SettingsView(store: store, selectedTab: 4))
     case "reflection":
       store.completionSessionID = store.data.sessions.first?.id
-      size = NSSize(width: 620, height: 450)
+      size = NSSize(width: 420, height: 600)
       view = AnyView(MainView(store: store))
     case "menu":
       size = NSSize(width: 320, height: 260)
@@ -160,15 +160,15 @@ struct SnapshotRequest {
     case "notes", "notes-empty":
       store.selection = .focus
       if request.scene == "notes-empty" { store.data.scratchpad = "" }
-      size = NSSize(width: 620, height: 450)
-      view = AnyView(MainView(store: store, showsNotes: true))
+      size = NSSize(width: 420, height: 520)
+      view = AnyView(MainView(store: store))
     case "focus-compact":
       store.selection = .focus
-      size = NSSize(width: 620, height: 450)
+      size = NSSize(width: 420, height: 520)
       view = AnyView(MainView(store: store))
     default:
       store.selection = .focus
-      size = NSSize(width: 620, height: 450)
+      size = NSSize(width: 420, height: 520)
       view = AnyView(MainView(store: store))
     }
 
@@ -180,15 +180,19 @@ struct SnapshotRequest {
           if accessibilityFixture { transaction.disablesAnimations = true }
         }
         .preferredColorScheme(.dark)
-        .background(request.composited ? Color.clear : IntervalTheme.surface))
+        .background(
+          request.composited
+            ? Color.clear
+            : request.scene == "reminder-countdown-light" ? .white : IntervalTheme.surface))
     hostingView.frame = NSRect(origin: .zero, size: size)
-    let window = NSWindow(
+    let window = SnapshotWindow(
       contentRect: hostingView.frame, styleMask: [.borderless], backing: .buffered, defer: false)
     window.appearance = NSAppearance(named: .darkAqua)
     window.backgroundColor = request.composited ? .clear : NSColor(IntervalTheme.surface)
     window.isOpaque = !request.composited
     window.hasShadow = false
     window.contentView = hostingView
+    NSApp.activate(ignoringOtherApps: true)
     window.makeKeyAndOrderFront(nil)
     try await Task.sleep(for: .milliseconds(350))
     hostingView.layoutSubtreeIfNeeded()
@@ -250,4 +254,9 @@ struct SnapshotRequest {
   private static func descendants(of view: NSView) -> [NSView] {
     view.subviews.flatMap { [$0] + descendants(of: $0) }
   }
+}
+
+private final class SnapshotWindow: NSWindow {
+  override var canBecomeKey: Bool { true }
+  override var canBecomeMain: Bool { true }
 }

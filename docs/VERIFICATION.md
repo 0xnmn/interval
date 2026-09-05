@@ -4,7 +4,7 @@
 
 Environment: Apple silicon, macOS 26.6.2, Xcode 26.6, Swift 6.3.3.
 
-- `swift test`: 41 tests pass across timer, reminder, calendar/persistence, and AppStore workflows, including automatic phase transitions, lifecycle pauses, deadline actions, early-version migration with original-file backup, and future-version rejection.
+- `swift test`: 43 tests pass across timer, reminder, calendar/persistence, AppStore, and cursor-warning workflows. Overlay checks verify stable hosting-view identity, click-through transparency, display-driven cursor movement between engine ticks, and callback shutdown after closing.
 - `scripts/build.sh`: builds the production executable and app bundle under macOS's bundled Bash.
 - `codesign --verify --deep --strict .build/Interval.app`: validates the local ad-hoc app and embedded Sparkle code.
 - `bash -n scripts/build.sh scripts/release.sh`: validates shell syntax.
@@ -26,7 +26,7 @@ Tests execute real state transitions and storage, including pause/resume/abandon
 
 ## Acceptance checks for a signed distribution
 
-Redesign-specific layout checks cover focus/paused/reflection, full/empty notes, history, reminder list/empty templates/editor, floating/full-screen/max-emoji reminders, paused warning, menu, and all five settings pages. Main and settings fixtures use the 620×450 default/minimum. `reminder-editor-bottom` scrolls the actual native editor within a 620×407 viewport (the main content area above navigation) and exposes both suppression toggles. `focus-no-animation` disables transactions for a static fixture; it is not a claim of end-to-end Reduce Motion or Reduce Transparency testing.
+Redesign-specific layout checks cover focus/paused/reflection with always-visible notes, Stats, reminder list/empty templates/editor, floating/full-screen/max-emoji reminders, paused warning, menu, and all five settings pages. Focus and Reminders use a constrained 420×520 portrait window; reflection expands to 420×600, Stats to 640×520, and Settings uses 560×450. `reminder-editor-bottom` scrolls the actual native editor within a 420×474 viewport and exposes both suppression switches. `focus-no-animation` disables transactions for a static fixture; it is not a claim of end-to-end Reduce Motion or Reduce Transparency testing.
 
 Example: `.build/Interval.app/Contents/MacOS/Interval --snapshot .build/focus.png --snapshot-scene focus --snapshot-composited`. This creates isolated fixture data, never edits the user's stored sessions, and requires macOS screen-capture access. Omit the final flag for native bitmap layout rendering.
 

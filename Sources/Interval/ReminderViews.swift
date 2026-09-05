@@ -29,9 +29,10 @@ struct RemindersView: View {
           Menu {
             Button("Delete Reminder…", role: .destructive) { deleting = reminder }
           } label: {
-            Image(systemName: "ellipsis")
+            Image(systemName: "ellipsis").font(.system(size: 14)).frame(width: 26, height: 26)
           }
-          .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Reminder actions")
+          .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+          .accessibilityLabel("Reminder actions")
         }.padding(16)
         ReminderEditor(reminder: reminder, store: store, advanced: $advanced)
       } else {
@@ -109,7 +110,7 @@ struct RemindersView: View {
             store.updateReminder(edited)
           })
       )
-      .labelsHidden().toggleStyle(.switch).controlSize(.small)
+      .labelsHidden().toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
       .accessibilityLabel("Enable \(reminder.title) reminder")
     }
     .padding(.vertical, 9).padding(.horizontal, 10)
@@ -121,7 +122,7 @@ struct RemindersView: View {
 
   private var addMenu: some View {
     Menu {
-      Button("Blank Reminder") { selection = store.addReminder() }
+      Button("New Reminder") { selection = store.addReminder() }
       Divider()
       ForEach(Reminder.templates(startingAt: store.now)) { template in
         Button("\(template.emoji) \(template.title)") {
@@ -129,9 +130,9 @@ struct RemindersView: View {
         }
       }
     } label: {
-      Image(systemName: "plus").frame(width: 24, height: 24)
+      Image(systemName: "plus").font(.system(size: 14)).frame(width: 26, height: 26)
     }
-    .menuStyle(.borderlessButton).fixedSize()
+    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
     .accessibilityLabel("Add reminder")
     .help("Add reminder or template")
   }
@@ -227,10 +228,12 @@ private struct ReminderEditor: View {
                 width: 48)
             }
             Toggle("Hide during focus", isOn: binding(\.suppressDuringFocus))
+              .toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
               .help("Includes paused focus")
             Toggle(
               "Hide during calendar events", isOn: binding(\.suppressDuringCalendar)
             )
+            .toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
             .help("Uses selected calendars")
           }
           .padding(.top, 8)
@@ -240,9 +243,9 @@ private struct ReminderEditor: View {
         }
         .padding(.vertical, 8)
       }
-      .padding(20).frame(maxWidth: 720)
+      .padding(16).frame(maxWidth: .infinity, alignment: .leading)
     }
-    .frame(minWidth: 410).background(GlassBackground()).preferredColorScheme(.dark)
+    .background(GlassBackground()).preferredColorScheme(.dark)
   }
 
   private func editorSection<Content: View>(
@@ -265,9 +268,8 @@ struct ReminderWarningView: View {
   }
 
   var body: some View {
-    HStack(spacing: 12) {
-      Text(reminder.emoji).font(.system(size: 30)).frame(width: 42, height: 42)
-        .background(IntervalTheme.accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 11))
+    HStack(spacing: 8) {
+      Text(reminder.emoji).font(.system(size: 28)).frame(width: 36, height: 36)
       VStack(alignment: .leading, spacing: 3) {
         Text(reminder.title).font(.subheadline.weight(.semibold)).lineLimit(1)
         Text(
@@ -275,14 +277,14 @@ struct ReminderWarningView: View {
             ? "Paused · \(warning.remaining)s idle"
             : "In \(warning.remaining)s"
         )
-        .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        .font(.caption).foregroundStyle(.white.opacity(0.9)).monospacedDigit().lineLimit(1)
       }
       Spacer(minLength: 0)
     }
-    .padding(14).frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(GlassBackground())
-    .clipShape(RoundedRectangle(cornerRadius: 16))
-    .overlay(RoundedRectangle(cornerRadius: 16).stroke(IntervalTheme.border))
+    .foregroundStyle(.white)
+    .padding(6).frame(maxWidth: .infinity, maxHeight: .infinity)
+    .shadow(color: .black.opacity(0.95), radius: 2, y: 1)
+    .shadow(color: .black.opacity(0.7), radius: 5)
     .preferredColorScheme(.dark)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(

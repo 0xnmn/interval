@@ -3,13 +3,13 @@ import SwiftUI
 
 enum Destination: String, CaseIterable, Identifiable {
   case focus = "Focus"
-  case history = "History"
+  case history = "Stats"
   case reminders = "Reminders"
   var id: Self { self }
   var icon: String {
     switch self {
     case .focus: "timer"
-    case .history: "clock.arrow.circlepath"
+    case .history: "chart.bar"
     case .reminders: "checklist"
     }
   }
@@ -17,12 +17,6 @@ enum Destination: String, CaseIterable, Identifiable {
 
 struct MainView: View {
   @Bindable var store: AppStore
-  @State private var showsNotes: Bool
-
-  init(store: AppStore, showsNotes: Bool = false) {
-    self.store = store
-    _showsNotes = State(initialValue: showsNotes)
-  }
 
   var body: some View {
     ZStack {
@@ -30,13 +24,13 @@ struct MainView: View {
       VStack(spacing: 0) {
         Group {
           switch store.selection ?? .focus {
-          case .focus: FocusView(store: store, showsNotes: $showsNotes)
+          case .focus: FocusView(store: store)
           case .history: HistoryView(store: store)
           case .reminders: RemindersView(store: store)
           }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
         Rectangle().fill(IntervalTheme.border).frame(height: 1)
-        HStack(spacing: 16) {
+        HStack(spacing: 18) {
           ForEach(Destination.allCases) { item in
             Button {
               store.selection = item
@@ -48,14 +42,19 @@ struct MainView: View {
             .accessibilityAddTraits((store.selection ?? .focus) == item ? .isSelected : [])
           }
           Spacer(minLength: 4)
-          SettingsLink { Image(systemName: "gearshape") }
-            .buttonStyle(.plain).help("Settings · ⌘,")
-            .accessibilityLabel("Settings")
+          SettingsLink {
+            Image(systemName: "gearshape").font(.system(size: 15)).frame(width: 28, height: 28)
+          }
+          .buttonStyle(.plain).help("Settings · ⌘,")
+          .accessibilityLabel("Settings")
         }.font(.caption).foregroundStyle(.secondary)
-          .padding(.horizontal, 20).frame(height: 42)
+          .padding(.horizontal, 18).frame(height: 46)
       }
     }
-    .frame(minWidth: 620, minHeight: 450)
+    .frame(
+      width: store.selection == .history ? 640 : 420,
+      height: (store.selection ?? .focus) == .focus && store.completionSessionID != nil ? 600 : 520
+    )
     .tint(IntervalTheme.accent).preferredColorScheme(.dark)
     .safeAreaInset(edge: .bottom) {
       if let error = store.persistenceError {
@@ -71,69 +70,50 @@ struct FocusView: View {
   @Bindable var store: AppStore
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var confirmingAbandon = false
-  @Binding var showsNotes: Bool
   var body: some View {
     VStack(spacing: 0) {
-      if showsNotes {
-        notesPane
-      } else {
-        ScrollView {
-          VStack(spacing: 18) {
-            VStack(spacing: 10) {
-              Text(store.timer.kind.title).font(.callout).foregroundStyle(.secondary)
-              Text(durationString(store.remaining)).font(
-                .system(size: 80, weight: .light, design: .rounded)
-              )
-              .monospacedDigit().contentTransition(reduceMotion ? .identity : .numericText())
-              .accessibilityLabel(timerAccessibilityLabel)
-              if store.timer.status == .paused {
-                Text("Paused").font(.caption).foregroundStyle(.secondary)
-              }
+      ScrollView {
+        VStack(spacing: store.completionSessionID == nil ? 12 : 8) {
+          VStack(spacing: 4) {
+            Text(store.timer.kind.title).font(.callout).foregroundStyle(.secondary)
+            Text(durationString(store.remaining)).font(
+              .system(
+                size: store.completionSessionID == nil ? 68 : 48, weight: .light, design: .rounded)
+            )
+            .monospacedDigit().contentTransition(reduceMotion ? .identity : .numericText())
+            .accessibilityLabel(timerAccessibilityLabel)
+            if store.timer.status == .paused {
+              Text("Paused").font(.caption).foregroundStyle(.secondary)
             }
-            ProgressView(value: progress).progressViewStyle(.linear)
-              .tint(.white.opacity(0.55)).frame(width: 160)
-              .accessibilityLabel("Session progress")
-            HStack(spacing: 12) {
-              Button(action: store.startOrToggle) {
-                Label(primaryTitle, systemImage: primaryIcon)
-              }
-              .buttonStyle(IntervalPrimaryButton())
-              cycleActions
+          }
+          ProgressView(value: progress).progressViewStyle(.linear)
+            .tint(.white.opacity(0.55)).frame(width: 160)
+            .accessibilityLabel("Session progress")
+          HStack(spacing: 12) {
+            Button(action: store.startOrToggle) {
+              Label(primaryTitle, systemImage: primaryIcon)
             }
-            cycleIndicator
-            if let id = store.completionSessionID {
-              ReflectionView(store: store, sessionID: id).frame(maxWidth: 440)
-            }
-            messageStack.font(.caption)
-          }.padding(.horizontal, 32).padding(.top, 32).padding(.bottom, 16)
-            .frame(maxWidth: .infinity)
-        }
+            .buttonStyle(IntervalPrimaryButton())
+          }
+          .overlay(alignment: .trailing) { cycleActions.offset(x: 38) }
+          cycleIndicator
+          if let id = store.completionSessionID {
+            ReflectionView(store: store, sessionID: id).frame(maxWidth: 440)
+          }
+          messageStack.font(.caption)
+        }.padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 16)
+          .frame(maxWidth: .infinity)
       }
-      HStack {
-        if showsNotes {
-          Button {
-            store.startOrToggle()
-          } label: {
-            Label(durationString(store.remaining), systemImage: primaryIcon).monospacedDigit()
-          }.buttonStyle(.plain).help(primaryTitle)
-            .accessibilityLabel("\(primaryTitle), \(timerAccessibilityLabel)")
-          cycleActions
-        }
-        Spacer()
-        Button {
-          showsNotes.toggle()
-        } label: {
-          Label(
-            showsNotes ? "Back to timer" : "Notes",
-            systemImage: showsNotes ? "arrow.left" : "square.and.pencil")
-        }.buttonStyle(.plain).keyboardShortcut("n", modifiers: [.command, .shift])
-      }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 12)
+      .defaultScrollAnchor(.center, for: .alignment)
+      .frame(maxHeight: .infinity)
+      Rectangle().fill(IntervalTheme.border).frame(height: 1).padding(.horizontal, 24)
+      notesPane.frame(height: 180)
     }
     .alert("Abandon this interval?", isPresented: $confirmingAbandon) {
       Button("Keep Going", role: .cancel) {}
       Button("Abandon", role: .destructive, action: store.abandon)
     } message: {
-      Text("Elapsed active time will be kept in History.")
+      Text("Elapsed active time will be kept in Stats.")
     }
   }
   @ViewBuilder private var cycleActions: some View {
@@ -141,9 +121,9 @@ struct FocusView: View {
       Menu {
         Button("Abandon Cycle…", role: .destructive) { confirmingAbandon = true }
       } label: {
-        Image(systemName: "ellipsis")
+        Image(systemName: "ellipsis").font(.system(size: 14)).frame(width: 26, height: 26)
       }
-      .menuStyle(.borderlessButton).fixedSize()
+      .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
       .accessibilityLabel("Cycle actions").help("Cycle actions")
     }
   }
@@ -159,8 +139,9 @@ struct FocusView: View {
   }
   private var notesPane: some View {
     VStack(alignment: .leading, spacing: 8) {
+      Text("Notes").font(.caption).foregroundStyle(.secondary)
       TextEditor(text: Binding(get: { store.data.scratchpad }, set: store.updateScratchpad))
-        .font(.system(size: 15)).lineSpacing(6).scrollContentBackground(.hidden).frame(
+        .font(.system(size: 13)).lineSpacing(4).scrollContentBackground(.hidden).frame(
           maxHeight: .infinity
         )
         .overlay(alignment: .topLeading) {
@@ -171,7 +152,7 @@ struct FocusView: View {
             .allowsHitTesting(false)
           }
         }.accessibilityLabel("Global scratchpad")
-    }.padding(28).frame(maxHeight: .infinity)
+    }.padding(.horizontal, 24).padding(.vertical, 14).frame(maxHeight: .infinity)
   }
   @ViewBuilder private var messageStack: some View {
     if let notice = store.inAppNotification {
@@ -211,7 +192,7 @@ struct HistoryView: View {
   var body: some View {
     VStack(spacing: 0) {
       HStack {
-        Text("History").font(.headline)
+        Text("Stats").font(.headline)
         Spacer()
         Button("Today") {
           month = store.now
@@ -571,7 +552,8 @@ struct MenuBarView: View {
             } label: {
               Image(systemName: "ellipsis")
             }
-            .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Cycle actions")
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().accessibilityLabel(
+              "Cycle actions")
           }
         }
       }
@@ -630,7 +612,7 @@ struct MenuBarView: View {
         Button("Keep Going", role: .cancel) {}
         Button("Abandon", role: .destructive, action: store.abandon)
       } message: {
-        Text("Elapsed active time will be kept in History.")
+        Text("Elapsed active time will be kept in Stats.")
       }
   }
   private var primaryTitle: String {

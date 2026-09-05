@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import IntervalCore
+import QuartzCore
 import SwiftUI
 
 enum UserIdleMonitor {
@@ -16,24 +17,36 @@ enum UserIdleMonitor {
   }
 }
 
-@MainActor final class ReminderOverlayController {
+@MainActor final class ReminderOverlayController: NSObject {
   private var panels: [NSPanel] = []
   private var shown: ReminderOverlay?
   private var shownReminder: Reminder?
+  private var warningHost: NSHostingView<ReminderWarningView>?
+  private var cursorDisplayLink: CADisplayLink?
+  private let cursorLocation: () -> NSPoint
+
+  init(cursorLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation }) {
+    self.cursorLocation = cursorLocation
+    super.init()
+  }
+
+  deinit { cursorDisplayLink?.invalidate() }
 
   func update(_ overlay: ReminderOverlay?, reminder: Reminder?, store: AppStore) {
     guard let overlay, let reminder else {
       close()
       return
     }
-    if case .warning = overlay, case .warning = shown {
-      if reminder != shownReminder || overlay != shown {
-        panels.first?.contentView = NSHostingView(
-          rootView: ReminderWarningView(reminder: reminder, overlay: overlay))
-        shown = overlay
-        shownReminder = reminder
+    if case .warning(_, let remaining, let paused) = overlay,
+      case .warning(_, let previousRemaining, let previousPaused) = shown
+    {
+      if reminder != shownReminder || ceil(remaining) != ceil(previousRemaining)
+        || paused != previousPaused
+      {
+        warningHost?.rootView = ReminderWarningView(reminder: reminder, overlay: overlay)
       }
-      positionWarning()
+      shown = overlay
+      shownReminder = reminder
       return
     }
     guard overlay != shown else { return }
@@ -43,16 +56,23 @@ enum UserIdleMonitor {
     switch overlay {
     case .warning:
       let panel = NSPanel(
-        contentRect: NSRect(x: 0, y: 0, width: 250, height: 84),
+        contentRect: NSRect(x: 0, y: 0, width: 250, height: 64),
         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
       configure(panel)
+      panel.hasShadow = false
       panel.level = .floating
-      panel.contentView = NSHostingView(
+      let host = NSHostingView(
         rootView: ReminderWarningView(reminder: reminder, overlay: overlay))
+      warningHost = host
+      panel.contentView = host
       panel.ignoresMouseEvents = true
       panels = [panel]
       positionWarning()
       panel.orderFrontRegardless()
+      let target = CursorFrameTarget { [weak self] in self?.positionWarning() }
+      let link = panel.displayLink(target: target, selector: #selector(CursorFrameTarget.frame))
+      link.add(to: .main, forMode: .common)
+      cursorDisplayLink = link
     case .reminder:
       let cursor = NSEvent.mouseLocation
       let cursorScreen =
@@ -88,6 +108,9 @@ enum UserIdleMonitor {
   }
 
   func close() {
+    cursorDisplayLink?.invalidate()
+    cursorDisplayLink = nil
+    warningHost = nil
     panels.forEach {
       $0.orderOut(nil)
       $0.close()
@@ -105,14 +128,15 @@ enum UserIdleMonitor {
   }
   private func positionWarning() {
     guard let panel = panels.first else { return }
-    let cursor = NSEvent.mouseLocation
+    let cursor = cursorLocation()
     let screen = NSScreen.screens.first(where: { $0.frame.contains(cursor) }) ?? NSScreen.main
     guard let safe = screen?.visibleFrame.insetBy(dx: 12, dy: 12) else { return }
     var origin = NSPoint(x: cursor.x + 22, y: cursor.y - panel.frame.height - 22)
-    if origin.x + panel.frame.width > safe.maxX { origin.x = cursor.x - panel.frame.width - 22 }
     origin.x = min(max(origin.x, safe.minX), safe.maxX - panel.frame.width)
     origin.y = min(max(origin.y, safe.minY), safe.maxY - panel.frame.height)
-    panel.setFrameOrigin(origin)
+    if panel.frame.origin != origin {
+      panel.setFrameOrigin(origin)
+    }
   }
   private func centered(size: NSSize, in rect: NSRect) -> NSRect {
     NSRect(
@@ -122,6 +146,12 @@ enum UserIdleMonitor {
   private func safeFrame(for screen: NSScreen) -> NSRect {
     screen.visibleFrame.insetBy(dx: 8, dy: 8)
   }
+}
+
+@MainActor private final class CursorFrameTarget: NSObject {
+  let update: () -> Void
+  init(update: @escaping () -> Void) { self.update = update }
+  @objc func frame() { update() }
 }
 
 private final class EscapePanel: NSPanel {

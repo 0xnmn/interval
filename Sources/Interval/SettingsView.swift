@@ -56,8 +56,8 @@ struct SettingsView: View {
       }
       .padding(20)
     }
-    .frame(width: 620, height: 450)
-    .tint(IntervalTheme.accent)
+    .frame(width: 560, height: 450)
+    .tint(.blue)
     .preferredColorScheme(.dark)
     .task {
       notificationStatus = await store.notifications.status()
@@ -234,6 +234,7 @@ private struct GeneralSettingsView: View {
     SettingsPage {
       SettingsSection("Startup") {
         Toggle("Launch Interval at login", isOn: Binding(get: { loginEnabled }, set: setLogin))
+          .toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
         if SMAppService.mainApp.status == .requiresApproval {
           Label(
             "Approval is required in System Settings → General → Login Items.",
@@ -295,6 +296,7 @@ private struct UpdatesSettingsView: View {
             get: { store.updates.automaticallyChecks },
             set: { store.updates.automaticallyChecks = $0 })
         )
+        .toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
         .disabled(!store.updates.isConfigured)
         Toggle(
           "Automatically download updates",
@@ -302,6 +304,7 @@ private struct UpdatesSettingsView: View {
             get: { store.updates.automaticallyDownloads },
             set: { store.updates.automaticallyDownloads = $0 })
         )
+        .toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
         .disabled(!store.updates.isConfigured)
         Button("Check Now") { store.updates.checkNow() }.disabled(!store.updates.isConfigured)
       }
@@ -335,7 +338,9 @@ private struct CalendarSettingsView: View {
                 } else {
                   store.disableCalendarIntegration()
                 }
-              }))
+              })
+          )
+          .toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
           if store.data.settings.calendarIntegrationEnabled {
             if store.calendarService.calendars.isEmpty {
               Text("No calendars are available.").foregroundStyle(.secondary)
@@ -345,7 +350,9 @@ private struct CalendarSettingsView: View {
                   calendar.title,
                   isOn: Binding(
                     get: { store.data.settings.selectedCalendarIDs.contains(calendar.id) },
-                    set: { store.setCalendarSelected(calendar.id, selected: $0) }))
+                    set: { store.setCalendarSelected(calendar.id, selected: $0) })
+                )
+                .toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
               }
               if store.data.settings.selectedCalendarIDs.isEmpty {
                 Text("No calendars selected. No events will be displayed or suppress reminders.")

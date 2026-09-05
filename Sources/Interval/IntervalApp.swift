@@ -53,9 +53,9 @@ struct IntervalApp: App {
   }
   var body: some Scene {
     Window("Interval", id: "main") { MainView(store: store) }
-      .defaultSize(width: 620, height: 450)
+      .defaultSize(width: 420, height: 520)
       .windowStyle(.hiddenTitleBar)
-      .windowResizability(.contentMinSize)
+      .windowResizability(.contentSize)
     MenuBarExtra {
       MenuBarView(store: store)
     } label: {
@@ -70,7 +70,7 @@ struct IntervalApp: App {
             "s", modifiers: [.command, .shift])
           Divider()
           Button("Focus") { store.selection = .focus }.keyboardShortcut("1")
-          Button("History") { store.selection = .history }.keyboardShortcut("2")
+          Button("Stats") { store.selection = .history }.keyboardShortcut("2")
           Button("Reminders") { store.selection = .reminders }.keyboardShortcut("3")
         }
         CommandGroup(after: .appInfo) {

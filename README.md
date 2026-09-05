@@ -19,9 +19,9 @@ The default build targets the build Mac's architecture. It is a local developmen
 ## Use Interval
 
 - **Focus cycle:** Start once. Interval automatically alternates 25-minute focus sessions and 5-minute breaks, with a 10-minute long break after every four completed focus sessions. All four values are configurable. Pause/Resume controls the current phase; Abandon stops the cycle. There is no manual mode picker.
-- **Reflect:** completed focus sessions are saved immediately. Choose Distracted, Neutral, or Focused and optionally journal without delaying your break. Edit reflections later in History.
-- **Scratchpad:** one autosaved note across every session. Open Notes from Focus (⌘⇧N) for a full-width writing surface; the timer continues. The menu-bar quick-note field appends to it.
-- **History:** month calendar and chronological daily sessions, with active duration and outcome. Calendar events are a separate visual category, not fabricated focus records.
+- **Reflect:** completed focus sessions are saved immediately. Choose Distracted, Neutral, or Focused and optionally journal without delaying your break. Edit reflections later in Stats.
+- **Scratchpad:** one autosaved note across every session, always visible below the timer. The menu-bar quick-note field appends to it.
+- **Stats:** month calendar and chronological daily sessions, with active duration and outcome. Calendar events are a separate visual category, not fabricated focus records.
 - **Sound:** Silence, Brown Noise, Rain, or Ocean, generated locally with separate focus/break choices and volume.
 - **Calendar:** opt in under Settings → Calendar and choose calendars. Interval never creates, edits, or deletes events. macOS calls the required reading permission “Full Access.”
 - **Reminders:** choose Add from Template for Look Away (20 seconds / 10 minutes), Posture (10 seconds / 20 minutes), Stretch (60 seconds / 30 minutes), or Water (60 seconds / 60 minutes). Templates create normal editable reminders. Blank reminders are also supported; none are enabled without being added.
@@ -43,7 +43,7 @@ The default build targets the build Mac's architecture. It is a local developmen
 ## Keyboard and accessibility
 
 - `⌘⇧S`: start/pause/resume the cycle.
-- `⌘1`, `⌘2`, `⌘3`: Focus, History, Reminders.
+- `⌘1`, `⌘2`, `⌘3`: Focus, Stats, Reminders.
 - `⌘,`: Settings. `⌘Q`: Quit.
 - Native controls, text editing, semantic materials, descriptive accessibility labels, and selected-state semantics. Motion is restrained; there are no flashing reminders.
 
