@@ -197,7 +197,6 @@ private struct FocusDial: View {
 
 struct FocusDayPanel: View {
   @Bindable var store: AppStore
-  @State private var newTodo = ""
   @State private var selectedSessionID: UUID?
   private var sessions: [SessionRecord] {
     store.data.sessions.filter {
@@ -208,22 +207,7 @@ struct FocusDayPanel: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
         Text("To-dos").font(.headline)
-        VStack(spacing: 8) {
-          ForEach(store.data.todos) { todo in
-            TodoRow(store: store, todo: todo)
-          }
-          HStack(spacing: 10) {
-            Image(systemName: "plus").foregroundStyle(.secondary).frame(width: 18)
-            TextField("Add a to-do…", text: $newTodo)
-              .textFieldStyle(.plain).onSubmit(addTodo)
-              .accessibilityLabel("New to-do")
-            Button(action: addTodo) {
-              Image(systemName: "return").frame(width: 24, height: 24)
-            }.buttonStyle(.plain).foregroundStyle(.secondary)
-              .disabled(newTodo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-              .help("Add to-do").accessibilityLabel("Add to-do")
-          }.padding(.vertical, 5)
-        }.font(.body)
+        TodoList(store: store)
         Text("Today").font(.headline).padding(.top, 12)
         HStack(spacing: 28) {
           VStack(alignment: .leading, spacing: 4) {
@@ -261,11 +245,6 @@ struct FocusDayPanel: View {
         }.frame(width: 460, height: 500).background(GlassBackground())
       }
     }
-  }
-
-  private func addTodo() {
-    store.addTodo(newTodo)
-    newTodo = ""
   }
 
   private var dayItems: [HistoryItem] {
@@ -315,43 +294,5 @@ struct FocusDayPanel: View {
           .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary).padding(.top, 12)
       }
     }
-  }
-}
-
-private struct TodoRow: View {
-  @Bindable var store: AppStore
-  let todo: TodoItem
-  @State private var title: String
-  @FocusState private var isEditing: Bool
-
-  init(store: AppStore, todo: TodoItem) {
-    self.store = store
-    self.todo = todo
-    _title = State(initialValue: todo.title)
-  }
-
-  var body: some View {
-    HStack(alignment: .firstTextBaseline, spacing: 10) {
-      Toggle("", isOn: Binding(get: { todo.isCompleted }, set: { _ in store.toggleTodo(todo.id) }))
-        .toggleStyle(.checkbox).labelsHidden().tint(.accentColor)
-        .accessibilityLabel("Complete \(todo.title)")
-      TextField("To-do", text: $title, axis: .vertical)
-        .textFieldStyle(.plain).lineLimit(1...5)
-        .strikethrough(todo.isCompleted)
-        .foregroundStyle(todo.isCompleted ? .secondary : .primary)
-        .focused($isEditing)
-        .accessibilityLabel("To-do title")
-        .onChange(of: title) { _, value in store.updateTodoTitle(todo.id, title: value) }
-        .onChange(of: isEditing) { _, editing in
-          if !editing { title = todo.title }
-        }
-        .onSubmit { isEditing = false }
-      Button {
-        store.deleteTodo(todo.id)
-      } label: {
-        Image(systemName: "xmark").font(.caption).frame(width: 24, height: 24)
-      }.buttonStyle(.plain).foregroundStyle(.tertiary)
-        .help("Delete to-do").accessibilityLabel("Delete \(todo.title)")
-    }.padding(.vertical, 5)
   }
 }

@@ -359,14 +359,39 @@ final class AppStore {
   func addTodo(_ text: String) {
     let title = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !title.isEmpty else { return }
-    data.todos.append(TodoItem(title: title))
+    if let index = data.todos.firstIndex(where: {
+      $0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }) {
+      data.todos[index].title = title
+      data.todos[index].isCompleted = false
+    } else {
+      data.todos.append(TodoItem(title: title))
+    }
     save()
+  }
+  @discardableResult func insertTodo(after id: UUID? = nil) -> UUID {
+    if let id, let index = data.todos.firstIndex(where: { $0.id == id }) {
+      if data.todos[index].title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return id
+      }
+      let item = TodoItem(title: "")
+      data.todos.insert(item, at: index + 1)
+      save()
+      return item.id
+    }
+    if let first = data.todos.first { return first.id }
+    let item = TodoItem(title: "")
+    data.todos.append(item)
+    save()
+    return item.id
   }
   func updateTodoTitle(_ id: UUID, title: String) {
     guard let index = data.todos.firstIndex(where: { $0.id == id }) else { return }
-    let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !title.isEmpty else { return }
+    guard data.todos[index].title != title else { return }
     data.todos[index].title = title
+    if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      data.todos[index].isCompleted = false
+    }
     save()
   }
   func toggleTodo(_ id: UUID) {
@@ -374,10 +399,16 @@ final class AppStore {
     data.todos[index].isCompleted.toggle()
     save()
   }
-  func deleteTodo(_ id: UUID) {
-    guard data.todos.contains(where: { $0.id == id }) else { return }
-    data.todos.removeAll { $0.id == id }
+  @discardableResult func deleteTodo(_ id: UUID) -> UUID? {
+    guard let index = data.todos.firstIndex(where: { $0.id == id }) else { return nil }
+    if data.todos.count == 1 {
+      data.todos[0].title = ""
+      data.todos[0].isCompleted = false
+    } else {
+      data.todos.remove(at: index)
+    }
     save()
+    return data.todos[max(0, index - 1)].id
   }
   func setSessionTitle(_ title: String) {
     guard title != data.sessionTitle else { return }

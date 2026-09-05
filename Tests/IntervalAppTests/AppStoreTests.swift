@@ -317,6 +317,8 @@ struct AppStoreTests {
       let secondID = try #require(store.data.todos.last?.id)
       store.updateTodoTitle(firstID, title: "  Renamed task\n")
       store.updateTodoTitle(firstID, title: "   ")
+      #expect(store.data.todos.first?.title == "   ")
+      store.updateTodoTitle(firstID, title: "Renamed task")
       store.toggleTodo(firstID)
       #expect(store.data.todos.map(\.id) == [firstID, secondID])
       store.deleteTodo(secondID)
@@ -325,6 +327,28 @@ struct AppStoreTests {
       #expect(saved.sessions[0].feedback == "focused")
       #expect(saved.sessions[0].journal == "A useful insight")
       #expect(saved.todos == [TodoItem(id: firstID, title: "Renamed task", isCompleted: true)])
+    }
+  }
+
+  @Test func keyboardTodoEditingKeepsOneRowAndPreservesOrdering() throws {
+    try withStore { store, persistence in
+      let first = store.insertTodo()
+      #expect(store.insertTodo(after: first) == first)
+      store.updateTodoTitle(first, title: "First task ")
+      let next = store.insertTodo(after: first)
+      store.updateTodoTitle(next, title: "Second")
+      let middle = store.insertTodo(after: first)
+      #expect(store.data.todos.map(\.id) == [first, middle, next])
+      #expect(store.deleteTodo(middle) == first)
+      #expect(store.deleteTodo(first) == next)
+      store.toggleTodo(next)
+      #expect(store.deleteTodo(next) == next)
+      #expect(store.data.todos == [TodoItem(id: next, title: "")])
+      #expect(store.deleteTodo(next) == next)
+      store.addTodo("Quick add")
+      #expect(store.data.todos == [TodoItem(id: next, title: "Quick add")])
+      let saved = try persistence.load()
+      #expect(saved.todos == store.data.todos)
     }
   }
 
