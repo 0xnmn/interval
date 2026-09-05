@@ -101,7 +101,6 @@ struct FocusView: View {
             .buttonStyle(IntervalPrimaryButton())
           }
           .overlay(alignment: .trailing) { cycleActions.offset(x: 38) }
-          cycleIndicator
           messageStack.font(.caption)
         }.padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 16)
           .frame(maxWidth: .infinity)
@@ -130,12 +129,6 @@ struct FocusView: View {
   private var progress: Double {
     guard store.timer.duration > 0 else { return 0 }
     return min(1, max(0, 1 - store.remaining / store.timer.duration))
-  }
-  private var cycleIndicator: some View {
-    let total = max(1, store.data.settings.longBreakEvery)
-    let completed = store.data.completedFocusCount
-    let current = store.timer.kind == .focus ? completed % total : max(0, completed - 1) % total
-    return Text("Cycle \(current + 1) of \(total)").font(.caption).foregroundStyle(.secondary)
   }
   private var notesPane: some View {
     VStack(alignment: .leading, spacing: 8) {
