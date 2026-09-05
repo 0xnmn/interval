@@ -7,7 +7,9 @@ struct SettingsView: View {
     @Bindable var store: AppStore
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var selectedTab: Int
-    init(store: AppStore, showSound: Bool = false) { self.store = store; _selectedTab = State(initialValue: showSound ? 1 : 0) }
+    init(store: AppStore, showSound: Bool = false, showCalendar: Bool = false) {
+        self.store = store; _selectedTab = State(initialValue: showCalendar ? 2 : showSound ? 1 : 0)
+    }
     var body: some View {
         TabView(selection: $selectedTab) {
             Form {
@@ -37,11 +39,68 @@ struct SettingsView: View {
                     }
                 }
             }.formStyle(.grouped).padding().tabItem { Label("Sound & Alerts", systemImage: "speaker.wave.2") }.tag(1)
-        }.frame(width: 500, height: 370).tint(.teal).task { notificationStatus = await store.notifications.status() }
+            CalendarSettingsView(store: store).padding().tabItem { Label("Calendar", systemImage: "calendar") }.tag(2)
+        }.frame(width: 520, height: 430).tint(.teal).task { notificationStatus = await store.notifications.status() }
     }
     private func setting(_ keyPath: WritableKeyPath<IntervalSettings, Int>) -> Binding<Int> {
         Binding(get: { store.data.settings[keyPath: keyPath] }, set: { value in var settings = store.data.settings; settings[keyPath: keyPath] = value; store.updateSettings(settings) })
     }
     private func soundSetting(_ keyPath: WritableKeyPath<IntervalSettings, AmbientSound>) -> Binding<AmbientSound> { Binding(get: { store.data.settings[keyPath: keyPath] }, set: { var value = store.data.settings; value[keyPath: keyPath] = $0; store.updateSettings(value) }) }
     private var volumeSetting: Binding<Double> { Binding(get: { store.data.settings.soundVolume }, set: { var value = store.data.settings; value.soundVolume = $0; store.updateSettings(value) }) }
+}
+
+private struct CalendarSettingsView: View {
+    @Bindable var store: AppStore
+    var body: some View {
+        Form {
+            Section("Apple Calendar") {
+                switch store.calendarService.authorizationState {
+                case .notDetermined:
+                    Text("Calendar access is off. Interval continues to work without it.").foregroundStyle(.secondary)
+                    Button("Enable Calendar Integration") { Task { await store.enableCalendarIntegration() } }
+                        .buttonStyle(.borderedProminent)
+                    Text("macOS calls this Full Access. Interval only reads selected calendars; it never creates, edits, or deletes events.")
+                        .font(.caption).foregroundStyle(.secondary)
+                case .fullAccess:
+                    LabeledContent("Integration", value: store.data.settings.calendarIntegrationEnabled ? "Enabled" : "Disabled")
+                    LabeledContent("Selected calendars", value: "\(store.data.settings.selectedCalendarIDs.count)")
+                    Toggle("Enable Calendar Integration", isOn: Binding(
+                        get: { store.data.settings.calendarIntegrationEnabled },
+                        set: { enabled in
+                            if enabled { Task { await store.enableCalendarIntegration() } }
+                            else { store.disableCalendarIntegration() }
+                        }))
+                    if store.data.settings.calendarIntegrationEnabled {
+                        if store.calendarService.calendars.isEmpty {
+                            Text("No calendars are available.").foregroundStyle(.secondary)
+                        } else {
+                            ForEach(store.calendarService.calendars) { calendar in
+                                Toggle(calendar.title, isOn: Binding(
+                                    get: { store.data.settings.selectedCalendarIDs.contains(calendar.id) },
+                                    set: { store.setCalendarSelected(calendar.id, selected: $0) }))
+                            }
+                            if store.data.settings.selectedCalendarIDs.isEmpty {
+                                Text("No calendars selected. No events will be displayed or suppress reminders.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                case .denied:
+                    accessUnavailable("Calendar access was denied or revoked. Calendar features are unavailable; the rest of Interval still works.")
+                case .restricted:
+                    accessUnavailable("Calendar access is restricted on this Mac. The rest of Interval still works.")
+                case .error(let message):
+                    Label("Calendar access failed: \(message)", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                }
+            }
+        }.formStyle(.grouped)
+    }
+
+    @ViewBuilder private func accessUnavailable(_ message: String) -> some View {
+        Label(message, systemImage: "calendar.badge.exclamationmark").foregroundStyle(.secondary)
+        Button("Open Privacy Settings") {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!)
+        }
+    }
 }

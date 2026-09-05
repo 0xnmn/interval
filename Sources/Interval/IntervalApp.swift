@@ -31,8 +31,12 @@ struct IntervalApp: App {
         if let request = SnapshotRequest(arguments: CommandLine.arguments) {
             let ephemeral = FileManager.default.temporaryDirectory
                 .appendingPathComponent("interval-snapshot-\(UUID().uuidString).json")
-            let snapshotStore = AppStore(persistence: JSONStore(fileURL: ephemeral))
+            let snapshotStore = AppStore(persistence: JSONStore(fileURL: ephemeral),
+                                         calendarService: CalendarService(fixtureEvents: SnapshotRenderer.calendarFixture))
             snapshotStore.data = SnapshotRenderer.fixture(scene: request.scene)
+            snapshotStore.calendarService.configure(enabled: snapshotStore.data.settings.calendarIntegrationEnabled,
+                selectedCalendarIDs: snapshotStore.data.settings.selectedCalendarIDs)
+            snapshotStore.calendarService.show(month: SnapshotRenderer.fixtureNow)
             snapshotStore.now = SnapshotRenderer.fixtureNow
             _store = State(initialValue: snapshotStore)
             AppDelegate.snapshotRequest = request

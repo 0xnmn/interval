@@ -15,14 +15,16 @@ final class AppStore {
     var audioError: String?
     var notificationError: String?
     let notifications = NotificationService()
+    let calendarService: CalendarService
     private let audio = AmbientAudio()
     private let persistence: JSONStore
     private var persistenceLocked = false
     private var ticker: Task<Void, Never>?
     private var observers: [NSObjectProtocol] = []
 
-    init(persistence: JSONStore = JSONStore()) {
+    init(persistence: JSONStore = JSONStore(), calendarService: CalendarService? = nil) {
         self.persistence = persistence
+        self.calendarService = calendarService ?? CalendarService()
         var recoveredRunningFocus = false
         do { data = try persistence.load() } catch {
             data = PersistedData()
@@ -38,6 +40,8 @@ final class AppStore {
             recoveredRunningFocus = true
         }
         if data.activeTimer == nil { data.activeTimer = timer(for: .focus) }
+        self.calendarService.configure(enabled: data.settings.calendarIntegrationEnabled,
+                                       selectedCalendarIDs: data.settings.selectedCalendarIDs)
         completionSessionID = data.sessions.last(where: { $0.kind == .focus && $0.outcome == .completed && $0.feedback == nil })?.id
         notifications.fallback = { [weak self] message in self?.inAppNotification = message }
         audio.failure = { [weak self] message in self?.audioError = message }
@@ -62,6 +66,11 @@ final class AppStore {
                 self.now = Date()
                 if !self.reconcile(at: self.now), self.data.activeTimer?.status == .running { self.syncServices(for: self.timer) }
             }
+        })
+        observers.append(center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] notification in
+            guard let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  application.bundleIdentifier == Bundle.main.bundleIdentifier else { return }
+            Task { @MainActor in self?.calendarService.applicationDidActivate() }
         })
     }
 
@@ -118,6 +127,36 @@ final class AppStore {
         if data.activeTimer?.status == .ready { data.activeTimer = timer(for: data.activeTimer?.kind ?? .focus) }
         save()
         if data.activeTimer?.status == .running { syncServices(for: timer) }
+    }
+
+    func enableCalendarIntegration() async {
+        guard await calendarService.requestFullAccessToEvents() else { return }
+        var settings = data.settings
+        settings.calendarIntegrationEnabled = true
+        if !settings.didChooseInitialCalendars {
+            settings.selectedCalendarIDs = Set(calendarService.calendars.map(\.id))
+            settings.didChooseInitialCalendars = true
+        }
+        updateCalendarSettings(settings)
+    }
+
+    func disableCalendarIntegration() {
+        var settings = data.settings; settings.calendarIntegrationEnabled = false
+        updateCalendarSettings(settings)
+    }
+
+    func setCalendarSelected(_ id: String, selected: Bool) {
+        var settings = data.settings
+        if selected { settings.selectedCalendarIDs.insert(id) } else { settings.selectedCalendarIDs.remove(id) }
+        settings.didChooseInitialCalendars = true
+        updateCalendarSettings(settings)
+    }
+
+    private func updateCalendarSettings(_ settings: IntervalSettings) {
+        data.settings = settings
+        calendarService.configure(enabled: settings.calendarIntegrationEnabled,
+                                  selectedCalendarIDs: settings.selectedCalendarIDs)
+        save()
     }
 
     func checkpointForTermination() {

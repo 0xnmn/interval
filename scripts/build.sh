@@ -25,7 +25,7 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>26.0</string>
   <key>NSHighResolutionCapable</key><true/>
-  <key>NSCalendarsFullAccessUsageDescription</key><string>Interval can use your calendar to schedule reminders you choose to create.</string>
+  <key>NSCalendarsFullAccessUsageDescription</key><string>Interval reads selected calendars to display events in History and avoid showing reminders during calendar events. It never changes your calendars.</string>
 </dict></plist>
 PLIST
 plutil -lint "$CONTENTS/Info.plist"

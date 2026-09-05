@@ -132,43 +132,123 @@ struct HistoryView: View {
                     ForEach(CalendarDates.weekdaySymbols(calendar: calendar), id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
                     ForEach(Array(CalendarDates.monthGrid(containing: month, calendar: calendar).enumerated()), id: \.offset) { _, date in
                         if let date {
-                            let count = sessionCount(on: date)
+                            let sessionCount = sessionCount(on: date)
+                            let eventCount = calendarEventCount(on: date)
                             Button("\(calendar.component(.day, from: date))") { selectedDay = date; selectedSession = nil }
                                 .buttonStyle(.plain).frame(maxWidth: .infinity, minHeight: 28)
                                 .background(calendar.isDate(date, inSameDayAs: selectedDay) ? Color.teal.opacity(0.22) : .clear, in: Circle())
-                                .overlay(alignment: .bottom) { if count > 0 { Circle().fill(.teal).frame(width: 4, height: 4) } }
-                                .accessibilityLabel("\(date.formatted(date: .complete, time: .omitted)), \(count) session\(count == 1 ? "" : "s")")
+                                .overlay(alignment: .bottom) {
+                                    HStack(spacing: 3) {
+                                        if sessionCount > 0 { Circle().fill(.teal).frame(width: 4, height: 4) }
+                                        if eventCount > 0 { Circle().fill(.blue).frame(width: 4, height: 4) }
+                                    }
+                                }
+                                .accessibilityLabel("\(date.formatted(date: .complete, time: .omitted)), \(sessionCount) session\(sessionCount == 1 ? "" : "s"), \(eventCount) calendar event\(eventCount == 1 ? "" : "s")")
                                 .accessibilityAddTraits(calendar.isDate(date, inSameDayAs: selectedDay) ? .isSelected : [])
                         } else { Color.clear.frame(height: 28) }
                     }
                 }
+                HStack(spacing: 14) {
+                    Label("Sessions", systemImage: "circle.fill").foregroundStyle(.teal)
+                    Label("Calendar events", systemImage: "circle.fill").foregroundStyle(.blue)
+                }.font(.caption).accessibilityElement(children: .combine).accessibilityLabel("Legend: teal marks sessions; blue marks calendar events")
                 Divider()
-                if daySessions.isEmpty {
-                    ContentUnavailableView("No sessions this day", systemImage: "calendar")
+                if dayItems.isEmpty {
+                    ContentUnavailableView(emptyTitle, systemImage: "calendar", description: Text(emptyDescription))
+                        .frame(minHeight: 170, maxHeight: .infinity)
                 } else {
-                    ScrollView { LazyVStack(alignment: .leading, spacing: 4) { ForEach(daySessions) { session in Button { selectedSession = session.id } label: { SessionRow(session: session).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8).background(selectedSession == session.id ? Color.teal.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 7)) }.buttonStyle(.plain) } } }
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 4) {
+                            ForEach(dayItems) { item in
+                                switch item {
+                                case .calendar(let event): CalendarEventRow(event: event)
+                                case .session(let session):
+                                    Button { selectedSession = session.id } label: {
+                                        SessionRow(session: session).frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(.horizontal, 8)
+                                            .background(selectedSession == session.id ? Color.teal.opacity(0.16) : .clear,
+                                                        in: RoundedRectangle(cornerRadius: 7))
+                                    }.buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }.frame(minHeight: 170, maxHeight: .infinity)
                 }
-            }.padding().frame(minWidth: 390)
+            }.padding().frame(minWidth: 390, maxHeight: .infinity)
             if let id = selectedSession, let session = store.data.sessions.first(where: { $0.id == id }) { SessionInspector(store: store, session: session).frame(minWidth: 260) }
             else { ContentUnavailableView("Select a session", systemImage: "rectangle.and.pencil.and.ellipsis") }
-        }.navigationTitle("History")
+        }.navigationTitle("History").task { store.calendarService.show(month: month) }
     }
     private var daySessions: [SessionRecord] {
         store.data.sessions.filter { calendar.isDate($0.endedAt, inSameDayAs: selectedDay) }.sorted { $0.endedAt < $1.endedAt }
     }
+    private var dayCalendarEvents: [CalendarEventSnapshot] { store.calendarService.events(on: selectedDay, calendar: calendar) }
+    private var dayItems: [HistoryItem] {
+        (daySessions.map(HistoryItem.session) + dayCalendarEvents.map(HistoryItem.calendar)).sorted { $0.start < $1.start }
+    }
+    private var emptyTitle: String {
+        store.data.settings.calendarIntegrationEnabled && store.calendarService.authorizationState != .fullAccess
+            ? "Calendar unavailable" : "Nothing this day"
+    }
+    private var emptyDescription: String {
+        if !store.data.settings.calendarIntegrationEnabled { return "No sessions. Apple Calendar integration is disabled." }
+        if store.calendarService.authorizationState != .fullAccess { return "No sessions. Calendar permission is unavailable." }
+        if store.data.settings.selectedCalendarIDs.isEmpty { return "No sessions. No calendars are selected." }
+        return "No sessions or Apple Calendar events."
+    }
     private func sessionCount(on date: Date) -> Int { store.data.sessions.count { calendar.isDate($0.endedAt, inSameDayAs: date) } }
+    private func calendarEventCount(on date: Date) -> Int { store.calendarService.events(on: date, calendar: calendar).count }
     private func changeMonth(by value: Int) {
         guard let newMonth = calendar.date(byAdding: .month, value: value, to: month),
               let interval = calendar.dateInterval(of: .month, for: newMonth),
               let range = calendar.range(of: .day, in: .month, for: newMonth) else { return }
         let day = min(calendar.component(.day, from: selectedDay), range.count)
         month = newMonth
+        store.calendarService.show(month: newMonth)
         selectedDay = calendar.date(byAdding: .day, value: day - 1, to: interval.start) ?? interval.start
         selectedSession = nil
     }
 }
 
-struct SessionRow: View { let session: SessionRecord; var body: some View { HStack { Image(systemName: session.outcome == .completed ? "checkmark.circle.fill" : "xmark.circle").foregroundStyle(session.outcome == .completed ? .teal : .secondary); VStack(alignment: .leading) { Text(session.kind.title).font(.headline); Text("\(session.endedAt.formatted(date: .omitted, time: .shortened)) · \(durationString(session.activeDuration)) · \(session.outcome.rawValue.capitalized)").font(.caption).foregroundStyle(.secondary); if let feedback = session.feedback { Text(feedback.capitalized).font(.caption) } } }.padding(.vertical, 3) } }
+private enum HistoryItem: Identifiable {
+    case session(SessionRecord)
+    case calendar(CalendarEventSnapshot)
+
+    var id: String {
+        switch self { case .session(let value): "session-\(value.id)"; case .calendar(let value): "calendar-\(value.id)" }
+    }
+    var start: Date {
+        switch self { case .session(let value): value.startedAt; case .calendar(let value): value.start }
+    }
+}
+
+struct CalendarEventRow: View {
+    let event: CalendarEventSnapshot
+    var body: some View {
+        HStack(alignment: .top) {
+            Image(systemName: "calendar").foregroundStyle(.blue)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(event.title).font(.headline)
+                Text("Apple Calendar · \(event.calendarName)").font(.caption.weight(.medium)).foregroundStyle(.blue)
+                Text(timeDescription + statusDescription).font(.caption).foregroundStyle(.secondary)
+            }
+        }.padding(.vertical, 5).padding(.horizontal, 8).frame(maxWidth: .infinity, alignment: .leading)
+    }
+    private var timeDescription: String {
+        if event.allDay { return "All day" }
+        return "\(event.start.formatted(date: .omitted, time: .shortened))–\(event.end.formatted(date: .omitted, time: .shortened))"
+    }
+    private var statusDescription: String {
+        switch event.status {
+        case .confirmed: ""
+        case .tentative: " · Tentative"
+        case .canceled: " · Canceled — does not suppress reminders"
+        case .declined: " · Declined — does not suppress reminders"
+        }
+    }
+}
+
+struct SessionRow: View { let session: SessionRecord; var body: some View { HStack { Image(systemName: session.outcome == .completed ? "checkmark.circle.fill" : "xmark.circle").foregroundStyle(session.outcome == .completed ? .teal : .secondary); VStack(alignment: .leading) { Text(session.kind.title).font(.headline); Text("Interval session").font(.caption.weight(.medium)).foregroundStyle(.teal); Text("\(session.startedAt.formatted(date: .omitted, time: .shortened))–\(session.endedAt.formatted(date: .omitted, time: .shortened)) · \(durationString(session.activeDuration)) · \(session.outcome.rawValue.capitalized)").font(.caption).foregroundStyle(.secondary); if let feedback = session.feedback { Text(feedback.capitalized).font(.caption) } } }.padding(.vertical, 3) } }
 
 struct ReflectionView: View {
     @Bindable var store: AppStore; let sessionID: UUID

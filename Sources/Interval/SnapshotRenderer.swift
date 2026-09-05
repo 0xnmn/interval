@@ -19,10 +19,23 @@ struct SnapshotRequest {
 
 @MainActor enum SnapshotRenderer {
     static let fixtureNow = Date(timeIntervalSince1970: 1_800_000_000.125)
+    static let calendarFixture = [
+        CalendarEventSnapshot(id: "calendar-1", title: "Design review",
+            start: fixtureNow.addingTimeInterval(-900), end: fixtureNow.addingTimeInterval(900),
+            allDay: false, calendarName: "Work"),
+        CalendarEventSnapshot(id: "calendar-2", title: "Team offsite",
+            start: Calendar.current.startOfDay(for: fixtureNow),
+            end: Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: fixtureNow))!,
+            allDay: true, calendarName: "Work"),
+        CalendarEventSnapshot(id: "calendar-3", title: "Dinner",
+            start: fixtureNow.addingTimeInterval(10_800), end: fixtureNow.addingTimeInterval(14_400),
+            allDay: false, calendarName: "Personal")
+    ]
 
     static func fixture(scene: String) -> PersistedData {
         let timerID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
         var timer = TimerState(id: timerID, kind: .focus, duration: 1_500, status: .ready)
+        if scene == "reflection" { timer = TimerState(id: timerID, kind: .shortBreak, duration: 300, status: .ready) }
         if scene == "paused" || scene == "menu" {
             timer.status = .paused
             timer.startedAt = fixtureNow.addingTimeInterval(-510)
@@ -33,8 +46,15 @@ struct SnapshotRequest {
             startedAt: fixtureNow.addingTimeInterval(-3_600), endedAt: fixtureNow.addingTimeInterval(-2_100),
             plannedDuration: 1_500, activeDuration: 1_500, outcome: .completed,
             feedback: scene == "reflection" ? nil : "focused", journal: "Clear progress on the launch plan.")
-        return PersistedData(activeTimer: timer, scratchpad: "Outline the launch notes\nReview accessibility labels",
-            sessions: [session], reminders: [Reminder(title: "Plan tomorrow", dueAt: fixtureNow.addingTimeInterval(3_600))],
+        var settings = IntervalSettings()
+        if scene == "history" || scene == "calendar-settings" || scene == "history-no-selection" {
+            settings.calendarIntegrationEnabled = true; settings.selectedCalendarIDs = ["Work", "Personal"]
+            settings.didChooseInitialCalendars = true
+        }
+        if scene == "history-no-selection" { settings.selectedCalendarIDs = [] }
+        let sessions = scene == "history-disabled" || scene == "history-no-selection" ? [] : [session]
+        return PersistedData(settings: settings, activeTimer: timer, scratchpad: "Outline the launch notes\nReview accessibility labels",
+            sessions: sessions, reminders: [Reminder(title: "Plan tomorrow", dueAt: fixtureNow.addingTimeInterval(3_600))],
             completedFocusCount: 3)
     }
 
@@ -42,10 +62,12 @@ struct SnapshotRequest {
         let size: NSSize
         let view: AnyView
         switch request.scene {
-        case "history": size = NSSize(width: 900, height: 650); view = AnyView(MainView(store: store, selection: .history))
+        case "history", "history-disabled", "history-no-selection":
+            size = NSSize(width: 900, height: 650); view = AnyView(MainView(store: store, selection: .history))
         case "reminders": size = NSSize(width: 900, height: 650); view = AnyView(MainView(store: store, selection: .reminders))
         case "settings": size = NSSize(width: 480, height: 320); view = AnyView(SettingsView(store: store))
         case "sound-settings": size = NSSize(width: 500, height: 370); view = AnyView(SettingsView(store: store, showSound: true))
+        case "calendar-settings": size = NSSize(width: 520, height: 430); view = AnyView(SettingsView(store: store, showCalendar: true))
         case "reflection": store.completionSessionID = store.data.sessions.first?.id; size = NSSize(width: 900, height: 650); view = AnyView(MainView(store: store))
         case "menu": size = NSSize(width: 310, height: 280); view = AnyView(MenuBarView(store: store))
         default: size = NSSize(width: 900, height: 650); view = AnyView(MainView(store: store))

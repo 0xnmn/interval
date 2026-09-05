@@ -49,12 +49,18 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
     public var focusSound: AmbientSound
     public var breakSound: AmbientSound
     public var soundVolume: Double
+    public var calendarIntegrationEnabled: Bool
+    public var selectedCalendarIDs: Set<String>
+    public var didChooseInitialCalendars: Bool
 
     public init(focusMinutes: Int = 25, shortBreakMinutes: Int = 5, longBreakMinutes: Int = 10, longBreakEvery: Int = 4,
-                focusSound: AmbientSound = .silence, breakSound: AmbientSound = .silence, soundVolume: Double = 0.35) {
+                focusSound: AmbientSound = .silence, breakSound: AmbientSound = .silence, soundVolume: Double = 0.35,
+                calendarIntegrationEnabled: Bool = false, selectedCalendarIDs: Set<String> = [], didChooseInitialCalendars: Bool = false) {
         self.focusMinutes = focusMinutes; self.shortBreakMinutes = shortBreakMinutes
         self.longBreakMinutes = longBreakMinutes; self.longBreakEvery = longBreakEvery
         self.focusSound = focusSound; self.breakSound = breakSound; self.soundVolume = soundVolume
+        self.calendarIntegrationEnabled = calendarIntegrationEnabled; self.selectedCalendarIDs = selectedCalendarIDs
+        self.didChooseInitialCalendars = didChooseInitialCalendars
     }
 
     public func duration(for kind: TimerKind) -> TimeInterval {
@@ -66,10 +72,11 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
               shortBreakMinutes: shortBreakMinutes.clamped(to: 1...60),
               longBreakMinutes: longBreakMinutes.clamped(to: 1...90),
               longBreakEvery: longBreakEvery.clamped(to: 1...12), focusSound: focusSound, breakSound: breakSound,
-              soundVolume: soundVolume.clamped(to: 0...1))
+              soundVolume: soundVolume.clamped(to: 0...1), calendarIntegrationEnabled: calendarIntegrationEnabled,
+              selectedCalendarIDs: selectedCalendarIDs, didChooseInitialCalendars: didChooseInitialCalendars)
     }
 
-    private enum CodingKeys: String, CodingKey { case focusMinutes, shortBreakMinutes, longBreakMinutes, longBreakEvery, focusSound, breakSound, soundVolume }
+    private enum CodingKeys: String, CodingKey { case focusMinutes, shortBreakMinutes, longBreakMinutes, longBreakEvery, focusSound, breakSound, soundVolume, calendarIntegrationEnabled, selectedCalendarIDs, didChooseInitialCalendars }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         focusMinutes = try c.decode(Int.self, forKey: .focusMinutes); shortBreakMinutes = try c.decode(Int.self, forKey: .shortBreakMinutes)
@@ -77,6 +84,42 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
         focusSound = try c.decodeIfPresent(AmbientSound.self, forKey: .focusSound) ?? .silence
         breakSound = try c.decodeIfPresent(AmbientSound.self, forKey: .breakSound) ?? .silence
         soundVolume = try c.decodeIfPresent(Double.self, forKey: .soundVolume) ?? 0.35
+        calendarIntegrationEnabled = try c.decodeIfPresent(Bool.self, forKey: .calendarIntegrationEnabled) ?? false
+        selectedCalendarIDs = try c.decodeIfPresent(Set<String>.self, forKey: .selectedCalendarIDs) ?? []
+        didChooseInitialCalendars = try c.decodeIfPresent(Bool.self, forKey: .didChooseInitialCalendars) ?? false
+    }
+}
+
+public enum CalendarEventStatus: String, Sendable { case confirmed, tentative, canceled, declined }
+
+public struct CalendarEventSnapshot: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let title: String
+    public let start: Date
+    public let end: Date
+    public let allDay: Bool
+    public let calendarName: String
+    public let status: CalendarEventStatus
+
+    public init(id: String, title: String, start: Date, end: Date, allDay: Bool, calendarName: String,
+                status: CalendarEventStatus = .confirmed) {
+        self.id = id; self.title = title; self.start = start; self.end = end; self.allDay = allDay
+        self.calendarName = calendarName; self.status = status
+    }
+
+    public var isEligibleForReminderSuppression: Bool { status != .canceled && status != .declined }
+    public func overlaps(_ interval: DateInterval) -> Bool {
+        start < interval.end && end > interval.start
+    }
+}
+
+public extension CalendarDates {
+    static func dayInterval(containing date: Date, calendar: Calendar) -> DateInterval? {
+        calendar.dateInterval(of: .day, for: date)
+    }
+
+    static func monthInterval(containing date: Date, calendar: Calendar) -> DateInterval? {
+        calendar.dateInterval(of: .month, for: date)
     }
 }
 
