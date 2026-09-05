@@ -7,7 +7,10 @@ struct FocusControls: View {
   @State private var confirmingBreak = false
   @State private var adjustmentDirection: Int?
   private var active: Bool { store.timer.status == .running }
-  private var accent: Color { store.timer.kind == .focus ? .blue : .teal }
+  private var accent: Color {
+    (store.timer.kind == .focus ? store.data.settings.focusColor : store.data.settings.breakColor)
+      .color
+  }
 
   init(store: AppStore, adjustmentDirection: Int? = nil) {
     self.store = store
@@ -26,20 +29,21 @@ struct FocusControls: View {
               if active { confirmingBreak = true } else { store.startBreakNow() }
             } label: {
               Label("Break", systemImage: "cup.and.saucer")
-            }.help("Start a break now")
+            }.help("Start a break now").foregroundStyle(store.data.settings.breakColor.color)
           } else if active {
             Button {
               store.endBreak()
             } label: {
-              Label("End Break", systemImage: "checkmark.circle")
-            }
+              Label("End break", systemImage: "briefcase")
+            }.help("End break · Return to focus").foregroundStyle(
+              store.data.settings.focusColor.color)
           }
           Button {
             confirmingAbandon = true
           } label: {
-            Label("Abandon", systemImage: "stop.circle")
-          }.disabled(!active)
-        }.buttonStyle(.plain).font(.callout).foregroundStyle(.secondary)
+            Label("Abandon", systemImage: "stop")
+          }.disabled(!active).help("Abandon interval")
+        }.buttonStyle(IntervalIconButton()).foregroundStyle(.primary)
         if let message = store.inAppNotification ?? store.recoveryMessage {
           Text(message).font(.caption).foregroundStyle(.secondary)
         }
@@ -79,7 +83,9 @@ struct FocusControls: View {
               "Started \(start.formatted(date: .omitted, time: .shortened)), ends \(end.formatted(date: .omitted, time: .shortened))"
             )
           } else {
-            Button("Start", action: store.startSession).buttonStyle(IntervalPrimaryButton())
+            Button(action: store.startSession) {
+              Label("Start", systemImage: "play.fill")
+            }.buttonStyle(IntervalIconButton()).foregroundStyle(accent).help("Start interval")
           }
         }.frame(maxWidth: .infinity)
         adjustmentButton(direction: 1)
@@ -106,9 +112,7 @@ struct FocusControls: View {
       store.adjustCurrentTime(by: Double(direction * 300))
     } label: {
       Image(systemName: direction > 0 ? "plus" : "minus")
-        .font(.body.weight(.medium)).frame(width: 32, height: 32)
-        .background(.white.opacity(0.07), in: Circle())
-    }.buttonStyle(.plain)
+    }.buttonStyle(IntervalIconButton())
       .disabled(direction > 0 ? store.remaining >= 10_800 : store.remaining <= 60)
       .accessibilityLabel(direction > 0 ? "Add 5 minutes" : "Remove 5 minutes")
       .help(
@@ -129,16 +133,7 @@ struct FocusControls: View {
     let reminders = store.data.reminders.filter { $0.isEnabled && $0.effectiveDueAt != nil }
       .sorted { $0.effectiveDueAt! < $1.effectiveDueAt! }
     return VStack(alignment: .leading, spacing: 14) {
-      Divider().padding(.bottom, 2)
-      HStack {
-        Text("Upcoming").font(.caption.weight(.medium)).foregroundStyle(.secondary)
-        Spacer()
-        Button {
-          store.selection = .reminders
-        } label: {
-          Image(systemName: "arrow.up.right")
-        }.buttonStyle(.plain).help("All reminders").accessibilityLabel("All reminders")
-      }
+      Text("Upcoming").font(.caption.weight(.medium)).foregroundStyle(.secondary)
       if reminders.isEmpty {
         Text("No reminders scheduled").font(.caption).foregroundStyle(.secondary)
       }
@@ -147,7 +142,8 @@ struct FocusControls: View {
           Text(reminder.emoji).font(.system(size: 19)).frame(width: 24)
           Text(reminder.title).font(.callout).lineLimit(1)
           Spacer(minLength: 8)
-          Text(reminderStatus(reminder)).font(.caption).foregroundStyle(.secondary)
+          Text(reminderStatus(reminder)).font(.caption).monospacedDigit().foregroundStyle(
+            .secondary)
         }
       }
     }
@@ -166,7 +162,7 @@ struct FocusControls: View {
       return "After event"
     }
     let remaining = (reminder.effectiveDueAt ?? store.now).timeIntervalSince(store.now)
-    return remaining <= 0 ? "When idle" : "In \(Int(ceil(remaining / 60)))m"
+    return remaining <= 0 ? "When idle" : "In \(durationString(remaining))"
   }
 }
 
@@ -191,11 +187,8 @@ private struct FocusDial: View {
       Circle().fill(accent).frame(width: 10, height: 10)
         .shadow(color: accent.opacity(0.5), radius: 5)
         .offset(y: -98).rotationEffect(.degrees(fraction * 360))
-      VStack(spacing: 5) {
-        Text(durationString(remaining))
-          .font(.system(size: 42, weight: .light, design: .rounded)).monospacedDigit()
-        Text("remaining").font(.caption).foregroundStyle(.secondary)
-      }
+      Text(durationString(remaining))
+        .font(.system(size: 42, weight: .light, design: .rounded)).monospacedDigit()
     }.frame(width: 250, height: 250)
       .accessibilityElement(children: .ignore)
       .accessibilityLabel("Time remaining").accessibilityValue(spokenDuration(remaining))
@@ -231,16 +224,7 @@ struct FocusDayPanel: View {
               .help("Add to-do").accessibilityLabel("Add to-do")
           }.padding(.vertical, 5)
         }.font(.body)
-        Divider()
-        HStack {
-          Text("Today").font(.headline)
-          Spacer()
-          Button {
-            store.selection = .history
-          } label: {
-            Image(systemName: "arrow.up.right")
-          }.buttonStyle(.plain).help("All stats").accessibilityLabel("All stats")
-        }
+        Text("Today").font(.headline).padding(.top, 12)
         HStack(spacing: 28) {
           VStack(alignment: .leading, spacing: 4) {
             Text("\(Int(sessions.reduce(0) { $0 + $1.activeDuration } / 60))m")
@@ -253,13 +237,12 @@ struct FocusDayPanel: View {
             Text("Completed").font(.caption).foregroundStyle(.secondary)
           }
         }
-        Divider()
         HStack {
           Text("Timeline").font(.headline)
           Spacer()
           Text(store.now.formatted(.dateTime.month(.abbreviated).day()))
             .font(.caption).foregroundStyle(.secondary)
-        }
+        }.padding(.top, 12)
         dayTimeline
       }.padding(24)
     }.sheet(
@@ -350,7 +333,7 @@ private struct TodoRow: View {
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 10) {
       Toggle("", isOn: Binding(get: { todo.isCompleted }, set: { _ in store.toggleTodo(todo.id) }))
-        .toggleStyle(.checkbox).labelsHidden().tint(.blue)
+        .toggleStyle(.checkbox).labelsHidden().tint(.accentColor)
         .accessibilityLabel("Complete \(todo.title)")
       TextField("To-do", text: $title, axis: .vertical)
         .textFieldStyle(.plain).lineLimit(1...5)

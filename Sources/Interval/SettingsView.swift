@@ -57,7 +57,7 @@ struct SettingsView: View {
       .padding(20)
     }
     .frame(width: 560, height: 450)
-    .tint(.blue)
+    .tint(.accentColor)
     .preferredColorScheme(.dark)
     .task {
       notificationStatus = await store.notifications.status()
@@ -85,6 +85,10 @@ struct SettingsView: View {
             value: setting(\.longBreakEvery), in: 1...12)
           Text("Continue after feedback to start your break.")
             .font(.caption).foregroundStyle(.secondary)
+        }
+        SettingsSection("Colors", divided: true) {
+          phaseColorPicker("Focus color", selection: phaseColorSetting(\.focusColor))
+          phaseColorPicker("Break color", selection: phaseColorSetting(\.breakColor))
         }
       }
     case 1:
@@ -176,6 +180,37 @@ struct SettingsView: View {
         store.updateSettings(value)
       })
   }
+  private func phaseColorSetting(_ keyPath: WritableKeyPath<IntervalSettings, PhaseColor>)
+    -> Binding<
+      PhaseColor
+    >
+  {
+    Binding(
+      get: { store.data.settings[keyPath: keyPath] },
+      set: {
+        var value = store.data.settings
+        value[keyPath: keyPath] = $0
+        store.updateSettings(value)
+      })
+  }
+  private func phaseColorPicker(_ title: String, selection: Binding<PhaseColor>) -> some View {
+    HStack {
+      Text(title)
+      Spacer()
+      Picker(title, selection: selection) {
+        ForEach(PhaseColor.allCases, id: \.rawValue) { phaseColor in
+          Label {
+            Text(phaseColor.title)
+          } icon: {
+            Circle().fill(phaseColor.color).frame(width: 8, height: 8)
+          }
+          .tag(phaseColor)
+        }
+      }
+      .labelsHidden()
+      .frame(width: 140)
+    }
+  }
   private var volumeSetting: Binding<Double> {
     Binding(
       get: { store.data.settings.soundVolume },
@@ -234,7 +269,7 @@ private struct GeneralSettingsView: View {
     SettingsPage {
       SettingsSection("Startup") {
         Toggle("Launch Interval at login", isOn: Binding(get: { loginEnabled }, set: setLogin))
-          .toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
+          .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
         if SMAppService.mainApp.status == .requiresApproval {
           Label(
             "Approval is required in System Settings → General → Login Items.",
@@ -296,7 +331,7 @@ private struct UpdatesSettingsView: View {
             get: { store.updates.automaticallyChecks },
             set: { store.updates.automaticallyChecks = $0 })
         )
-        .toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
+        .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
         .disabled(!store.updates.isConfigured)
         Toggle(
           "Automatically download updates",
@@ -304,7 +339,7 @@ private struct UpdatesSettingsView: View {
             get: { store.updates.automaticallyDownloads },
             set: { store.updates.automaticallyDownloads = $0 })
         )
-        .toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
+        .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
         .disabled(!store.updates.isConfigured)
         Button("Check Now") { store.updates.checkNow() }.disabled(!store.updates.isConfigured)
       }
@@ -340,7 +375,7 @@ private struct CalendarSettingsView: View {
                 }
               })
           )
-          .toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
+          .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
           if store.data.settings.calendarIntegrationEnabled {
             if store.calendarService.calendars.isEmpty {
               Text("No calendars are available.").foregroundStyle(.secondary)
@@ -352,7 +387,7 @@ private struct CalendarSettingsView: View {
                     get: { store.data.settings.selectedCalendarIDs.contains(calendar.id) },
                     set: { store.setCalendarSelected(calendar.id, selected: $0) })
                 )
-                .toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
+                .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
               }
               if store.data.settings.selectedCalendarIDs.isEmpty {
                 Text("No calendars selected. No events will be displayed or suppress reminders.")

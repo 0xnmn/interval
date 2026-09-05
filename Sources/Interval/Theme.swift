@@ -1,10 +1,43 @@
 import AppKit
+import IntervalCore
 import SwiftUI
 
 enum IntervalTheme {
-  static let accent = Color(white: 0.88)
+  static let accent = Color.accentColor
   static let surface = Color(white: 0.12)
   static let border = Color.white.opacity(0.07)
+}
+
+extension PhaseColor {
+  var color: Color {
+    switch self {
+    case .green: .green
+    case .blue: .blue
+    case .teal: .teal
+    case .orange: .orange
+    case .red: .red
+    case .pink: .pink
+    case .purple: .purple
+    }
+  }
+}
+
+struct IntervalIconButton: ButtonStyle {
+  @Environment(\.isEnabled) private var isEnabled
+  @State private var hovering = false
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label.labelStyle(.iconOnly)
+      .font(.system(size: 17, weight: .medium))
+      .frame(width: 36, height: 36)
+      .background(
+        .white.opacity(configuration.isPressed ? 0.14 : hovering ? 0.08 : 0),
+        in: RoundedRectangle(cornerRadius: 9)
+      )
+      .contentShape(RoundedRectangle(cornerRadius: 9))
+      .opacity(isEnabled ? 1 : 0.3)
+      .onHover { hovering = $0 }
+  }
 }
 
 struct GlassBackground: View {
@@ -46,7 +79,7 @@ struct IntervalPrimaryButton: ButtonStyle {
       .foregroundStyle(Color.white.opacity(isEnabled ? 0.9 : 0.45))
       .padding(.horizontal, 14).padding(.vertical, 7)
       .background(
-        Color.white.opacity(configuration.isPressed ? 0.18 : 0.10),
+        Color.accentColor.opacity(configuration.isPressed ? 0.4 : 0.25),
         in: RoundedRectangle(cornerRadius: 8)
       )
       .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(.white.opacity(0.12)) }

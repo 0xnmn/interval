@@ -79,6 +79,8 @@ import Testing
   #expect(settings.shortBreakMinutes == 5)
   #expect(settings.longBreakMinutes == 10)
   #expect(settings.longBreakEvery == 4)
+  #expect(settings.focusColor == .green)
+  #expect(settings.breakColor == .blue)
 }
 
 @Test func persistencePreservesSubsecondDates() throws {
@@ -121,10 +123,30 @@ import Testing
 }
 
 @Test func ambientSettingsRoundTripAndClampVolume() {
-  let value = IntervalSettings(focusSound: .rain, breakSound: .ocean, soundVolume: 2).clamped()
+  let value = IntervalSettings(
+    focusColor: .purple, breakColor: .orange, focusSound: .rain, breakSound: .ocean,
+    soundVolume: 2
+  ).clamped()
+  #expect(value.focusColor == .purple)
+  #expect(value.breakColor == .orange)
   #expect(value.focusSound == .rain)
   #expect(value.breakSound == .ocean)
   #expect(value.soundVolume == 1)
+}
+
+@Test func phaseColorsRoundTripAndLegacySettingsUseDefaults() throws {
+  let settings = IntervalSettings(focusColor: .pink, breakColor: .teal)
+  #expect(
+    try JSONDecoder().decode(IntervalSettings.self, from: JSONEncoder().encode(settings))
+      == settings)
+
+  let legacy = try JSONDecoder().decode(
+    IntervalSettings.self,
+    from: Data(
+      #"{"focusMinutes":25,"shortBreakMinutes":5,"longBreakMinutes":10,"longBreakEvery":4}"#
+        .utf8))
+  #expect(legacy.focusColor == .green)
+  #expect(legacy.breakColor == .blue)
 }
 
 @Test func legacyISOStorageMigratesWithOriginalBackup() throws {

@@ -21,6 +21,11 @@ public enum SessionFeedback: String, Codable, CaseIterable, Sendable {
   public var title: String { rawValue.capitalized }
 }
 
+public enum PhaseColor: String, Codable, CaseIterable, Sendable {
+  case green, blue, teal, orange, red, pink, purple
+  public var title: String { rawValue.capitalized }
+}
+
 public struct SessionCategory: Identifiable, Codable, Equatable, Sendable {
   public var id: UUID
   public var name: String
@@ -81,6 +86,8 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
   public var shortBreakMinutes: Int
   public var longBreakMinutes: Int
   public var longBreakEvery: Int
+  public var focusColor: PhaseColor
+  public var breakColor: PhaseColor
   public var focusSound: AmbientSound
   public var breakSound: AmbientSound
   public var soundVolume: Double
@@ -91,6 +98,7 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
   public init(
     focusMinutes: Int = 25, shortBreakMinutes: Int = 5, longBreakMinutes: Int = 10,
     longBreakEvery: Int = 4,
+    focusColor: PhaseColor = .green, breakColor: PhaseColor = .blue,
     focusSound: AmbientSound = .silence, breakSound: AmbientSound = .silence,
     soundVolume: Double = 0.35,
     calendarIntegrationEnabled: Bool = false, selectedCalendarIDs: Set<String> = [],
@@ -100,6 +108,8 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
     self.shortBreakMinutes = shortBreakMinutes
     self.longBreakMinutes = longBreakMinutes
     self.longBreakEvery = longBreakEvery
+    self.focusColor = focusColor
+    self.breakColor = breakColor
     self.focusSound = focusSound
     self.breakSound = breakSound
     self.soundVolume = soundVolume
@@ -119,7 +129,8 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
       focusMinutes: focusMinutes.clamped(to: 1...180),
       shortBreakMinutes: shortBreakMinutes.clamped(to: 1...60),
       longBreakMinutes: longBreakMinutes.clamped(to: 1...90),
-      longBreakEvery: longBreakEvery.clamped(to: 1...12), focusSound: focusSound,
+      longBreakEvery: longBreakEvery.clamped(to: 1...12), focusColor: focusColor,
+      breakColor: breakColor, focusSound: focusSound,
       breakSound: breakSound,
       soundVolume: soundVolume.clamped(to: 0...1),
       calendarIntegrationEnabled: calendarIntegrationEnabled,
@@ -128,8 +139,9 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case focusMinutes, shortBreakMinutes, longBreakMinutes, longBreakEvery, focusSound, breakSound,
-      soundVolume, calendarIntegrationEnabled, selectedCalendarIDs, didChooseInitialCalendars
+    case focusMinutes, shortBreakMinutes, longBreakMinutes, longBreakEvery, focusColor, breakColor,
+      focusSound, breakSound, soundVolume, calendarIntegrationEnabled, selectedCalendarIDs,
+      didChooseInitialCalendars
   }
   public init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -137,6 +149,8 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
     shortBreakMinutes = try c.decode(Int.self, forKey: .shortBreakMinutes)
     longBreakMinutes = try c.decode(Int.self, forKey: .longBreakMinutes)
     longBreakEvery = try c.decode(Int.self, forKey: .longBreakEvery)
+    focusColor = try c.decodeIfPresent(PhaseColor.self, forKey: .focusColor) ?? .green
+    breakColor = try c.decodeIfPresent(PhaseColor.self, forKey: .breakColor) ?? .blue
     focusSound = try c.decodeIfPresent(AmbientSound.self, forKey: .focusSound) ?? .silence
     breakSound = try c.decodeIfPresent(AmbientSound.self, forKey: .breakSound) ?? .silence
     soundVolume = try c.decodeIfPresent(Double.self, forKey: .soundVolume) ?? 0.35

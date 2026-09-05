@@ -24,12 +24,13 @@ struct RemindersView: View {
           } label: {
             Label("Back", systemImage: "chevron.left")
           }
-          .buttonStyle(.plain)
+          .buttonStyle(IntervalIconButton()).help("Back to reminders")
           Spacer()
           Menu {
             Button("Delete Reminder…", role: .destructive) { deleting = reminder }
           } label: {
-            Image(systemName: "ellipsis").font(.system(size: 14)).frame(width: 26, height: 26)
+            Image(systemName: "ellipsis").font(.system(size: 17, weight: .medium)).frame(
+              width: 36, height: 36)
           }
           .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
           .accessibilityLabel("Reminder actions")
@@ -110,7 +111,7 @@ struct RemindersView: View {
             store.updateReminder(edited)
           })
       )
-      .labelsHidden().toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
+      .labelsHidden().toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
       .accessibilityLabel("Enable \(reminder.title) reminder")
     }
     .padding(.vertical, 9).padding(.horizontal, 10)
@@ -130,7 +131,8 @@ struct RemindersView: View {
         }
       }
     } label: {
-      Image(systemName: "plus").font(.system(size: 14)).frame(width: 26, height: 26)
+      Image(systemName: "plus").font(.system(size: 17, weight: .medium)).frame(
+        width: 36, height: 36)
     }
     .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
     .accessibilityLabel("Add reminder")
@@ -228,11 +230,11 @@ private struct ReminderEditor: View {
                 width: 48)
             }
             Toggle("Hide during focus", isOn: binding(\.suppressDuringFocus))
-              .toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
+              .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
             Toggle(
               "Hide during calendar events", isOn: binding(\.suppressDuringCalendar)
             )
-            .toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
+            .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
             .help("Uses selected calendars")
           }
           .padding(.top, 8)

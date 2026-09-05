@@ -192,7 +192,7 @@ struct HistoryView: View {
                 selectedSession = nil
               } label: {
                 Label("Back", systemImage: "chevron.left")
-              }.buttonStyle(.plain)
+              }.buttonStyle(IntervalIconButton()).help("Back to timeline")
               Spacer()
               Text("Session").font(.headline)
               Spacer()
@@ -480,7 +480,7 @@ struct ReflectionView: View {
               Text(value.title).font(.caption)
             }.frame(maxWidth: .infinity).padding(.vertical, 14)
               .background(
-                selected ? Color.blue.opacity(0.22) : .white.opacity(0.05),
+                selected ? Color.accentColor.opacity(0.22) : .white.opacity(0.05),
                 in: RoundedRectangle(cornerRadius: 12))
           }
           .buttonStyle(.plain).accessibilityLabel(value.title)
@@ -520,7 +520,9 @@ struct WritingArea: View {
       .background(.black.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
       .overlay {
         RoundedRectangle(cornerRadius: 10)
-          .strokeBorder(isFocused ? Color.blue.opacity(0.5) : .white.opacity(0.07), lineWidth: 1)
+          .strokeBorder(
+            isFocused ? Color.accentColor.opacity(0.5) : .white.opacity(0.07), lineWidth: 1
+          )
           .allowsHitTesting(false)
       }
       .accessibilityLabel(label)
@@ -602,26 +604,41 @@ struct MenuBarView: View {
         Spacer()
         HStack(spacing: 8) {
           if store.completionSessionID != nil {
-            Button("Review") {
+            Button {
               store.showFocus()
               openWindow(id: "main")
               NSApp.activate(ignoringOtherApps: true)
-            }.buttonStyle(IntervalPrimaryButton())
+            } label: {
+              Label("Review", systemImage: "square.and.pencil")
+            }
+            .help("Review completed focus")
           } else if store.timer.status == .ready {
-            Button("Start", action: store.startSession).buttonStyle(IntervalPrimaryButton())
+            Button(action: store.startSession) { Label("Start", systemImage: "play.fill") }
+              .help("Start interval")
           } else if store.timer.kind != .focus {
-            Button("End Break") { store.endBreak() }.buttonStyle(IntervalPrimaryButton())
+            Button {
+              store.endBreak()
+            } label: {
+              Label("End break", systemImage: "briefcase")
+            }
+            .foregroundStyle(store.data.settings.focusColor.color).help(
+              "End break · Return to focus")
           } else {
-            Button("Break") { confirmingBreak = true }.buttonStyle(IntervalPrimaryButton())
+            Button {
+              confirmingBreak = true
+            } label: {
+              Label("Break", systemImage: "cup.and.saucer")
+            }
+            .foregroundStyle(store.data.settings.breakColor.color).help("Start a break")
           }
           if store.timer.status == .running {
             Button {
               confirmingAbandon = true
             } label: {
-              Image(systemName: "stop.fill").frame(width: 26, height: 26)
-            }.buttonStyle(.plain).accessibilityLabel("Abandon cycle").help("Abandon cycle")
+              Label("Abandon", systemImage: "stop")
+            }.help("Abandon interval")
           }
-        }
+        }.buttonStyle(IntervalIconButton())
       }
       if store.timer.status == .running, let start = store.timer.startedAt,
         let end = store.timer.deadline

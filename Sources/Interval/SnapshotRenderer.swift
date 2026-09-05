@@ -109,6 +109,10 @@ struct SnapshotRequest {
       session.isDurationEstimated = true
     }
     var settings = IntervalSettings()
+    if scene == "focus-custom-colors" {
+      settings.focusColor = .purple
+      settings.breakColor = .orange
+    }
     if scene == "history" || scene == "calendar-settings" || scene == "history-no-selection"
       || scene == "dashboard-calendar"
     {
@@ -148,6 +152,8 @@ struct SnapshotRequest {
   static func render(request: SnapshotRequest, store: AppStore) async throws {
     let size: NSSize
     let view: AnyView
+    if request.scene == "focus-countdown" { store.now = fixtureNow.addingTimeInterval(67) }
+    if request.scene == "focus-countdown-next" { store.now = fixtureNow.addingTimeInterval(68) }
     if request.scene == "dashboard-calendar" {
       store.calendarService.configure(
         enabled: true, selectedCalendarIDs: store.data.settings.selectedCalendarIDs)
