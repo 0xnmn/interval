@@ -58,6 +58,11 @@ struct MainView: View {
           case .reminders: RemindersView(store: store)
           }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
+          .safeAreaInset(edge: .bottom, spacing: 0) {
+            if store.selection == .history || store.selection == .reminders {
+              LiveTimerBar(store: store)
+            }
+          }
       }
     }
     .frame(
@@ -88,93 +93,82 @@ struct FocusView: View {
 
 struct HistoryView: View {
   @Bindable var store: AppStore
-  @State private var month = Date()
   @State private var selectedDay = Date()
   @State private var selectedSession: UUID?
   @State private var categoryFilter: CategoryFilter = .all
+  @State private var showsDatePicker = false
   private var calendar: Calendar { .autoupdatingCurrent }
-  init(store: AppStore, categoryID: UUID? = nil) {
+  init(store: AppStore, categoryID: UUID? = nil, selectedDate: Date? = nil) {
     self.store = store
-    _month = State(initialValue: store.now)
-    _selectedDay = State(initialValue: store.now)
+    _selectedDay = State(initialValue: selectedDate ?? store.now)
     _categoryFilter = State(initialValue: categoryID.map(CategoryFilter.category) ?? .all)
   }
   var body: some View {
     VStack(spacing: 0) {
-      HStack {
-        Text("Stats").font(.headline)
-        Spacer()
-        Picker("Category", selection: $categoryFilter) {
-          ForEach(categoryFilters) { filter in
-            Text(categoryFilterName(filter)).tag(filter)
+      VStack(spacing: 8) {
+        HStack(spacing: 8) {
+          Text("Stats").font(.headline)
+          Spacer()
+          Button {
+            selectDay(calendar.date(byAdding: .day, value: -1, to: selectedDay) ?? selectedDay)
+          } label: {
+            Image(systemName: "chevron.left")
           }
+          .buttonStyle(IntervalIconButton()).help("Previous day").accessibilityLabel("Previous day")
+          Button {
+            showsDatePicker.toggle()
+          } label: {
+            Label(
+              selectedDay.formatted(
+                .dateTime.weekday(.abbreviated).month(.abbreviated).day().year()),
+              systemImage: "calendar")
+          }
+          .buttonStyle(.bordered).popover(isPresented: $showsDatePicker) {
+            DatePicker("Date", selection: dateSelection, displayedComponents: .date)
+              .datePickerStyle(.graphical).labelsHidden().padding()
+          }
+          Button {
+            selectDay(calendar.date(byAdding: .day, value: 1, to: selectedDay) ?? selectedDay)
+          } label: {
+            Image(systemName: "chevron.right")
+          }
+          .buttonStyle(IntervalIconButton()).help("Next day").accessibilityLabel("Next day")
+          Button("Today") { selectDay(store.now) }.buttonStyle(.bordered)
         }
-        .labelsHidden().frame(maxWidth: 190)
-        Button("Today") {
-          month = store.now
-          selectedDay = store.now
-          selectedSession = nil
-          store.calendarService.show(month: store.now)
+        HStack(spacing: 6) {
+          ForEach(weekDates, id: \.self) { date in
+            Button {
+              selectDay(date)
+            } label: {
+              VStack(spacing: 3) {
+                Text(date.formatted(.dateTime.weekday(.abbreviated))).font(.caption)
+                Text(date.formatted(.dateTime.day())).font(.callout.weight(.semibold))
+              }.frame(maxWidth: .infinity).padding(.vertical, 5)
+                .background(
+                  calendar.isDate(date, inSameDayAs: selectedDay)
+                    ? IntervalTheme.accent.opacity(0.22) : .clear,
+                  in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(
+              dayAccessibilityLabel(date, sessionCount(on: date), calendarEventCount(on: date))
+            )
+            .accessibilityAddTraits(
+              calendar.isDate(date, inSameDayAs: selectedDay) ? .isSelected : [])
+          }
+          Picker("Category", selection: $categoryFilter) {
+            ForEach(categoryFilters) { filter in Text(categoryFilterName(filter)).tag(filter) }
+          }.labelsHidden().frame(width: 170)
         }
-        .buttonStyle(.bordered)
-      }.padding(.horizontal, 18).frame(height: 48)
+      }.padding(.horizontal, 18).padding(.vertical, 10)
       Divider().opacity(0.6)
       HStack(spacing: 0) {
         VStack(spacing: 10) {
-          HStack {
-            Button(action: { changeMonth(by: -1) }) { Image(systemName: "chevron.left") }
-              .accessibilityLabel("Previous month")
-            Spacer()
-            Text(month.formatted(.dateTime.month(.wide).year())).font(.headline)
-            Spacer()
-            Button(action: { changeMonth(by: 1) }) { Image(systemName: "chevron.right") }
-              .accessibilityLabel("Next month")
-          }
-          LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
-            ForEach(CalendarDates.weekdaySymbols(calendar: calendar), id: \.self) {
-              Text($0).font(.caption).foregroundStyle(.secondary)
-            }
-            ForEach(
-              Array(CalendarDates.monthGrid(containing: month, calendar: calendar).enumerated()),
-              id: \.offset
-            ) { _, date in
-              if let date {
-                let sessionCount = sessionCount(on: date)
-                let eventCount = calendarEventCount(on: date)
-                Button("\(calendar.component(.day, from: date))") {
-                  selectedDay = date
-                  selectedSession = nil
-                }
-                .buttonStyle(.plain).frame(maxWidth: .infinity, minHeight: 28)
-                .background(
-                  calendar.isDate(date, inSameDayAs: selectedDay)
-                    ? Color.teal.opacity(0.22) : .clear,
-                  in: Circle()
-                )
-                .overlay(alignment: .bottom) {
-                  HStack(spacing: 3) {
-                    if sessionCount > 0 { Circle().fill(.teal).frame(width: 4, height: 4) }
-                    if eventCount > 0 { Circle().fill(.blue).frame(width: 4, height: 4) }
-                  }
-                }
-                .accessibilityLabel(dayAccessibilityLabel(date, sessionCount, eventCount))
-                .accessibilityAddTraits(
-                  calendar.isDate(date, inSameDayAs: selectedDay) ? .isSelected : [])
-              } else {
-                Color.clear.frame(height: 28)
-              }
-            }
-          }
-          HStack(spacing: 14) {
-            Label("Sessions", systemImage: "circle.fill").foregroundStyle(.teal)
-            Label("Calendar events", systemImage: "circle.fill").foregroundStyle(.blue)
-          }.font(.caption).accessibilityElement(children: .combine).accessibilityLabel(
-            "Legend: teal marks sessions; blue marks calendar events")
-          Divider().opacity(0.6)
           ScrollView {
             VStack(alignment: .leading, spacing: 12) {
               daySummary
               categoryBreakdown
+              feedbackBreakdown
               if let calendarStatus {
                 Label(calendarStatus, systemImage: "calendar.badge.exclamationmark")
                   .font(.caption).foregroundStyle(.secondary).frame(
@@ -182,7 +176,7 @@ struct HistoryView: View {
               }
             }.frame(maxWidth: .infinity, alignment: .leading)
           }
-        }.padding(14).frame(width: 280).frame(maxHeight: .infinity)
+        }.padding(14).frame(width: 270).frame(maxHeight: .infinity)
         Rectangle().fill(IntervalTheme.border).frame(width: 1)
         if let id = selectedSession, let session = store.data.sessions.first(where: { $0.id == id })
         {
@@ -204,14 +198,26 @@ struct HistoryView: View {
           timeline
         }
       }
-    }.task { store.calendarService.show(month: month) }
+    }.task { store.calendarService.show(month: selectedDay) }
       .onChange(of: categoryFilter) { _, _ in selectedSession = nil }
+  }
+  private var dateSelection: Binding<Date> {
+    Binding(get: { selectedDay }, set: { selectDay($0) })
+  }
+  private var weekDates: [Date] {
+    guard let start = calendar.dateInterval(of: .weekOfYear, for: selectedDay)?.start else {
+      return []
+    }
+    return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
   }
   private var daySummary: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text(selectedDay.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
         .font(.caption).foregroundStyle(.secondary)
-      Text(summaryText).font(.callout)
+      Text(durationString(focusDuration)).font(.title2.weight(.semibold))
+      Text("Focus time · \(completedFocusCount) completed").font(.caption).foregroundStyle(
+        .secondary)
+      Text(summaryText).font(.caption).foregroundStyle(.secondary)
     }.frame(maxWidth: .infinity, alignment: .leading)
   }
   private var timeline: some View {
@@ -260,22 +266,51 @@ struct HistoryView: View {
   }
   private var categoryBreakdown: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("Focus time").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+      Text("Categories").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
       if focusCategoryStats.isEmpty {
         Text("No focus sessions").font(.caption).foregroundStyle(.secondary)
       } else {
         ForEach(focusCategoryStats) { stat in
-          VStack(alignment: .leading, spacing: 2) {
-            Text(stat.name).font(.callout)
-            Text("\(durationString(stat.duration)) · \(stat.completedCount) completed")
-              .font(.caption).foregroundStyle(.secondary)
+          VStack(alignment: .leading, spacing: 4) {
+            HStack {
+              Text(stat.name).font(.callout)
+              Spacer()
+              Text(durationString(stat.duration)).font(.caption).foregroundStyle(.secondary)
+            }
+            ProgressView(value: stat.duration, total: max(focusDuration, 1))
+              .tint(store.data.settings.focusColor.color)
           }
         }
       }
     }
   }
-  private var focusCategoryStats: [CategoryStat] {
-    let focusSessions = daySessions.filter { $0.kind == .focus }
+  private var feedbackBreakdown: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Focus feedback").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+      ForEach(feedbackStats) { stat in
+        HStack {
+          Text(stat.label).font(.callout)
+          Spacer()
+          Text("\(stat.count)").font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+        }
+      }
+    }
+  }
+  private var focusSessions: [SessionRecord] { daySessions.filter { $0.kind == .focus } }
+  var focusDuration: TimeInterval { focusSessions.reduce(0) { $0 + $1.activeDuration } }
+  var completedFocusCount: Int { focusSessions.count { $0.outcome == .completed } }
+  var feedbackStats: [FeedbackStat] {
+    let counts = Dictionary(grouping: focusSessions) {
+      SessionFeedback(rawValue: $0.feedback ?? "")
+    }
+    return [
+      FeedbackStat(id: "focused", label: "🎯 Focused", count: counts[.focused]?.count ?? 0),
+      FeedbackStat(id: "neutral", label: "😐 Neutral", count: counts[.neutral]?.count ?? 0),
+      FeedbackStat(id: "distracted", label: "🫠 Distracted", count: counts[.distracted]?.count ?? 0),
+      FeedbackStat(id: "unrated", label: "— Unrated", count: counts[nil]?.count ?? 0),
+    ]
+  }
+  var focusCategoryStats: [CategoryStat] {
     let grouped = Dictionary(grouping: focusSessions) { $0.categoryID }
     return grouped.map { id, sessions in
       CategoryStat(
@@ -340,17 +375,10 @@ struct HistoryView: View {
   private func calendarEventCount(on date: Date) -> Int {
     store.calendarService.events(on: date, calendar: calendar).count
   }
-  private func changeMonth(by value: Int) {
-    guard let newMonth = calendar.date(byAdding: .month, value: value, to: month),
-      let interval = calendar.dateInterval(of: .month, for: newMonth),
-      let range = calendar.range(of: .day, in: .month, for: newMonth)
-    else { return }
-    let day = min(calendar.component(.day, from: selectedDay), range.count)
-    month = newMonth
-    store.calendarService.show(month: newMonth)
-    selectedDay =
-      calendar.date(byAdding: .day, value: day - 1, to: interval.start) ?? interval.start
+  private func selectDay(_ date: Date) {
+    selectedDay = date
     selectedSession = nil
+    store.calendarService.show(month: date)
   }
 }
 
@@ -369,11 +397,17 @@ private enum CategoryFilter: Hashable, Identifiable {
   }
 }
 
-private struct CategoryStat: Identifiable {
+struct CategoryStat: Identifiable {
   let id: UUID?
   let name: String
   let duration: TimeInterval
   let completedCount: Int
+}
+
+struct FeedbackStat: Identifiable {
+  let id: String
+  let label: String
+  let count: Int
 }
 
 enum HistoryItem: Identifiable {

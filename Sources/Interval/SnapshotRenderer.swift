@@ -56,13 +56,13 @@ struct SnapshotRequest {
         title: "Polish launch narrative", categoryID: deepWork.id, categoryName: deepWork.name)
     }
     if scene == "dashboard-running" || scene == "menu" || scene == "time-options"
-      || scene == "time-options-minus"
+      || scene == "time-options-minus" || scene == "history-running" || scene == "history-previous"
     {
       timer.status = .running
       timer.startedAt = fixtureNow.addingTimeInterval(-420)
       timer.deadline = fixtureNow.addingTimeInterval(1_080)
     }
-    if scene == "dashboard-break" {
+    if scene == "dashboard-break" || scene == "history-break" {
       timer = TimerState(
         id: timerID, kind: .shortBreak, duration: 300, status: .running,
         startedAt: fixtureNow.addingTimeInterval(-60),
@@ -160,10 +160,24 @@ struct SnapshotRequest {
       _ = store.calendarService.hasEvent(at: fixtureNow)
     }
     switch request.scene {
-    case "history", "history-disabled", "history-no-selection":
+    case "history", "history-disabled", "history-no-selection", "history-running", "history-break",
+      "history-compact", "history-review":
       store.selection = .history
-      size = NSSize(width: 880, height: 680)
+      if request.scene == "history-review" {
+        store.completionSessionID = store.data.sessions.first?.id
+      }
+      size =
+        request.scene == "history-compact"
+        ? NSSize(width: 780, height: 620) : NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))
+    case "history-previous":
+      size = NSSize(width: 820, height: 680)
+      view = AnyView(
+        HistoryView(
+          store: store,
+          selectedDate: Calendar.current.date(byAdding: .day, value: -1, to: store.now)
+        )
+        .safeAreaInset(edge: .bottom, spacing: 0) { LiveTimerBar(store: store) })
     case "history-category":
       size = NSSize(width: 820, height: 680)
       view = AnyView(HistoryView(store: store, categoryID: store.data.categories.first?.id))
