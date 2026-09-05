@@ -14,8 +14,27 @@ struct RemindersView: View {
   }
 
   var body: some View {
-    HStack(spacing: 0) {
-      VStack(spacing: 0) {
+    VStack(spacing: 0) {
+      if let selection,
+        let reminder = store.data.reminders.first(where: { $0.id == selection })
+      {
+        HStack {
+          Button {
+            self.selection = nil
+          } label: {
+            Label("Back", systemImage: "chevron.left")
+          }
+          .buttonStyle(.plain)
+          Spacer()
+          Menu {
+            Button("Delete Reminder…", role: .destructive) { deleting = reminder }
+          } label: {
+            Image(systemName: "ellipsis")
+          }
+          .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Reminder actions")
+        }.padding(16)
+        ReminderEditor(reminder: reminder, store: store, advanced: $advanced)
+      } else {
         HStack {
           Text("Reminders").font(.headline)
           Spacer()
@@ -36,51 +55,25 @@ struct RemindersView: View {
           }
         }
 
-        if let selection,
-          let reminder = store.data.reminders.first(where: { $0.id == selection })
-        {
-          Divider().overlay(Color.white.opacity(0.06))
-          HStack {
-            Spacer()
-            Button("Delete", role: .destructive) { deleting = reminder }
-              .buttonStyle(.plain).foregroundStyle(.red.opacity(0.85))
+      }
+    }.frame(maxWidth: .infinity, maxHeight: .infinity).background(GlassBackground())
+      .navigationTitle("Reminders")
+      .preferredColorScheme(.dark)
+      .alert(
+        "Delete \(deleting?.title ?? "reminder")?",
+        isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })
+      ) {
+        Button("Cancel", role: .cancel) { deleting = nil }
+        Button("Delete", role: .destructive) {
+          if let id = deleting?.id {
+            store.deleteReminder(id)
+            selection = nil
           }
-          .padding(12)
+          deleting = nil
         }
+      } message: {
+        Text("This reminder and its current schedule will be removed.")
       }
-      .frame(width: 280)
-      .frame(maxHeight: .infinity, alignment: .top)
-      .background(GlassBackground())
-      Rectangle().fill(IntervalTheme.border).frame(width: 1)
-      if let selection,
-        let reminder = store.data.reminders.first(where: { $0.id == selection })
-      {
-        ReminderEditor(reminder: reminder, store: store, advanced: $advanced)
-      } else if store.data.reminders.isEmpty {
-        emptyDetail
-      } else {
-        Text("Select a reminder")
-          .font(.callout).foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-      }
-    }
-    .navigationTitle("Reminders")
-    .preferredColorScheme(.dark)
-    .alert(
-      "Delete \(deleting?.title ?? "reminder")?",
-      isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })
-    ) {
-      Button("Cancel", role: .cancel) { deleting = nil }
-      Button("Delete", role: .destructive) {
-        if let id = deleting?.id {
-          store.deleteReminder(id)
-          selection = nil
-        }
-        deleting = nil
-      }
-    } message: {
-      Text("This reminder and its current schedule will be removed.")
-    }
   }
 
   private func reminderRow(_ reminder: Reminder) -> some View {
@@ -163,17 +156,12 @@ struct RemindersView: View {
     .padding(14).frame(maxHeight: .infinity, alignment: .top)
   }
 
-  private var emptyDetail: some View {
-    Text("Add or choose a template")
-      .font(.callout).foregroundStyle(.secondary)
-      .frame(maxWidth: .infinity, maxHeight: .infinity).background(GlassBackground())
-  }
-
   private func status(_ reminder: Reminder) -> String {
     guard reminder.isEnabled else { return "Off" }
     guard let due = reminder.effectiveDueAt else { return "Not scheduled" }
     let time = due.formatted(date: .omitted, time: .shortened)
-    let day = Calendar.current.isDate(due, inSameDayAs: store.now)
+    let day =
+      Calendar.current.isDate(due, inSameDayAs: store.now)
       ? "" : due.formatted(.dateTime.month(.abbreviated).day()) + " · "
     return (reminder.snoozedUntil == nil ? "" : "Snoozed · ") + day + time
   }

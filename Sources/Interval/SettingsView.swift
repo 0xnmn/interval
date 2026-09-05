@@ -34,73 +34,34 @@ struct SettingsView: View {
   var body: some View {
     ZStack {
       GlassBackground()
-      HStack(spacing: 0) {
-        sidebar
-        Divider().overlay(IntervalTheme.border)
-        VStack(alignment: .leading, spacing: 14) {
-          sectionHeader
-          if let error = store.persistenceError ?? store.notificationError {
-            Label(error, systemImage: "exclamationmark.triangle.fill")
-              .font(.caption)
-              .foregroundStyle(.red)
-              .padding(.horizontal, 4)
+      VStack(alignment: .leading, spacing: 16) {
+        Picker("Settings page", selection: $selectedTab) {
+          ForEach(destinations) { destination in
+            Label(destination.title, systemImage: destination.systemImage)
+              .tag(destination.id)
           }
-          selectedContent
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding(20)
+        .pickerStyle(.segmented)
+        .labelsHidden()
+
+        if let error = store.persistenceError ?? store.notificationError {
+          Label(error, systemImage: "exclamationmark.triangle.fill")
+            .font(.caption)
+            .foregroundStyle(.red)
+            .padding(.horizontal, 4)
+        }
+
+        selectedContent
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
+      .padding(20)
     }
-    .frame(width: 720, height: 500)
+    .frame(width: 620, height: 450)
     .tint(IntervalTheme.accent)
     .preferredColorScheme(.dark)
     .task {
       notificationStatus = await store.notifications.status()
     }
-  }
-
-  private var sidebar: some View {
-    VStack(alignment: .leading, spacing: 4) {
-      Text("Interval")
-        .font(.headline)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 12)
-        .padding(.bottom, 10)
-
-      ForEach(destinations) { destination in
-        Button {
-          selectedTab = destination.id
-        } label: {
-          Label(destination.title, systemImage: destination.systemImage)
-            .font(.callout.weight(selectedTab == destination.id ? .semibold : .regular))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(selectedTab == destination.id ? Color.primary : Color.secondary)
-        .background {
-          if selectedTab == destination.id {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-              .fill(IntervalTheme.accent.opacity(0.16))
-              .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                  .stroke(IntervalTheme.accent.opacity(0.24))
-              }
-          }
-        }
-        .accessibilityAddTraits(selectedTab == destination.id ? .isSelected : [])
-      }
-      Spacer()
-    }
-    .padding(10)
-    .frame(width: 145)
-  }
-
-  private var sectionHeader: some View {
-    let destination = destinations.first(where: { $0.id == selectedTab }) ?? destinations[0]
-    return Text(destination.title).font(.headline)
   }
 
   @ViewBuilder private var selectedContent: some View {

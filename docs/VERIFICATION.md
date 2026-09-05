@@ -26,7 +26,7 @@ Tests execute real state transitions and storage, including pause/resume/abandon
 
 ## Acceptance checks for a signed distribution
 
-Redesign-specific layout checks cover focus/paused/reflection, history, reminder list/empty templates/editor, floating/full-screen/max-emoji reminders, paused warning, menu, and all five settings pages. Main fixtures use the 860×520 default; `focus-compact` uses the 860×500 minimum. `reminder-editor-bottom` scrolls the actual native editor within a 790×512 viewport and exposes both suppression toggles. `focus-no-animation` disables transactions for a static fixture; it is not a claim of end-to-end Reduce Motion or Reduce Transparency testing.
+Redesign-specific layout checks cover focus/paused/reflection, full/empty notes, history, reminder list/empty templates/editor, floating/full-screen/max-emoji reminders, paused warning, menu, and all five settings pages. Main and settings fixtures use the 620×450 default/minimum. `reminder-editor-bottom` scrolls the actual native editor within a 620×407 viewport (the main content area above navigation) and exposes both suppression toggles. `focus-no-animation` disables transactions for a static fixture; it is not a claim of end-to-end Reduce Motion or Reduce Transparency testing.
 
 Example: `.build/Interval.app/Contents/MacOS/Interval --snapshot .build/focus.png --snapshot-scene focus --snapshot-composited`. This creates isolated fixture data, never edits the user's stored sessions, and requires macOS screen-capture access. Omit the final flag for native bitmap layout rendering.
 

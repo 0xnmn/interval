@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 
 enum IntervalTheme {
-  static let accent = Color(red: 0.65, green: 0.88, blue: 0.76)
-  static let surface = Color(red: 0.065, green: 0.068, blue: 0.075)
+  static let accent = Color(white: 0.88)
+  static let surface = Color(white: 0.12)
   static let border = Color.white.opacity(0.07)
 }
 
@@ -12,7 +12,7 @@ struct GlassBackground: View {
   var body: some View {
     ZStack {
       NativeGlass(reduceTransparency: reduceTransparency)
-      IntervalTheme.surface.opacity(reduceTransparency ? 1 : 0.86)
+      IntervalTheme.surface.opacity(reduceTransparency ? 1 : 0.58)
     }.ignoresSafeArea()
   }
 }
@@ -43,12 +43,13 @@ struct IntervalPrimaryButton: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .font(.callout.weight(.semibold))
-      .foregroundStyle(Color.black.opacity(isEnabled ? 0.9 : 0.45))
+      .foregroundStyle(Color.white.opacity(isEnabled ? 0.9 : 0.45))
       .padding(.horizontal, 14).padding(.vertical, 7)
       .background(
-        IntervalTheme.accent.opacity(configuration.isPressed ? 0.75 : 1),
+        Color.white.opacity(configuration.isPressed ? 0.18 : 0.10),
         in: RoundedRectangle(cornerRadius: 8)
       )
+      .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(.white.opacity(0.12)) }
       .opacity(isEnabled ? 1 : 0.5)
       .contentShape(RoundedRectangle(cornerRadius: 8))
   }

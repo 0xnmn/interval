@@ -17,57 +17,45 @@ enum Destination: String, CaseIterable, Identifiable {
 
 struct MainView: View {
   @Bindable var store: AppStore
+  @State private var showsNotes: Bool
 
-  init(store: AppStore) { self.store = store }
+  init(store: AppStore, showsNotes: Bool = false) {
+    self.store = store
+    _showsNotes = State(initialValue: showsNotes)
+  }
 
   var body: some View {
     ZStack {
       GlassBackground()
-      HStack(spacing: 0) {
-        VStack(alignment: .leading, spacing: 4) {
-          Text("Interval").font(.system(.headline, design: .rounded).weight(.semibold))
-            .padding(.horizontal, 10).padding(.bottom, 12)
-          ForEach(Destination.allCases) { item in
-            let selected = (store.selection ?? .focus) == item
-            Button {
-              store.selection = item
-            } label: {
-              Label(item.rawValue, systemImage: item.icon)
-                .font(.callout.weight(selected ? .semibold : .regular))
-                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 11)
-                .frame(height: 36)
-                .background(
-                  selected ? .white.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 8))
-            }.buttonStyle(.plain).foregroundStyle(selected ? .primary : .secondary)
-              .accessibilityAddTraits(selected ? .isSelected : [])
-          }
-          Spacer()
-          if (store.timer.status == .running || store.timer.status == .paused)
-            && (store.selection ?? .focus) != .focus
-          {
-            HStack {
-              Text(store.timer.kind.title).foregroundStyle(.secondary)
-              Spacer()
-              Text(durationString(store.remaining)).monospacedDigit()
-            }.font(.caption).padding(10)
-          }
-          SettingsLink {
-            Label("Settings", systemImage: "gearshape").frame(
-              maxWidth: .infinity, alignment: .leading)
-          }.buttonStyle(.plain).foregroundStyle(.secondary).padding(11)
-        }.padding(10).frame(width: 150)
-          .background(.black.opacity(0.20))
-          .overlay(alignment: .trailing) { Rectangle().fill(IntervalTheme.border).frame(width: 1) }
+      VStack(spacing: 0) {
         Group {
           switch store.selection ?? .focus {
-          case .focus: FocusView(store: store)
+          case .focus: FocusView(store: store, showsNotes: $showsNotes)
           case .history: HistoryView(store: store)
           case .reminders: RemindersView(store: store)
           }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
+        Rectangle().fill(IntervalTheme.border).frame(height: 1)
+        HStack(spacing: 16) {
+          ForEach(Destination.allCases) { item in
+            Button {
+              store.selection = item
+            } label: {
+              Label(item.rawValue, systemImage: item.icon)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle((store.selection ?? .focus) == item ? .primary : .secondary)
+            .accessibilityAddTraits((store.selection ?? .focus) == item ? .isSelected : [])
+          }
+          Spacer(minLength: 4)
+          SettingsLink { Image(systemName: "gearshape") }
+            .buttonStyle(.plain).help("Settings · ⌘,")
+            .accessibilityLabel("Settings")
+        }.font(.caption).foregroundStyle(.secondary)
+          .padding(.horizontal, 20).frame(height: 42)
       }
     }
-    .frame(minWidth: 860, minHeight: 500)
+    .frame(minWidth: 620, minHeight: 450)
     .tint(IntervalTheme.accent).preferredColorScheme(.dark)
     .safeAreaInset(edge: .bottom) {
       if let error = store.persistenceError {
@@ -83,72 +71,80 @@ struct FocusView: View {
   @Bindable var store: AppStore
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var confirmingAbandon = false
-  @State private var showsNotes = true
+  @Binding var showsNotes: Bool
   var body: some View {
     VStack(spacing: 0) {
-      HStack {
-        Text("Focus").font(.headline)
-        Spacer()
-        Button {
-          showsNotes.toggle()
-        } label: {
-          Image(systemName: "note.text")
-        }.buttonStyle(.borderless).accessibilityLabel(showsNotes ? "Hide notes" : "Show notes")
-          .help(showsNotes ? "Hide notes" : "Show notes")
-      }.padding(.horizontal, 22).frame(height: 48)
-      Divider().opacity(0.6)
-      HStack(spacing: 0) {
+      if showsNotes {
+        notesPane
+      } else {
         ScrollView {
-          VStack(spacing: 16) {
-            ZStack {
-              Circle().stroke(.white.opacity(0.08), lineWidth: 3)
-              Circle().trim(from: 0, to: progress).stroke(
-                IntervalTheme.accent, style: StrokeStyle(lineWidth: 3, lineCap: .round)
+          VStack(spacing: 18) {
+            VStack(spacing: 10) {
+              Text(store.timer.kind.title).font(.callout).foregroundStyle(.secondary)
+              Text(durationString(store.remaining)).font(
+                .system(size: 80, weight: .light, design: .rounded)
               )
-              .rotationEffect(.degrees(-90)).animation(
-                reduceMotion ? nil : .smooth, value: progress)
-              VStack(spacing: 6) {
-                Text(store.timer.kind.title).font(.callout).foregroundStyle(.secondary)
-                Text(durationString(store.remaining)).font(
-                  .system(size: 64, weight: .medium, design: .rounded)
-                )
-                .monospacedDigit().contentTransition(reduceMotion ? .identity : .numericText())
-                .accessibilityLabel(timerAccessibilityLabel)
-                if store.timer.status == .paused {
-                  Text("Paused").font(.caption).foregroundStyle(.secondary)
-                }
+              .monospacedDigit().contentTransition(reduceMotion ? .identity : .numericText())
+              .accessibilityLabel(timerAccessibilityLabel)
+              if store.timer.status == .paused {
+                Text("Paused").font(.caption).foregroundStyle(.secondary)
               }
-            }.frame(width: 220, height: 220)
+            }
+            ProgressView(value: progress).progressViewStyle(.linear)
+              .tint(.white.opacity(0.55)).frame(width: 160)
+              .accessibilityLabel("Session progress")
             HStack(spacing: 12) {
               Button(action: store.startOrToggle) {
-                Label(primaryTitle, systemImage: primaryIcon).frame(minWidth: 105)
+                Label(primaryTitle, systemImage: primaryIcon)
               }
               .buttonStyle(IntervalPrimaryButton())
-              if store.timer.status == .running || store.timer.status == .paused {
-                Button("Abandon", role: .destructive) { confirmingAbandon = true }.buttonStyle(
-                  .plain
-                )
-                .foregroundStyle(.red.opacity(0.9))
-              }
+              cycleActions
             }
             cycleIndicator
             if let id = store.completionSessionID {
               ReflectionView(store: store, sessionID: id).frame(maxWidth: 440)
             }
             messageStack.font(.caption)
-          }.padding(24).frame(maxWidth: .infinity)
-        }
-        if showsNotes {
-          Rectangle().fill(IntervalTheme.border).frame(width: 1)
-          notesPane.frame(width: 280)
+          }.padding(.horizontal, 32).padding(.top, 32).padding(.bottom, 16)
+            .frame(maxWidth: .infinity)
         }
       }
+      HStack {
+        if showsNotes {
+          Button {
+            store.startOrToggle()
+          } label: {
+            Label(durationString(store.remaining), systemImage: primaryIcon).monospacedDigit()
+          }.buttonStyle(.plain).help(primaryTitle)
+            .accessibilityLabel("\(primaryTitle), \(timerAccessibilityLabel)")
+          cycleActions
+        }
+        Spacer()
+        Button {
+          showsNotes.toggle()
+        } label: {
+          Label(
+            showsNotes ? "Back to timer" : "Notes",
+            systemImage: showsNotes ? "arrow.left" : "square.and.pencil")
+        }.buttonStyle(.plain).keyboardShortcut("n", modifiers: [.command, .shift])
+      }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 12)
     }
     .alert("Abandon this interval?", isPresented: $confirmingAbandon) {
       Button("Keep Going", role: .cancel) {}
       Button("Abandon", role: .destructive, action: store.abandon)
     } message: {
       Text("Elapsed active time will be kept in History.")
+    }
+  }
+  @ViewBuilder private var cycleActions: some View {
+    if store.timer.status == .running || store.timer.status == .paused {
+      Menu {
+        Button("Abandon Cycle…", role: .destructive) { confirmingAbandon = true }
+      } label: {
+        Image(systemName: "ellipsis")
+      }
+      .menuStyle(.borderlessButton).fixedSize()
+      .accessibilityLabel("Cycle actions").help("Cycle actions")
     }
   }
   private var progress: Double {
@@ -163,9 +159,10 @@ struct FocusView: View {
   }
   private var notesPane: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("Notes").font(.callout.weight(.semibold))
       TextEditor(text: Binding(get: { store.data.scratchpad }, set: store.updateScratchpad))
-        .font(.body).lineSpacing(4).scrollContentBackground(.hidden).frame(maxHeight: .infinity)
+        .font(.system(size: 15)).lineSpacing(6).scrollContentBackground(.hidden).frame(
+          maxHeight: .infinity
+        )
         .overlay(alignment: .topLeading) {
           if store.data.scratchpad.isEmpty {
             Text("Add a note…").foregroundStyle(.tertiary).padding(.horizontal, 5).padding(
@@ -174,7 +171,7 @@ struct FocusView: View {
             .allowsHitTesting(false)
           }
         }.accessibilityLabel("Global scratchpad")
-    }.padding(16).frame(maxHeight: .infinity)
+    }.padding(28).frame(maxHeight: .infinity)
   }
   @ViewBuilder private var messageStack: some View {
     if let notice = store.inAppNotification {
@@ -280,7 +277,8 @@ struct HistoryView: View {
           daySummary
           if let calendarStatus {
             Label(calendarStatus, systemImage: "calendar.badge.exclamationmark")
-              .font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+              .font(.caption).foregroundStyle(.secondary).frame(
+                maxWidth: .infinity, alignment: .leading)
           }
           Spacer(minLength: 0)
         }.padding(14).frame(width: 280).frame(maxHeight: .infinity)
@@ -376,10 +374,12 @@ struct HistoryView: View {
   private func sessionCount(on date: Date) -> Int {
     store.data.sessions.count { calendar.isDate($0.endedAt, inSameDayAs: date) }
   }
-  private func dayAccessibilityLabel(_ date: Date, _ sessionCount: Int, _ eventCount: Int) -> String {
+  private func dayAccessibilityLabel(_ date: Date, _ sessionCount: Int, _ eventCount: Int) -> String
+  {
     let sessions = sessionCount == 1 ? "session" : "sessions"
     let events = eventCount == 1 ? "calendar event" : "calendar events"
-    return "\(date.formatted(date: .complete, time: .omitted)), \(sessionCount) \(sessions), \(eventCount) \(events)"
+    return
+      "\(date.formatted(date: .complete, time: .omitted)), \(sessionCount) \(sessions), \(eventCount) \(events)"
   }
   private func calendarEventCount(on date: Date) -> Int {
     store.calendarService.events(on: date, calendar: calendar).count
@@ -566,8 +566,12 @@ struct MenuBarView: View {
         HStack(spacing: 8) {
           Button(primaryTitle, action: store.startOrToggle).buttonStyle(IntervalPrimaryButton())
           if store.timer.status == .running || store.timer.status == .paused {
-            Button("Abandon", role: .destructive) { confirmingAbandon = true }.buttonStyle(.plain)
-              .foregroundStyle(.red)
+            Menu {
+              Button("Abandon Cycle…", role: .destructive) { confirmingAbandon = true }
+            } label: {
+              Image(systemName: "ellipsis")
+            }
+            .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Cycle actions")
           }
         }
       }

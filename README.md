@@ -20,7 +20,7 @@ The default build targets the build Mac's architecture. It is a local developmen
 
 - **Focus cycle:** Start once. Interval automatically alternates 25-minute focus sessions and 5-minute breaks, with a 10-minute long break after every four completed focus sessions. All four values are configurable. Pause/Resume controls the current phase; Abandon stops the cycle. There is no manual mode picker.
 - **Reflect:** completed focus sessions are saved immediately. Choose Distracted, Neutral, or Focused and optionally journal without delaying your break. Edit reflections later in History.
-- **Scratchpad:** one autosaved note across every session. The menu-bar quick-note field appends to it.
+- **Scratchpad:** one autosaved note across every session. Open Notes from Focus (⌘⇧N) for a full-width writing surface; the timer continues. The menu-bar quick-note field appends to it.
 - **History:** month calendar and chronological daily sessions, with active duration and outcome. Calendar events are a separate visual category, not fabricated focus records.
 - **Sound:** Silence, Brown Noise, Rain, or Ocean, generated locally with separate focus/break choices and volume.
 - **Calendar:** opt in under Settings → Calendar and choose calendars. Interval never creates, edits, or deletes events. macOS calls the required reading permission “Full Access.”

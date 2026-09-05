@@ -99,7 +99,7 @@ struct SnapshotRequest {
     switch request.scene {
     case "history", "history-disabled", "history-no-selection":
       store.selection = .history
-      size = NSSize(width: 860, height: 520)
+      size = NSSize(width: 620, height: 450)
       view = AnyView(MainView(store: store))
     case "history-legacy":
       size = NSSize(width: 580, height: 650)
@@ -110,10 +110,10 @@ struct SnapshotRequest {
         })
     case "reminders", "reminders-empty":
       store.selection = .reminders
-      size = NSSize(width: 860, height: 520)
+      size = NSSize(width: 620, height: 450)
       view = AnyView(MainView(store: store))
     case "reminder-editor", "reminder-editor-expanded", "reminder-editor-bottom":
-      size = NSSize(width: 790, height: 512)
+      size = NSSize(width: 620, height: 407)
       view = AnyView(
         RemindersView(
           store: store, selection: store.data.reminders[0].id,
@@ -136,34 +136,39 @@ struct SnapshotRequest {
       view = AnyView(
         ReminderTakeoverView(reminder: store.data.reminders[1], dismiss: {}, snooze: {}))
     case "settings":
-      size = NSSize(width: 720, height: 500)
+      size = NSSize(width: 620, height: 450)
       view = AnyView(SettingsView(store: store))
     case "sound-settings":
-      size = NSSize(width: 720, height: 500)
+      size = NSSize(width: 620, height: 450)
       view = AnyView(SettingsView(store: store, showSound: true))
     case "calendar-settings":
-      size = NSSize(width: 720, height: 500)
+      size = NSSize(width: 620, height: 450)
       view = AnyView(SettingsView(store: store, showCalendar: true))
     case "general-settings":
-      size = NSSize(width: 720, height: 500)
+      size = NSSize(width: 620, height: 450)
       view = AnyView(SettingsView(store: store, selectedTab: 3))
     case "updates-settings":
-      size = NSSize(width: 720, height: 500)
+      size = NSSize(width: 620, height: 450)
       view = AnyView(SettingsView(store: store, selectedTab: 4))
     case "reflection":
       store.completionSessionID = store.data.sessions.first?.id
-      size = NSSize(width: 860, height: 520)
+      size = NSSize(width: 620, height: 450)
       view = AnyView(MainView(store: store))
     case "menu":
       size = NSSize(width: 320, height: 260)
       view = AnyView(MenuBarView(store: store))
+    case "notes", "notes-empty":
+      store.selection = .focus
+      if request.scene == "notes-empty" { store.data.scratchpad = "" }
+      size = NSSize(width: 620, height: 450)
+      view = AnyView(MainView(store: store, showsNotes: true))
     case "focus-compact":
       store.selection = .focus
-      size = NSSize(width: 860, height: 500)
+      size = NSSize(width: 620, height: 450)
       view = AnyView(MainView(store: store))
     default:
       store.selection = .focus
-      size = NSSize(width: 860, height: 520)
+      size = NSSize(width: 620, height: 450)
       view = AnyView(MainView(store: store))
     }
 
@@ -227,9 +232,7 @@ struct SnapshotRequest {
         scrollViews
         .filter({ scrollView in
           guard let documentView = scrollView.documentView else { return false }
-          let frame = scrollView.convert(scrollView.bounds, to: root)
-          return frame.midX > root.bounds.midX
-            && documentView.bounds.height > scrollView.contentView.bounds.height
+          return documentView.bounds.height > scrollView.contentView.bounds.height
         })
         .max(by: { $0.bounds.width < $1.bounds.width }),
       let documentView = editor.documentView

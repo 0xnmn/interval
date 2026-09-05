@@ -67,6 +67,12 @@ Lifecycle handling now pauses both focus and breaks on sleep, lock, screensaver,
 
 All surfaces were simplified: darker smoked background, narrow navigation, no timer mode tabs or enclosing cards, plain persistent notes, concise reflection, calendar beside the day timeline, compact reminder editor, flat settings rows, and a smaller menu and cursor warning. Essential permissions and errors remain. Independent plan, adversarial code, and rendered design reviews accompanied the work; targeted tests cover automatic cadence, deadline actions, lifecycle pauses, late observations, and reflection during running breaks.
 
+## Native reference inspection and utility layout
+
+Inspected window captures from the installed Raycast launcher, LookAway Now window, and Session main interface. Raycast uses neutral translucent surfaces, bright primary text, low-emphasis controls, and an action footer. LookAway centers its current state in a compact 420-point window. Session separates setup from history, but its permanent sidebar was deliberately not adopted. macOS reported Accessibility automation disabled, so exhaustive settings-tab and menu-bar inspection was blocked; these captures are not a full application audit and remain local, untracked research files.
+
+The current UI supersedes the navigation rail and mint theme above: a 620×450 workspace with bottom navigation, no Focus heading row, a typographic timer, neutral actions, and on-demand full-width notes. Notes presentation survives destination changes, and timer actions remain available while writing. Reminders use a full-width list and an on-demand editor; settings use five compact horizontal tabs. Destructive cycle actions are under an ellipsis menu with confirmation. Native window controls are retained without a title heading. Independent code and screenshot reviews informed the corrections.
+
 ## Release boundary
 
 The source and local app are implemented. Production distribution is a separate credentialed step: this machine has no Developer ID Application signing identity, and no notarization profile or production update feed/key was supplied. Therefore the local app truthfully disables unconfigured updates. The guarded release script prepares notarized, Sparkle-signed artifacts once those external requirements exist; it does not invent credentials or silently publish an ad-hoc release.
