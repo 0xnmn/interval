@@ -356,12 +356,24 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
   }
 }
 
+public struct TodoItem: Identifiable, Codable, Equatable, Sendable {
+  public var id: UUID
+  public var title: String
+  public var isCompleted: Bool
+
+  public init(id: UUID = UUID(), title: String, isCompleted: Bool = false) {
+    self.id = id
+    self.title = title
+    self.isCompleted = isCompleted
+  }
+}
+
 public struct PersistedData: Codable, Equatable, Sendable {
   public static let currentVersion = 1
   public var version: Int
   public var settings: IntervalSettings
   public var activeTimer: TimerState?
-  public var scratchpad: String
+  public var todos: [TodoItem]
   public var sessions: [SessionRecord]
   public var reminders: [Reminder]
   public var completedFocusCount: Int
@@ -369,15 +381,49 @@ public struct PersistedData: Codable, Equatable, Sendable {
   public init(
     version: Int = currentVersion, settings: IntervalSettings = .init(),
     activeTimer: TimerState? = nil,
-    scratchpad: String = "", sessions: [SessionRecord] = [], reminders: [Reminder] = [],
+    todos: [TodoItem] = [], sessions: [SessionRecord] = [], reminders: [Reminder] = [],
     completedFocusCount: Int = 0
   ) {
     self.version = version
     self.settings = settings
     self.activeTimer = activeTimer
-    self.scratchpad = scratchpad
+    self.todos = todos
     self.sessions = sessions
     self.reminders = reminders
     self.completedFocusCount = completedFocusCount
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case version, settings, activeTimer, todos, scratchpad, sessions, reminders, completedFocusCount
+  }
+
+  public init(from decoder: Decoder) throws {
+    let values = try decoder.container(keyedBy: CodingKeys.self)
+    version = try values.decode(Int.self, forKey: .version)
+    settings = try values.decode(IntervalSettings.self, forKey: .settings)
+    activeTimer = try values.decodeIfPresent(TimerState.self, forKey: .activeTimer)
+    if values.contains(.todos) {
+      todos = try values.decode([TodoItem].self, forKey: .todos)
+    } else {
+      let scratchpad = try values.decodeIfPresent(String.self, forKey: .scratchpad) ?? ""
+      todos = scratchpad.split(whereSeparator: \Character.isNewline).compactMap { line in
+        let title = line.trimmingCharacters(in: .whitespaces)
+        return title.isEmpty ? nil : TodoItem(title: title)
+      }
+    }
+    sessions = try values.decode([SessionRecord].self, forKey: .sessions)
+    reminders = try values.decode([Reminder].self, forKey: .reminders)
+    completedFocusCount = try values.decode(Int.self, forKey: .completedFocusCount)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var values = encoder.container(keyedBy: CodingKeys.self)
+    try values.encode(version, forKey: .version)
+    try values.encode(settings, forKey: .settings)
+    try values.encodeIfPresent(activeTimer, forKey: .activeTimer)
+    try values.encode(todos, forKey: .todos)
+    try values.encode(sessions, forKey: .sessions)
+    try values.encode(reminders, forKey: .reminders)
+    try values.encode(completedFocusCount, forKey: .completedFocusCount)
   }
 }

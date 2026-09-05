@@ -356,13 +356,27 @@ final class AppStore {
     save()
   }
 
-  func updateScratchpad(_ text: String) {
-    data.scratchpad = text
+  func addTodo(_ text: String) {
+    let title = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !title.isEmpty else { return }
+    data.todos.append(TodoItem(title: title))
     save()
   }
-  func appendQuickNote(_ text: String) {
-    guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-    data.scratchpad += (data.scratchpad.isEmpty ? "" : "\n") + text
+  func updateTodoTitle(_ id: UUID, title: String) {
+    guard let index = data.todos.firstIndex(where: { $0.id == id }) else { return }
+    let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !title.isEmpty else { return }
+    data.todos[index].title = title
+    save()
+  }
+  func toggleTodo(_ id: UUID) {
+    guard let index = data.todos.firstIndex(where: { $0.id == id }) else { return }
+    data.todos[index].isCompleted.toggle()
+    save()
+  }
+  func deleteTodo(_ id: UUID) {
+    guard data.todos.contains(where: { $0.id == id }) else { return }
+    data.todos.removeAll { $0.id == id }
     save()
   }
   func updateSession(id: UUID, feedback: SessionFeedback?, journal: String) {

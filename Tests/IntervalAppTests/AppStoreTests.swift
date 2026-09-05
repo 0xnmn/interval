@@ -236,7 +236,7 @@ struct AppStoreTests {
     }
   }
 
-  @Test func reflectionAndScratchpadPersistIndependently() throws {
+  @Test func todoCRUDPersistsWithoutChangingJournal() throws {
     try withStore { store, persistence in
       let now = Date()
       let session = SessionRecord(
@@ -247,13 +247,21 @@ struct AppStoreTests {
       store.completionSessionID = session.id
       store.updateSession(id: session.id, feedback: .focused, journal: "A useful insight")
       #expect(store.completionSessionID == session.id)
-      store.updateScratchpad("Keep this across sessions")
-      store.appendQuickNote("Another thought")
+      store.addTodo("  First task  ")
+      store.addTodo("\n\t")
+      store.addTodo("Second task")
+      let firstID = try #require(store.data.todos.first?.id)
+      let secondID = try #require(store.data.todos.last?.id)
+      store.updateTodoTitle(firstID, title: "  Renamed task\n")
+      store.updateTodoTitle(firstID, title: "   ")
+      store.toggleTodo(firstID)
+      #expect(store.data.todos.map(\.id) == [firstID, secondID])
+      store.deleteTodo(secondID)
       store.continueAfterReflection(at: now.addingTimeInterval(1))
       let saved = try persistence.load()
       #expect(saved.sessions[0].feedback == "focused")
       #expect(saved.sessions[0].journal == "A useful insight")
-      #expect(saved.scratchpad == "Keep this across sessions\nAnother thought")
+      #expect(saved.todos == [TodoItem(id: firstID, title: "Renamed task", isCompleted: true)])
     }
   }
 
@@ -330,7 +338,7 @@ struct AppStoreTests {
       persistence: JSONStore(fileURL: file), calendarService: CalendarService(fixtureEvents: []),
       runtimeEnabled: false)
     #expect(store.persistenceError != nil)
-    store.updateScratchpad("Don't replace the original")
+    store.addTodo("Don't replace the original")
     #expect(try Data(contentsOf: file) == original)
     #expect(store.persistenceError != nil)
   }
@@ -592,12 +600,14 @@ struct AppStoreTests {
 
   @Test func exportContainsLocalDataButNoCalendarContents() throws {
     try withStore { store, persistence in
-      store.updateScratchpad("Portable note")
+      store.addTodo("Portable task")
       let url = persistence.fileURL.deletingLastPathComponent().appendingPathComponent(
         "export.json")
       try store.exportData(to: url)
       let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
-      #expect(object?["scratchpad"] as? String == "Portable note")
+      #expect(object?["scratchpad"] == nil)
+      let todos = object?["todos"] as? [[String: Any]]
+      #expect(todos?.first?["title"] as? String == "Portable task")
       #expect(object?["historyEvents"] == nil)
       #expect(object?["todayEvents"] == nil)
     }

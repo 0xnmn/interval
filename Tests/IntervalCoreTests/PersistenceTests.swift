@@ -7,10 +7,46 @@ import Testing
   let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
   defer { try? FileManager.default.removeItem(at: directory) }
   let store = JSONStore(fileURL: directory.appendingPathComponent("state.json"))
-  var value = PersistedData(scratchpad: "A thought", completedFocusCount: 3)
+  var value = PersistedData(
+    todos: [TodoItem(title: "A thought"), TodoItem(title: "Finished", isCompleted: true)],
+    completedFocusCount: 3)
   value.reminders = [Reminder(title: "Review tomorrow")]
   try store.save(value)
   #expect(try store.load() == value)
+}
+
+@Test func legacyScratchpadMigratesOnceAndRoundTripsAsTodos() throws {
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let store = JSONStore(fileURL: directory.appendingPathComponent("state.json"))
+  try Data(
+    #"""
+    {"version":1,"settings":{"focusMinutes":25,"shortBreakMinutes":5,"longBreakMinutes":10,"longBreakEvery":4},
+    "scratchpad":"  First task  \n\nSecond task\n   ","sessions":[],"reminders":[],"completedFocusCount":0}
+    """#.utf8
+  ).write(to: store.fileURL)
+
+  let migrated = try store.load()
+  #expect(migrated.todos.map(\.title) == ["First task", "Second task"])
+  #expect(migrated.todos.allSatisfy { !$0.isCompleted })
+
+  try store.save(migrated)
+  let encoded = try #require(
+    JSONSerialization.jsonObject(with: Data(contentsOf: store.fileURL)) as? [String: Any])
+  #expect(encoded["scratchpad"] == nil)
+  #expect((encoded["todos"] as? [[String: Any]])?.count == 2)
+  #expect(try store.load() == migrated)
+}
+
+@Test func explicitEmptyTodosDoNotRemigrateLegacyScratchpad() throws {
+  let json = Data(
+    """
+    {"version":1,"settings":{"focusMinutes":25,"shortBreakMinutes":5,"longBreakMinutes":10,"longBreakEvery":4},
+    "todos":[],"scratchpad":"Do not restore","sessions":[],"reminders":[],"completedFocusCount":0}
+    """.utf8)
+  let decoded = try JSONDecoder().decode(PersistedData.self, from: json)
+  #expect(decoded.todos.isEmpty)
 }
 
 @Test func defaultSettingsMatchProductDefaults() {
@@ -82,7 +118,8 @@ import Testing
     """.utf8)
   try legacy.write(to: store.fileURL)
   let loaded = try store.load()
-  #expect(loaded.scratchpad == "Preserve this")
+  #expect(loaded.todos.map(\.title) == ["Preserve this"])
+  #expect(loaded.todos[0].isCompleted == false)
   #expect(loaded.sessions[0].activeDuration == 180)
   #expect(loaded.sessions[0].isDurationEstimated)
   #expect(try Data(contentsOf: store.fileURL.appendingPathExtension("pre-migration")) == legacy)

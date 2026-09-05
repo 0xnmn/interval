@@ -96,7 +96,10 @@ struct SnapshotRequest {
     if scene == "reminder-max-emoji" { reminders[0].emojiSize = 180 }
     return PersistedData(
       settings: settings, activeTimer: timer,
-      scratchpad: "Outline the launch notes\nReview accessibility labels",
+      todos: [
+        TodoItem(title: "Outline the launch notes"),
+        TodoItem(title: "Review accessibility labels", isCompleted: true),
+      ],
       sessions: sessions,
       reminders: reminders,
       completedFocusCount: 3)
@@ -175,9 +178,16 @@ struct SnapshotRequest {
     case "menu":
       size = NSSize(width: 348, height: 290)
       view = AnyView(MenuBarView(store: store))
-    case "notes", "notes-empty":
+    case "todos", "todos-empty", "todos-long":
       store.selection = .focus
-      if request.scene == "notes-empty" { store.data.scratchpad = "" }
+      if request.scene == "todos-empty" { store.data.todos = [] }
+      if request.scene == "todos-long" {
+        store.data.todos.append(
+          TodoItem(
+            title:
+              "Review the full onboarding flow and make sure all keyboard shortcuts and accessibility labels work correctly"
+          ))
+      }
       size = NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))
     case "focus-compact":

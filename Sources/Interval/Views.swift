@@ -480,7 +480,7 @@ struct MenuBarView: View {
   @Environment(\.openWindow) private var openWindow
   @State private var confirmingAbandon = false
   @State private var confirmingBreak = false
-  @State private var quickNote = ""
+  @State private var quickTodo = ""
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(alignment: .center, spacing: 12) {
@@ -541,14 +541,14 @@ struct MenuBarView: View {
         }.frame(maxWidth: .infinity, alignment: .leading)
       }
       HStack(spacing: 7) {
-        TextField("Quick note", text: $quickNote).onSubmit {
-          store.appendQuickNote(quickNote)
-          quickNote = ""
+        TextField("Add a to-do…", text: $quickTodo).onSubmit {
+          store.addTodo(quickTodo)
+          quickTodo = ""
         }
         Button("Add") {
-          store.appendQuickNote(quickNote)
-          quickNote = ""
-        }.disabled(quickNote.isEmpty)
+          store.addTodo(quickTodo)
+          quickTodo = ""
+        }.disabled(quickTodo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       }
       Divider()
       HStack(spacing: 12) {

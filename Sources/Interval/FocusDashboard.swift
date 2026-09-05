@@ -207,54 +207,69 @@ private struct FocusDial: View {
 
 struct FocusDayPanel: View {
   @Bindable var store: AppStore
+  @State private var newTodo = ""
   private var sessions: [SessionRecord] {
     store.data.sessions.filter {
       $0.kind == .focus && Calendar.autoupdatingCurrent.isDate($0.endedAt, inSameDayAs: store.now)
     }
   }
   var body: some View {
-    GeometryReader { geometry in
-      ScrollView {
-        VStack(alignment: .leading, spacing: 20) {
-          Text("Notes").font(.headline)
-          WritingArea(
-            text: Binding(get: { store.data.scratchpad }, set: store.updateScratchpad),
-            placeholder: "Add a note…", label: "Global scratchpad"
-          )
-          .frame(height: max(180, geometry.size.height * 0.43))
-          Divider()
-          HStack {
-            Text("Today").font(.headline)
-            Spacer()
-            Button {
-              store.selection = .history
-            } label: {
-              Image(systemName: "arrow.up.right")
-            }.buttonStyle(.plain).help("All stats").accessibilityLabel("All stats")
+    ScrollView {
+      VStack(alignment: .leading, spacing: 20) {
+        Text("To-dos").font(.headline)
+        VStack(spacing: 8) {
+          ForEach(store.data.todos) { todo in
+            TodoRow(store: store, todo: todo)
           }
-          HStack(spacing: 28) {
-            VStack(alignment: .leading, spacing: 4) {
-              Text("\(Int(sessions.reduce(0) { $0 + $1.activeDuration } / 60))m")
-                .font(.title2.weight(.medium)).monospacedDigit()
-              Text("Logged focus").font(.caption).foregroundStyle(.secondary)
-            }
-            VStack(alignment: .leading, spacing: 4) {
-              Text("\(sessions.filter { $0.outcome == .completed }.count)")
-                .font(.title2.weight(.medium)).monospacedDigit()
-              Text("Completed").font(.caption).foregroundStyle(.secondary)
-            }
+          HStack(spacing: 10) {
+            Image(systemName: "plus").foregroundStyle(.secondary).frame(width: 18)
+            TextField("Add a to-do…", text: $newTodo)
+              .textFieldStyle(.plain).onSubmit(addTodo)
+              .accessibilityLabel("New to-do")
+            Button(action: addTodo) {
+              Image(systemName: "return").frame(width: 24, height: 24)
+            }.buttonStyle(.plain).foregroundStyle(.secondary)
+              .disabled(newTodo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+              .help("Add to-do").accessibilityLabel("Add to-do")
+          }.padding(.vertical, 5)
+        }.font(.body)
+        Divider()
+        HStack {
+          Text("Today").font(.headline)
+          Spacer()
+          Button {
+            store.selection = .history
+          } label: {
+            Image(systemName: "arrow.up.right")
+          }.buttonStyle(.plain).help("All stats").accessibilityLabel("All stats")
+        }
+        HStack(spacing: 28) {
+          VStack(alignment: .leading, spacing: 4) {
+            Text("\(Int(sessions.reduce(0) { $0 + $1.activeDuration } / 60))m")
+              .font(.title2.weight(.medium)).monospacedDigit()
+            Text("Logged focus").font(.caption).foregroundStyle(.secondary)
           }
-          Divider()
-          HStack {
-            Text("Calendar").font(.headline)
-            Spacer()
-            Text(store.now.formatted(.dateTime.month(.abbreviated).day()))
-              .font(.caption).foregroundStyle(.secondary)
+          VStack(alignment: .leading, spacing: 4) {
+            Text("\(sessions.filter { $0.outcome == .completed }.count)")
+              .font(.title2.weight(.medium)).monospacedDigit()
+            Text("Completed").font(.caption).foregroundStyle(.secondary)
           }
-          calendarAgenda
-        }.padding(24)
-      }
+        }
+        Divider()
+        HStack {
+          Text("Calendar").font(.headline)
+          Spacer()
+          Text(store.now.formatted(.dateTime.month(.abbreviated).day()))
+            .font(.caption).foregroundStyle(.secondary)
+        }
+        calendarAgenda
+      }.padding(24)
     }
+  }
+
+  private func addTodo() {
+    store.addTodo(newTodo)
+    newTodo = ""
   }
 
   @ViewBuilder private var calendarAgenda: some View {
@@ -283,5 +298,43 @@ struct FocusDayPanel: View {
         }
       }
     }
+  }
+}
+
+private struct TodoRow: View {
+  @Bindable var store: AppStore
+  let todo: TodoItem
+  @State private var title: String
+  @FocusState private var isEditing: Bool
+
+  init(store: AppStore, todo: TodoItem) {
+    self.store = store
+    self.todo = todo
+    _title = State(initialValue: todo.title)
+  }
+
+  var body: some View {
+    HStack(alignment: .firstTextBaseline, spacing: 10) {
+      Toggle("", isOn: Binding(get: { todo.isCompleted }, set: { _ in store.toggleTodo(todo.id) }))
+        .toggleStyle(.checkbox).labelsHidden().tint(.blue)
+        .accessibilityLabel("Complete \(todo.title)")
+      TextField("To-do", text: $title, axis: .vertical)
+        .textFieldStyle(.plain).lineLimit(1...5)
+        .strikethrough(todo.isCompleted)
+        .foregroundStyle(todo.isCompleted ? .secondary : .primary)
+        .focused($isEditing)
+        .accessibilityLabel("To-do title")
+        .onChange(of: title) { _, value in store.updateTodoTitle(todo.id, title: value) }
+        .onChange(of: isEditing) { _, editing in
+          if !editing { title = todo.title }
+        }
+        .onSubmit { isEditing = false }
+      Button {
+        store.deleteTodo(todo.id)
+      } label: {
+        Image(systemName: "xmark").font(.caption).frame(width: 24, height: 24)
+      }.buttonStyle(.plain).foregroundStyle(.tertiary)
+        .help("Delete to-do").accessibilityLabel("Delete \(todo.title)")
+    }.padding(.vertical, 5)
   }
 }
