@@ -108,7 +108,6 @@ struct FocusView: View {
       }
       .defaultScrollAnchor(.center, for: .alignment)
       .frame(maxHeight: .infinity)
-      Rectangle().fill(IntervalTheme.border).frame(height: 1).padding(.horizontal, 24)
       notesPane.frame(height: 180)
     }
     .alert("Abandon this interval?", isPresented: $confirmingAbandon) {
@@ -141,18 +140,9 @@ struct FocusView: View {
   private var notesPane: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text("Notes").font(.caption).foregroundStyle(.secondary)
-      TextEditor(text: Binding(get: { store.data.scratchpad }, set: store.updateScratchpad))
-        .font(.system(size: 13)).lineSpacing(4).scrollContentBackground(.hidden).frame(
-          maxHeight: .infinity
-        )
-        .overlay(alignment: .topLeading) {
-          if store.data.scratchpad.isEmpty {
-            Text("Add a note…").foregroundStyle(.tertiary).padding(.horizontal, 5).padding(
-              .vertical, 8
-            )
-            .allowsHitTesting(false)
-          }
-        }.accessibilityLabel("Global scratchpad")
+      WritingArea(
+        text: Binding(get: { store.data.scratchpad }, set: store.updateScratchpad),
+        placeholder: "Add a note…", label: "Global scratchpad")
     }.padding(.horizontal, 24).padding(.vertical, 14).frame(maxHeight: .infinity)
   }
   @ViewBuilder private var messageStack: some View {
@@ -486,14 +476,44 @@ struct ReflectionView: View {
           .accessibilityAddTraits(feedback.wrappedValue == value ? .isSelected : [])
         }
       }
-      TextField("Add a thought…", text: journal).accessibilityLabel("Journal")
-        .onSubmit { store.continueAfterReflection() }
+      WritingArea(text: journal, placeholder: "Add a thought…", label: "Journal")
+        .frame(height: 112)
       Button("Continue") { store.continueAfterReflection() }
-        .buttonStyle(IntervalPrimaryButton()).keyboardShortcut(.defaultAction)
+        .buttonStyle(IntervalPrimaryButton()).keyboardShortcut(.return, modifiers: .command)
+        .help("Continue · ⌘Return")
       Spacer(minLength: 0)
     }
   }
   private func setFeedback(_ value: SessionFeedback) { feedback.wrappedValue = value }
+}
+
+private struct WritingArea: View {
+  @Binding var text: String
+  let placeholder: String
+  let label: String
+  @FocusState private var isFocused: Bool
+
+  var body: some View {
+    TextEditor(text: $text)
+      .font(.system(size: 13)).lineSpacing(4)
+      .scrollContentBackground(.hidden)
+      .focused($isFocused)
+      .overlay(alignment: .topLeading) {
+        if text.isEmpty {
+          Text(placeholder).font(.system(size: 13)).foregroundStyle(.secondary)
+            .padding(.horizontal, 5)
+            .allowsHitTesting(false)
+        }
+      }
+      .padding(8)
+      .background(.black.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+      .overlay {
+        RoundedRectangle(cornerRadius: 10)
+          .strokeBorder(isFocused ? Color.blue.opacity(0.5) : .white.opacity(0.07), lineWidth: 1)
+          .allowsHitTesting(false)
+      }
+      .accessibilityLabel(label)
+  }
 }
 
 struct SessionInspector: View {
