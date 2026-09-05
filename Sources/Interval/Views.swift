@@ -21,21 +21,56 @@ struct MainView: View {
   init(store: AppStore) { self.store = store }
 
   var body: some View {
-    NavigationSplitView {
-      List(Destination.allCases, selection: $store.selection) { item in
-        Label(item.rawValue, systemImage: item.icon).tag(item)
-      }
-      .navigationTitle("Interval")
-    } detail: {
-      switch store.selection ?? .focus {
-      case .focus: FocusView(store: store)
-      case .history: HistoryView(store: store)
-      case .reminders: RemindersView(store: store)
+    ZStack {
+      GlassBackground()
+      HStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 6) {
+          HStack(spacing: 9) {
+            Image(systemName: "circle.hexagongrid.fill").foregroundStyle(IntervalTheme.accent)
+            Text("INTERVAL").font(.system(.headline, design: .rounded).weight(.bold)).tracking(1.5)
+          }.padding(.horizontal, 12).padding(.bottom, 18)
+          ForEach(Destination.allCases) { item in
+            let selected = (store.selection ?? .focus) == item
+            Button {
+              store.selection = item
+            } label: {
+              Label(item.rawValue, systemImage: item.icon)
+                .font(.callout.weight(selected ? .semibold : .regular))
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 11)
+                .frame(height: 36)
+                .background(
+                  selected ? .white.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 8))
+            }.buttonStyle(.plain).foregroundStyle(selected ? .primary : .secondary)
+              .accessibilityAddTraits(selected ? .isSelected : [])
+          }
+          Spacer()
+          if store.timer.status == .running || store.timer.status == .paused {
+            VStack(alignment: .leading, spacing: 5) {
+              Text(store.timer.status == .running ? "IN PROGRESS" : "PAUSED")
+                .font(.caption2.weight(.bold)).tracking(1).foregroundStyle(IntervalTheme.accent)
+              Text(durationString(store.remaining)).font(
+                .system(.title3, design: .monospaced).weight(.medium))
+              Text(store.timer.kind.title).font(.caption).foregroundStyle(.secondary)
+            }.padding(11).frame(maxWidth: .infinity, alignment: .leading).intervalPanel()
+          }
+          SettingsLink {
+            Label("Settings", systemImage: "gearshape").frame(
+              maxWidth: .infinity, alignment: .leading)
+          }.buttonStyle(.plain).foregroundStyle(.secondary).padding(11)
+        }.padding(12).frame(width: 170)
+          .background(.black.opacity(0.20))
+          .overlay(alignment: .trailing) { Rectangle().fill(IntervalTheme.border).frame(width: 1) }
+        Group {
+          switch store.selection ?? .focus {
+          case .focus: FocusView(store: store)
+          case .history: HistoryView(store: store)
+          case .reminders: RemindersView(store: store)
+          }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
       }
     }
-    .navigationSplitViewColumnWidth(min: 180, ideal: 205)
     .frame(minWidth: 940, minHeight: 540)
-    .tint(.teal)
+    .tint(IntervalTheme.accent).preferredColorScheme(.dark)
     .safeAreaInset(edge: .bottom) {
       if let error = store.persistenceError {
         Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -48,79 +83,134 @@ struct MainView: View {
 
 struct FocusView: View {
   @Bindable var store: AppStore
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var confirmingAbandon = false
+  @State private var showsNotes = true
   var body: some View {
-    ScrollView {
-      VStack(spacing: 0) {
+    VStack(spacing: 0) {
+      HStack {
+        VStack(alignment: .leading, spacing: 3) {
+          Text("Focus").font(.title2.bold())
+          Text("One interval at a time.").font(.caption).foregroundStyle(.secondary)
+        }
+        Spacer()
+        Button {
+          showsNotes.toggle()
+        } label: {
+          Label(showsNotes ? "Hide notes" : "Show notes", systemImage: "sidebar.right")
+        }.buttonStyle(.borderless).accessibilityLabel(showsNotes ? "Hide notes" : "Show notes")
+      }.padding(.horizontal, 26).padding(.vertical, 18)
+      Divider().opacity(0.6)
+      ScrollView {
         VStack(spacing: 18) {
-          Picker("Interval type", selection: Binding(get: { store.timer.kind }, set: store.choose))
-          {
-            ForEach(TimerKind.allCases, id: \.self) { Text($0.title).tag($0) }
-          }.pickerStyle(.segmented).frame(maxWidth: 390).disabled(store.timer.status != .ready)
-          Text(store.timer.kind.title.uppercased()).font(.caption.weight(.semibold)).tracking(1.8)
-            .foregroundStyle(.secondary)
-          if store.timer.kind == .focus {
-            Text(
-              "Cycle \(store.data.completedFocusCount % max(1, store.data.settings.longBreakEvery) + 1) of \(max(1, store.data.settings.longBreakEvery))"
-            )
-            .font(.callout).foregroundStyle(.secondary)
+          HStack(alignment: .top, spacing: 18) {
+            VStack(spacing: 14) {
+              Picker(
+                "Interval type", selection: Binding(get: { store.timer.kind }, set: store.choose)
+              ) {
+                ForEach(TimerKind.allCases, id: \.self) { Text($0.title).tag($0) }
+              }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: 360).disabled(
+                store.timer.status != .ready)
+              ZStack {
+                Circle().stroke(.white.opacity(0.07), lineWidth: 8)
+                Circle().trim(from: 0, to: progress).stroke(
+                  IntervalTheme.accent, style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90)).animation(
+                  reduceMotion ? nil : .smooth, value: progress)
+                VStack(spacing: 7) {
+                  Text(store.timer.kind.title.uppercased()).font(.caption.weight(.bold)).tracking(2)
+                    .foregroundStyle(.secondary)
+                  Text(durationString(store.remaining)).font(
+                    .system(size: 54, weight: .semibold, design: .monospaced)
+                  )
+                  .monospacedDigit().contentTransition(reduceMotion ? .identity : .numericText())
+                  .accessibilityLabel(
+                    timerAccessibilityLabel)
+                  Text(statusText).font(.caption).foregroundStyle(.secondary)
+                }
+              }.frame(width: 268, height: 268).padding(.vertical, 2)
+              HStack(spacing: 12) {
+                Button(action: store.startOrToggle) {
+                  Label(primaryTitle, systemImage: primaryIcon).frame(minWidth: 105)
+                }
+                .buttonStyle(IntervalPrimaryButton())
+                if store.timer.status == .running || store.timer.status == .paused {
+                  Button("Abandon", role: .destructive) { confirmingAbandon = true }.buttonStyle(
+                    .plain
+                  )
+                  .foregroundStyle(.red.opacity(0.9))
+                }
+              }
+              if store.timer.kind == .focus { cycleIndicator }
+            }.padding(22).frame(maxWidth: .infinity).intervalPanel()
+            if showsNotes && store.completionSessionID == nil { notesPane.frame(width: 250) }
           }
-          Text(durationString(store.remaining)).font(
-            .system(size: 76, weight: .semibold, design: .rounded)
-          ).monospacedDigit()
-            .contentTransition(.numericText()).accessibilityLabel(timerAccessibilityLabel)
-          HStack(spacing: 12) {
-            Button(action: store.startOrToggle) {
-              Label(primaryTitle, systemImage: primaryIcon).frame(minWidth: 105)
-            }
-            .buttonStyle(.borderedProminent).controlSize(.large)
-            .glassEffect(.regular.interactive(), in: .capsule)
-            if store.timer.status == .running || store.timer.status == .paused {
-              Button("Abandon", role: .destructive) { confirmingAbandon = true }.buttonStyle(
-                .bordered
-              ).controlSize(.large)
-            }
-          }
-          Text(statusText).font(.callout).foregroundStyle(.secondary)
-        }.padding(.top, 48).padding(.horizontal, 42)
-        Divider().padding(.top, 38)
-        VStack(alignment: .leading, spacing: 10) {
           if let id = store.completionSessionID {
-            ReflectionView(store: store, sessionID: id).padding(.bottom, 8)
+            ReflectionView(store: store, sessionID: id).padding(20).intervalPanel()
           }
-          if let notice = store.inAppNotification {
-            Label(notice, systemImage: "bell.fill").foregroundStyle(.teal)
+          if !showsNotes || store.completionSessionID != nil {
+            HStack(spacing: 14) { messageStack }
+              .font(.caption).padding(.horizontal, 4).frame(
+                maxWidth: .infinity, alignment: .leading)
           }
-          Label("Scratchpad", systemImage: "square.and.pencil").font(.headline)
-          TextEditor(text: Binding(get: { store.data.scratchpad }, set: store.updateScratchpad))
-            .font(.body).scrollContentBackground(.hidden).padding(10)
-            .frame(minHeight: 140)
-            .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 9))
-            .accessibilityLabel("Global scratchpad")
-          if let error = store.persistenceError {
-            Label(error, systemImage: "exclamationmark.triangle.fill").font(.caption)
-              .foregroundStyle(.red)
-          } else if store.didSave {
-            Label("Saved", systemImage: "checkmark.circle").font(.caption).foregroundStyle(
-              .secondary)
-          } else {
-            Text("Changes save automatically.").font(.caption).foregroundStyle(.secondary)
-          }
-          if let recovery = store.recoveryMessage {
-            Label(recovery, systemImage: "pause.circle").font(.caption).foregroundStyle(.secondary)
-          }
-          if let error = store.audioError {
-            Label(error, systemImage: "speaker.slash").font(.caption).foregroundStyle(.orange)
-          }
-        }.padding(28).frame(maxWidth: 680, minHeight: 180)
+        }.padding(22)
       }
-    }.background(Color(nsColor: .windowBackgroundColor))
-      .alert("Abandon this interval?", isPresented: $confirmingAbandon) {
-        Button("Keep Going", role: .cancel) {}
-        Button("Abandon", role: .destructive, action: store.abandon)
-      } message: {
-        Text("Elapsed active time will be kept in History.")
+    }
+    .alert("Abandon this interval?", isPresented: $confirmingAbandon) {
+      Button("Keep Going", role: .cancel) {}
+      Button("Abandon", role: .destructive, action: store.abandon)
+    } message: {
+      Text("Elapsed active time will be kept in History.")
+    }
+  }
+  private var progress: Double {
+    guard store.timer.duration > 0 else { return 0 }
+    return min(1, max(0, 1 - store.remaining / store.timer.duration))
+  }
+  private var cycleIndicator: some View {
+    let total = max(1, store.data.settings.longBreakEvery)
+    let current = store.data.completedFocusCount % total
+    return VStack(spacing: 7) {
+      HStack(spacing: 7) {
+        ForEach(0..<total, id: \.self) { index in
+          Circle().fill(index <= current ? IntervalTheme.accent : .white.opacity(0.14)).frame(
+            width: 6, height: 6
+          ).accessibilityHidden(true)
+        }
       }
+      Text("Cycle \(current + 1) of \(total)").font(.caption).foregroundStyle(.secondary)
+    }.accessibilityElement(children: .combine)
+  }
+  private var notesPane: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Label("Notes", systemImage: "square.and.pencil").font(.headline)
+      Text("Keep context close without leaving the interval.").font(.caption).foregroundStyle(
+        .secondary)
+      TextEditor(text: Binding(get: { store.data.scratchpad }, set: store.updateScratchpad))
+        .scrollContentBackground(.hidden).padding(8).frame(maxHeight: .infinity)
+        .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 9)).accessibilityLabel(
+          "Global scratchpad")
+      messageStack
+    }.padding(16).frame(minHeight: 410, maxHeight: .infinity).intervalPanel()
+  }
+  @ViewBuilder private var messageStack: some View {
+    if let notice = store.inAppNotification {
+      Label(notice, systemImage: "bell.fill").foregroundStyle(IntervalTheme.accent)
+    }
+    if let error = store.persistenceError {
+      Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
+    } else if store.didSave {
+      Label("Saved", systemImage: "checkmark.circle").foregroundStyle(.secondary)
+    } else {
+      Text("Changes save automatically.").foregroundStyle(.secondary)
+    }
+    if let recovery = store.recoveryMessage {
+      Label(recovery, systemImage: "pause.circle").foregroundStyle(.secondary)
+    }
+    if let error = store.audioError {
+      Label(error, systemImage: "speaker.slash").foregroundStyle(.orange)
+    }
   }
   private var primaryTitle: String {
     switch store.timer.status {
@@ -158,92 +248,136 @@ struct HistoryView: View {
     _selectedDay = State(initialValue: store.now)
   }
   var body: some View {
-    HSplitView {
-      VStack(spacing: 12) {
-        HStack {
-          Button(action: { changeMonth(by: -1) }) { Image(systemName: "chevron.left") }
-            .accessibilityLabel("Previous month")
-          Spacer()
-          Text(month.formatted(.dateTime.month(.wide).year())).font(.headline)
-          Spacer()
-          Button(action: { changeMonth(by: 1) }) { Image(systemName: "chevron.right") }
-            .accessibilityLabel("Next month")
+    VStack(spacing: 0) {
+      HStack {
+        VStack(alignment: .leading, spacing: 3) {
+          Text("History").font(.title2.bold())
+          Text(selectedDay.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
+            .font(.caption).foregroundStyle(.secondary)
         }
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
-          ForEach(CalendarDates.weekdaySymbols(calendar: calendar), id: \.self) {
-            Text($0).font(.caption).foregroundStyle(.secondary)
+        Spacer()
+        Button("Today") {
+          month = store.now
+          selectedDay = store.now
+          selectedSession = nil
+          store.calendarService.show(month: store.now)
+        }
+        .buttonStyle(.bordered)
+      }.padding(.horizontal, 26).padding(.vertical, 18)
+      Divider().opacity(0.6)
+      HStack(spacing: 0) {
+        VStack(spacing: 14) {
+          HStack {
+            Button(action: { changeMonth(by: -1) }) { Image(systemName: "chevron.left") }
+              .accessibilityLabel("Previous month")
+            Spacer()
+            Text(month.formatted(.dateTime.month(.wide).year())).font(.headline)
+            Spacer()
+            Button(action: { changeMonth(by: 1) }) { Image(systemName: "chevron.right") }
+              .accessibilityLabel("Next month")
           }
-          ForEach(
-            Array(CalendarDates.monthGrid(containing: month, calendar: calendar).enumerated()),
-            id: \.offset
-          ) { _, date in
-            if let date {
-              let sessionCount = sessionCount(on: date)
-              let eventCount = calendarEventCount(on: date)
-              Button("\(calendar.component(.day, from: date))") {
-                selectedDay = date
-                selectedSession = nil
-              }
-              .buttonStyle(.plain).frame(maxWidth: .infinity, minHeight: 28)
-              .background(
-                calendar.isDate(date, inSameDayAs: selectedDay) ? Color.teal.opacity(0.22) : .clear,
-                in: Circle()
-              )
-              .overlay(alignment: .bottom) {
-                HStack(spacing: 3) {
-                  if sessionCount > 0 { Circle().fill(.teal).frame(width: 4, height: 4) }
-                  if eventCount > 0 { Circle().fill(.blue).frame(width: 4, height: 4) }
+          LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
+            ForEach(CalendarDates.weekdaySymbols(calendar: calendar), id: \.self) {
+              Text($0).font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(
+              Array(CalendarDates.monthGrid(containing: month, calendar: calendar).enumerated()),
+              id: \.offset
+            ) { _, date in
+              if let date {
+                let sessionCount = sessionCount(on: date)
+                let eventCount = calendarEventCount(on: date)
+                Button("\(calendar.component(.day, from: date))") {
+                  selectedDay = date
+                  selectedSession = nil
                 }
+                .buttonStyle(.plain).frame(maxWidth: .infinity, minHeight: 28)
+                .background(
+                  calendar.isDate(date, inSameDayAs: selectedDay)
+                    ? Color.teal.opacity(0.22) : .clear,
+                  in: Circle()
+                )
+                .overlay(alignment: .bottom) {
+                  HStack(spacing: 3) {
+                    if sessionCount > 0 { Circle().fill(.teal).frame(width: 4, height: 4) }
+                    if eventCount > 0 { Circle().fill(.blue).frame(width: 4, height: 4) }
+                  }
+                }
+                .accessibilityLabel(
+                  "\(date.formatted(date: .complete, time: .omitted)), \(sessionCount) session\(sessionCount == 1 ? "" : "s"), \(eventCount) calendar event\(eventCount == 1 ? "" : "s")"
+                )
+                .accessibilityAddTraits(
+                  calendar.isDate(date, inSameDayAs: selectedDay) ? .isSelected : [])
+              } else {
+                Color.clear.frame(height: 28)
               }
-              .accessibilityLabel(
-                "\(date.formatted(date: .complete, time: .omitted)), \(sessionCount) session\(sessionCount == 1 ? "" : "s"), \(eventCount) calendar event\(eventCount == 1 ? "" : "s")"
-              )
-              .accessibilityAddTraits(
-                calendar.isDate(date, inSameDayAs: selectedDay) ? .isSelected : [])
-            } else {
-              Color.clear.frame(height: 28)
             }
           }
-        }
-        HStack(spacing: 14) {
-          Label("Sessions", systemImage: "circle.fill").foregroundStyle(.teal)
-          Label("Calendar events", systemImage: "circle.fill").foregroundStyle(.blue)
-        }.font(.caption).accessibilityElement(children: .combine).accessibilityLabel(
-          "Legend: teal marks sessions; blue marks calendar events")
-        Divider()
-        if dayItems.isEmpty {
-          ContentUnavailableView(
-            emptyTitle, systemImage: "calendar", description: Text(emptyDescription)
-          )
-          .frame(minHeight: 170, maxHeight: .infinity)
+          HStack(spacing: 14) {
+            Label("Sessions", systemImage: "circle.fill").foregroundStyle(.teal)
+            Label("Calendar events", systemImage: "circle.fill").foregroundStyle(.blue)
+          }.font(.caption).accessibilityElement(children: .combine).accessibilityLabel(
+            "Legend: teal marks sessions; blue marks calendar events")
+          Divider().opacity(0.6)
+          if dayItems.isEmpty {
+            ContentUnavailableView(
+              emptyTitle, systemImage: "calendar", description: Text(emptyDescription)
+            )
+            .frame(minHeight: 170, maxHeight: .infinity)
+          } else {
+            ScrollView {
+              LazyVStack(alignment: .leading, spacing: 4) {
+                ForEach(dayItems) { item in
+                  switch item {
+                  case .calendar(let event): CalendarEventRow(event: event)
+                  case .session(let session):
+                    Button {
+                      selectedSession = session.id
+                    } label: {
+                      SessionRow(session: session).frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 8)
+                        .background(
+                          selectedSession == session.id ? Color.teal.opacity(0.16) : .clear,
+                          in: RoundedRectangle(cornerRadius: 7))
+                    }.buttonStyle(.plain)
+                  }
+                }
+              }
+            }.frame(minHeight: 170, maxHeight: .infinity)
+          }
+        }.padding(18).frame(minWidth: 350, maxWidth: .infinity, maxHeight: .infinity)
+          .intervalPanel().padding(18)
+        Rectangle().fill(IntervalTheme.border).frame(width: 1)
+        if let id = selectedSession, let session = store.data.sessions.first(where: { $0.id == id })
+        {
+          SessionInspector(store: store, session: session).frame(minWidth: 290)
         } else {
-          ScrollView {
-            LazyVStack(alignment: .leading, spacing: 4) {
-              ForEach(dayItems) { item in
-                switch item {
-                case .calendar(let event): CalendarEventRow(event: event)
-                case .session(let session):
-                  Button {
-                    selectedSession = session.id
-                  } label: {
-                    SessionRow(session: session).frame(maxWidth: .infinity, alignment: .leading)
-                      .padding(.horizontal, 8)
-                      .background(
-                        selectedSession == session.id ? Color.teal.opacity(0.16) : .clear,
-                        in: RoundedRectangle(cornerRadius: 7))
-                  }.buttonStyle(.plain)
-                }
-              }
-            }
-          }.frame(minHeight: 170, maxHeight: .infinity)
+          daySummary.frame(minWidth: 290)
         }
-      }.padding().frame(minWidth: 390, maxHeight: .infinity)
-      if let id = selectedSession, let session = store.data.sessions.first(where: { $0.id == id }) {
-        SessionInspector(store: store, session: session).frame(minWidth: 260)
-      } else {
-        ContentUnavailableView("Select a session", systemImage: "rectangle.and.pencil.and.ellipsis")
       }
-    }.navigationTitle("History").task { store.calendarService.show(month: month) }
+    }.task { store.calendarService.show(month: month) }
+  }
+  private var daySummary: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      Image(systemName: "calendar.day.timeline.left").font(.title).foregroundStyle(
+        IntervalTheme.accent)
+      Text(selectedDay.formatted(.dateTime.weekday(.wide).month(.wide).day())).font(.title3.bold())
+      if daySessions.isEmpty {
+        Text("No interval sessions were recorded on this day.").foregroundStyle(.secondary)
+      } else {
+        Text("\(daySessions.count) interval\(daySessions.count == 1 ? "" : "s") recorded")
+        Text("Select a session in the timeline to review its timing and reflection.")
+          .font(.callout).foregroundStyle(.secondary)
+      }
+      if !dayCalendarEvents.isEmpty {
+        Label(
+          "\(dayCalendarEvents.count) calendar event\(dayCalendarEvents.count == 1 ? "" : "s")",
+          systemImage: "calendar"
+        )
+        .font(.callout).foregroundStyle(.blue)
+      }
+      Spacer()
+    }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
   }
   private var daySessions: [SessionRecord] {
     store.data.sessions.filter { calendar.isDate($0.endedAt, inSameDayAs: selectedDay) }.sorted {
@@ -377,30 +511,27 @@ struct ReflectionView: View {
       set: { store.updateSession(id: sessionID, feedback: feedback.wrappedValue, journal: $0) })
   }
   var body: some View {
-    GroupBox {
-      VStack(alignment: .leading, spacing: 10) {
-        Label("Focus complete — how did it feel?", systemImage: "sparkles").font(.title3.bold())
-        HStack {
-          ForEach(SessionFeedback.allCases, id: \.self) { value in
-            let selected = feedback.wrappedValue == value
-            Button {
-              setFeedback(value)
-            } label: {
-              Label(value.title, systemImage: selected ? "checkmark.circle.fill" : "circle")
-            }
-            .buttonStyle(.bordered)
-            .tint(selected ? .teal : .secondary)
-            .accessibilityAddTraits(feedback.wrappedValue == value ? .isSelected : [])
+    VStack(alignment: .leading, spacing: 14) {
+      Label("Focus complete — how did it feel?", systemImage: "sparkles").font(.title3.bold())
+      HStack {
+        ForEach(SessionFeedback.allCases, id: \.self) { value in
+          let selected = feedback.wrappedValue == value
+          Button {
+            setFeedback(value)
+          } label: {
+            Label(value.title, systemImage: selected ? "checkmark.circle.fill" : "circle")
           }
+          .buttonStyle(.bordered).tint(selected ? IntervalTheme.accent : .secondary)
+          .accessibilityAddTraits(feedback.wrappedValue == value ? .isSelected : [])
         }
-        TextField("Optional reflection", text: journal)
-        HStack {
-          Text("Your session is already saved. Your suggested break is ready.").font(.caption)
-            .foregroundStyle(.secondary)
-          Spacer()
-          Button("Later", action: store.deferReflection)
-          Button("Done", action: store.deferReflection).buttonStyle(.borderedProminent)
-        }
+      }
+      TextField("Optional reflection", text: journal)
+      HStack {
+        Text("Your session is already saved. Your suggested break is ready.").font(.caption)
+          .foregroundStyle(.secondary)
+        Spacer()
+        Button("Later", action: store.deferReflection).buttonStyle(.plain)
+        Button("Done", action: store.deferReflection).buttonStyle(IntervalPrimaryButton())
       }
     }
   }
@@ -445,7 +576,7 @@ struct SessionInspector: View {
             })
         ).frame(minHeight: 120)
       }
-    }.formStyle(.grouped).padding()
+    }.formStyle(.grouped).scrollContentBackground(.hidden).padding(18).intervalPanel().padding(18)
   }
 }
 
@@ -465,22 +596,34 @@ struct MenuBarView: View {
   @State private var confirmingAbandon = false
   @State private var quickNote = ""
   var body: some View {
-    VStack(spacing: 14) {
-      Text(store.timer.kind.title).font(.headline)
-      Text(durationString(store.remaining)).font(
-        .system(size: 38, weight: .semibold, design: .rounded)
-      ).monospacedDigit()
-      if store.timer.kind == .focus {
-        Text(
-          "Cycle \(store.data.completedFocusCount % max(1, store.data.settings.longBreakEvery) + 1) of \(max(1, store.data.settings.longBreakEvery))"
-        ).font(.caption).foregroundStyle(.secondary)
-      }
+    VStack(alignment: .leading, spacing: 0) {
       HStack {
-        Button(primaryTitle, action: store.startOrToggle).buttonStyle(.borderedProminent)
-        if store.timer.status == .running || store.timer.status == .paused {
-          Button("Abandon", role: .destructive) { confirmingAbandon = true }
+        Label("INTERVAL", systemImage: "circle.hexagongrid.fill").font(.caption.bold()).tracking(
+          1.2
+        )
+        .foregroundStyle(IntervalTheme.accent)
+        Spacer()
+        Text(store.timer.status.rawValue.uppercased()).font(.caption2.weight(.bold))
+          .foregroundStyle(.secondary)
+      }.padding(.bottom, 13)
+      VStack(alignment: .leading, spacing: 5) {
+        Text(store.timer.kind.title).font(.callout.weight(.semibold)).foregroundStyle(.secondary)
+        Text(durationString(store.remaining)).font(
+          .system(size: 42, weight: .semibold, design: .monospaced)
+        ).monospacedDigit()
+        if store.timer.kind == .focus {
+          Text(
+            "Cycle \(store.data.completedFocusCount % max(1, store.data.settings.longBreakEvery) + 1) of \(max(1, store.data.settings.longBreakEvery))"
+          ).font(.caption).foregroundStyle(.secondary).padding(.bottom, 6)
         }
-      }
+        HStack(spacing: 8) {
+          Button(primaryTitle, action: store.startOrToggle).buttonStyle(IntervalPrimaryButton())
+          if store.timer.status == .running || store.timer.status == .paused {
+            Button("Abandon", role: .destructive) { confirmingAbandon = true }.buttonStyle(.plain)
+              .foregroundStyle(.red)
+          }
+        }
+      }.padding(13).frame(maxWidth: .infinity, alignment: .leading).intervalPanel()
       if store.completionSessionID != nil {
         Button("Open Reflection") {
           store.showFocus()
@@ -488,7 +631,7 @@ struct MenuBarView: View {
           NSApp.activate(ignoringOtherApps: true)
         }
       }
-      Divider()
+      Divider().padding(.vertical, 12)
       if let warningReminder {
         VStack(alignment: .leading, spacing: 6) {
           Text("Warning: \(warningReminder.title)").font(.caption.weight(.semibold))
@@ -497,7 +640,7 @@ struct MenuBarView: View {
             Button("Skip") { store.dismissReminder(warningReminder.id) }
           }
         }.frame(maxWidth: .infinity, alignment: .leading)
-        Divider()
+        Divider().padding(.vertical, 10)
       }
       if let reminder = store.nextReminder {
         VStack(alignment: .leading, spacing: 5) {
@@ -507,9 +650,11 @@ struct MenuBarView: View {
           ).font(.caption).foregroundStyle(.secondary)
           Button("Postpone this time · 5min") { store.snoozeReminder(reminder.id) }
         }.frame(maxWidth: .infinity, alignment: .leading)
-        Divider()
+        Divider().padding(.vertical, 10)
       }
-      HStack {
+      Text("QUICK NOTE").font(.caption2.bold()).tracking(1).foregroundStyle(.secondary).padding(
+        .bottom, 6)
+      HStack(spacing: 7) {
         TextField("Quick note", text: $quickNote).onSubmit {
           store.appendQuickNote(quickNote)
           quickNote = ""
@@ -519,7 +664,8 @@ struct MenuBarView: View {
           quickNote = ""
         }.disabled(quickNote.isEmpty)
       }
-      HStack {
+      Divider().padding(.vertical, 12)
+      HStack(spacing: 12) {
         Button("Open Interval") {
           openWindow(id: "main")
           NSApp.activate(ignoringOtherApps: true)
@@ -528,7 +674,8 @@ struct MenuBarView: View {
         Spacer()
         Button("Quit") { NSApp.terminate(nil) }
       }
-    }.padding(16).frame(width: 310).tint(.teal)
+    }.padding(14).frame(width: 320).background(IntervalTheme.surface).tint(IntervalTheme.accent)
+      .preferredColorScheme(.dark)
       .accessibilityElement(children: .contain)
       .accessibilityLabel(
         "\(store.timer.kind.title), \(store.timer.status.rawValue), \(spokenDuration(store.remaining)) remaining"

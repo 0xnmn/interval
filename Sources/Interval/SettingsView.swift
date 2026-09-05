@@ -5,9 +5,33 @@ import SwiftUI
 import UserNotifications
 
 struct SettingsView: View {
+  private struct Destination: Identifiable {
+    let id: Int
+    let title: String
+    let subtitle: String
+    let systemImage: String
+  }
+
+  private let destinations = [
+    Destination(id: 0, title: "Timer", subtitle: "Durations and cadence", systemImage: "timer"),
+    Destination(
+      id: 1, title: "Sound & Alerts", subtitle: "Ambient audio and completions",
+      systemImage: "speaker.wave.2"),
+    Destination(
+      id: 2, title: "Calendar", subtitle: "Calendar access and visibility", systemImage: "calendar"),
+    Destination(
+      id: 3, title: "General", subtitle: "Startup, data, and privacy", systemImage: "gearshape"),
+    Destination(
+      id: 4, title: "Updates", subtitle: "Automatic update preferences",
+      systemImage: "arrow.triangle.2.circlepath"),
+  ]
+
   @Bindable var store: AppStore
   @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
   @State private var selectedTab: Int
+  @State private var loginEnabled = SMAppService.mainApp.status == .enabled
+  @State private var loginMessage: String?
+  @State private var exportMessage: String?
   init(
     store: AppStore, showSound: Bool = false, showCalendar: Bool = false, selectedTab: Int? = nil
   ) {
@@ -15,84 +39,160 @@ struct SettingsView: View {
     _selectedTab = State(initialValue: selectedTab ?? (showCalendar ? 2 : showSound ? 1 : 0))
   }
   var body: some View {
-    VStack(spacing: 0) {
-      if let error = store.persistenceError ?? store.notificationError {
-        Label(error, systemImage: "exclamationmark.triangle.fill")
-          .font(.caption).foregroundStyle(.red).padding(.horizontal).padding(.top, 8)
+    ZStack {
+      GlassBackground()
+      HStack(spacing: 0) {
+        sidebar
+        Divider().overlay(IntervalTheme.border)
+        VStack(alignment: .leading, spacing: 14) {
+          sectionHeader
+          if let error = store.persistenceError ?? store.notificationError {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+              .font(.caption)
+              .foregroundStyle(.red)
+              .padding(.horizontal, 4)
+          }
+          selectedContent
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .intervalPanel()
+        }
+        .padding(20)
       }
-      TabView(selection: $selectedTab) {
-        Form {
-          Section("Durations") {
-            Stepper(
-              "Focus: \(store.data.settings.focusMinutes) minutes", value: setting(\.focusMinutes),
-              in: 1...180)
-            Stepper(
-              "Short break: \(store.data.settings.shortBreakMinutes) minutes",
-              value: setting(\.shortBreakMinutes), in: 1...60)
-            Stepper(
-              "Long break: \(store.data.settings.longBreakMinutes) minutes",
-              value: setting(\.longBreakMinutes), in: 1...90)
-          }
-          Section("Cadence") {
-            Stepper(
-              "Long break every \(store.data.settings.longBreakEvery) focus completions",
-              value: setting(\.longBreakEvery), in: 1...12)
-          }
-        }.formStyle(.grouped).padding().tabItem { Label("Timer", systemImage: "timer") }.tag(0)
-        Form {
-          Section("Ambient sound") {
-            Picker("Focus", selection: soundSetting(\.focusSound)) {
-              ForEach(AmbientSound.allCases, id: \.self) { Text($0.title).tag($0) }
-            }
-            Picker("Break", selection: soundSetting(\.breakSound)) {
-              ForEach(AmbientSound.allCases, id: \.self) { Text($0.title).tag($0) }
-            }
-            Slider(value: volumeSetting, in: 0...1) { Text("Volume") }
-          }
-          Section("Completions") {
-            if notificationStatus == .authorized {
-              Label("Notifications enabled", systemImage: "checkmark.circle.fill").foregroundStyle(
-                .green)
-            } else if notificationStatus == .denied {
-              Label(
-                "Notifications denied. Interval will show an in-app completion message.",
-                systemImage: "bell.slash")
-              Button("Open System Settings") {
-                NSWorkspace.shared.open(
-                  URL(
-                    string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!
-                )
-              }
-            } else {
-              Button("Enable Notifications") {
-                Task {
-                  do {
-                    _ = try await store.notifications.request()
-                    store.notificationError = nil
-                  } catch {
-                    store.notificationError =
-                      "Couldn’t request notification access: \(error.localizedDescription)"
-                  }
-                  notificationStatus = await store.notifications.status()
-                }
-              }
-            }
-          }
-        }.formStyle(.grouped).padding().tabItem {
-          Label("Sound & Alerts", systemImage: "speaker.wave.2")
-        }.tag(1)
-        CalendarSettingsView(store: store).padding().tabItem {
-          Label("Calendar", systemImage: "calendar")
-        }.tag(2)
-        GeneralSettingsView(store: store).padding().tabItem {
-          Label("General", systemImage: "gear")
-        }.tag(3)
-        UpdatesSettingsView(store: store).padding().tabItem {
-          Label("Updates", systemImage: "arrow.triangle.2.circlepath")
-        }.tag(4)
-      }
-    }.frame(width: 520, height: 500).tint(.teal).task {
+    }
+    .frame(width: 760, height: 560)
+    .tint(IntervalTheme.accent)
+    .preferredColorScheme(.dark)
+    .task {
       notificationStatus = await store.notifications.status()
+    }
+  }
+
+  private var sidebar: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Text("INTERVAL")
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.secondary)
+        .tracking(1.4)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 10)
+
+      ForEach(destinations) { destination in
+        Button {
+          selectedTab = destination.id
+        } label: {
+          Label(destination.title, systemImage: destination.systemImage)
+            .font(.callout.weight(selectedTab == destination.id ? .semibold : .regular))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(selectedTab == destination.id ? Color.primary : Color.secondary)
+        .background {
+          if selectedTab == destination.id {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+              .fill(IntervalTheme.accent.opacity(0.16))
+              .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                  .stroke(IntervalTheme.accent.opacity(0.24))
+              }
+          }
+        }
+        .accessibilityAddTraits(selectedTab == destination.id ? .isSelected : [])
+      }
+      Spacer()
+    }
+    .padding(14)
+    .frame(width: 160)
+  }
+
+  private var sectionHeader: some View {
+    let destination = destinations.first(where: { $0.id == selectedTab }) ?? destinations[0]
+    return VStack(alignment: .leading, spacing: 3) {
+      Text(destination.title).font(.title2.weight(.semibold))
+      Text(destination.subtitle).font(.callout).foregroundStyle(.secondary)
+    }
+  }
+
+  @ViewBuilder private var selectedContent: some View {
+    switch selectedTab {
+    case 0:
+      Form {
+        Section("Durations") {
+          Stepper(
+            "Focus: \(store.data.settings.focusMinutes) minutes", value: setting(\.focusMinutes),
+            in: 1...180)
+          Stepper(
+            "Short break: \(store.data.settings.shortBreakMinutes) minutes",
+            value: setting(\.shortBreakMinutes), in: 1...60)
+          Stepper(
+            "Long break: \(store.data.settings.longBreakMinutes) minutes",
+            value: setting(\.longBreakMinutes), in: 1...90)
+        }
+        Section("Cadence") {
+          Stepper(
+            "Long break every \(store.data.settings.longBreakEvery) focus completions",
+            value: setting(\.longBreakEvery), in: 1...12)
+          Text("Cadence changes apply to future completions and do not reset the current timer.")
+            .font(.caption).foregroundStyle(.secondary)
+        }
+      }
+      .formStyle(.grouped)
+      .scrollContentBackground(.hidden)
+    case 1:
+      Form {
+        Section("Ambient sound") {
+          Picker("Focus", selection: soundSetting(\.focusSound)) {
+            ForEach(AmbientSound.allCases, id: \.self) { Text($0.title).tag($0) }
+          }
+          Picker("Break", selection: soundSetting(\.breakSound)) {
+            ForEach(AmbientSound.allCases, id: \.self) { Text($0.title).tag($0) }
+          }
+          Slider(value: volumeSetting, in: 0...1) { Text("Volume") }
+        }
+        Section("Completions") {
+          if notificationStatus == .authorized {
+            Label("Notifications enabled", systemImage: "checkmark.circle.fill").foregroundStyle(
+              .green)
+          } else if notificationStatus == .denied {
+            Label(
+              "Notifications denied. Interval will show an in-app completion message.",
+              systemImage: "bell.slash")
+            Button("Open System Settings") {
+              NSWorkspace.shared.open(
+                URL(
+                  string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!
+              )
+            }
+          } else {
+            Button("Enable Notifications") {
+              Task {
+                do {
+                  _ = try await store.notifications.request()
+                  store.notificationError = nil
+                } catch {
+                  store.notificationError =
+                    "Couldn’t request notification access: \(error.localizedDescription)"
+                }
+                notificationStatus = await store.notifications.status()
+              }
+            }
+          }
+        }
+      }
+      .formStyle(.grouped)
+      .scrollContentBackground(.hidden)
+    case 2:
+      CalendarSettingsView(store: store)
+    case 3:
+      GeneralSettingsView(
+        store: store, loginEnabled: $loginEnabled, loginMessage: $loginMessage,
+        exportMessage: $exportMessage)
+    case 4:
+      UpdatesSettingsView(store: store)
+    default:
+      EmptyView()
     }
   }
   private func setting(_ keyPath: WritableKeyPath<IntervalSettings, Int>) -> Binding<Int> {
@@ -128,9 +228,9 @@ struct SettingsView: View {
 
 private struct GeneralSettingsView: View {
   @Bindable var store: AppStore
-  @State private var loginEnabled = SMAppService.mainApp.status == .enabled
-  @State private var loginMessage: String?
-  @State private var exportMessage: String?
+  @Binding var loginEnabled: Bool
+  @Binding var loginMessage: String?
+  @Binding var exportMessage: String?
   var body: some View {
     Form {
       Section("Startup") {
@@ -156,7 +256,9 @@ private struct GeneralSettingsView: View {
           "Interval has no analytics and makes no cloud writes. Your data stays in the local file shown above; network access is used only for a configured update feed."
         )
       }
-    }.formStyle(.grouped)
+    }
+    .formStyle(.grouped)
+    .scrollContentBackground(.hidden)
   }
   private func setLogin(_ enabled: Bool) {
     do {
@@ -207,7 +309,9 @@ private struct UpdatesSettingsView: View {
         .disabled(!store.updates.isConfigured)
         Button("Check Now") { store.updates.checkNow() }.disabled(!store.updates.isConfigured)
       }
-    }.formStyle(.grouped)
+    }
+    .formStyle(.grouped)
+    .scrollContentBackground(.hidden)
   }
 }
 
@@ -272,7 +376,9 @@ private struct CalendarSettingsView: View {
             .foregroundStyle(.orange)
         }
       }
-    }.formStyle(.grouped)
+    }
+    .formStyle(.grouped)
+    .scrollContentBackground(.hidden)
   }
 
   @ViewBuilder private func accessUnavailable(_ message: String) -> some View {

@@ -5,11 +5,13 @@ import SwiftUI
 struct SnapshotRequest {
   let path: String
   let scene: String
+  let composited: Bool
 
   init?(arguments: [String]) {
     guard let index = arguments.firstIndex(of: "--snapshot"), arguments.indices.contains(index + 1)
     else { return nil }
     path = arguments[index + 1]
+    composited = arguments.contains("--snapshot-composited")
     if let sceneIndex = arguments.firstIndex(of: "--snapshot-scene"),
       arguments.indices.contains(sceneIndex + 1)
     {
@@ -70,19 +72,22 @@ struct SnapshotRequest {
     }
     if scene == "history-no-selection" { settings.selectedCalendarIDs = [] }
     let sessions = scene == "history-disabled" || scene == "history-no-selection" ? [] : [session]
+    var reminders = [
+      Reminder(
+        title: "Look away", message: "Look at something far away for 20 seconds.", emoji: "👀",
+        intervalSeconds: 600, displaySeconds: 20, dueAt: fixtureNow.addingTimeInterval(600)),
+      Reminder(
+        title: "Water", message: "Take a moment to drink some water.", emoji: "💧",
+        intervalSeconds: 3_600, displaySeconds: 60, presentation: .fullscreen,
+        dueAt: fixtureNow.addingTimeInterval(3_600)),
+    ]
+    if scene == "reminders-empty" { reminders = [] }
+    if scene == "reminder-max-emoji" { reminders[0].emojiSize = 180 }
     return PersistedData(
       settings: settings, activeTimer: timer,
       scratchpad: "Outline the launch notes\nReview accessibility labels",
       sessions: sessions,
-      reminders: [
-        Reminder(
-          title: "Look away", message: "Look at something far away for 20 seconds.", emoji: "👀",
-          intervalSeconds: 600, displaySeconds: 20, dueAt: fixtureNow.addingTimeInterval(600)),
-        Reminder(
-          title: "Water", message: "Take a moment to drink some water.", emoji: "💧",
-          intervalSeconds: 3_600, displaySeconds: 60, presentation: .fullscreen,
-          dueAt: fixtureNow.addingTimeInterval(3_600)),
-      ],
+      reminders: reminders,
       completedFocusCount: 3)
   }
 
@@ -101,16 +106,16 @@ struct SnapshotRequest {
           SessionRow(session: store.data.sessions[0]).padding()
           SessionInspector(store: store, session: store.data.sessions[0])
         })
-    case "reminders":
+    case "reminders", "reminders-empty":
       store.selection = .reminders
       size = NSSize(width: 1000, height: 740)
       view = AnyView(MainView(store: store))
-    case "reminder-editor", "reminder-editor-expanded":
+    case "reminder-editor", "reminder-editor-expanded", "reminder-editor-bottom":
       size = NSSize(width: 900, height: 650)
       view = AnyView(
         RemindersView(
           store: store, selection: store.data.reminders[0].id,
-          advanced: request.scene.hasSuffix("expanded")))
+          advanced: request.scene != "reminder-editor"))
     case "reminder-countdown", "reminder-countdown-paused":
       let reminder = store.data.reminders[0]
       size = NSSize(width: 290, height: 118)
@@ -120,7 +125,7 @@ struct SnapshotRequest {
           overlay: .warning(
             reminderID: reminder.id, remaining: 7,
             isPaused: request.scene == "reminder-countdown-paused")))
-    case "reminder-floating":
+    case "reminder-floating", "reminder-max-emoji":
       size = NSSize(width: 520, height: 480)
       view = AnyView(
         ReminderTakeoverView(reminder: store.data.reminders[0], dismiss: {}, snooze: {}))
@@ -129,46 +134,76 @@ struct SnapshotRequest {
       view = AnyView(
         ReminderTakeoverView(reminder: store.data.reminders[1], dismiss: {}, snooze: {}))
     case "settings":
-      size = NSSize(width: 520, height: 500)
+      size = NSSize(width: 760, height: 560)
       view = AnyView(SettingsView(store: store))
     case "sound-settings":
-      size = NSSize(width: 520, height: 500)
+      size = NSSize(width: 760, height: 560)
       view = AnyView(SettingsView(store: store, showSound: true))
     case "calendar-settings":
-      size = NSSize(width: 520, height: 500)
+      size = NSSize(width: 760, height: 560)
       view = AnyView(SettingsView(store: store, showCalendar: true))
     case "general-settings":
-      size = NSSize(width: 520, height: 500)
+      size = NSSize(width: 760, height: 560)
       view = AnyView(SettingsView(store: store, selectedTab: 3))
     case "updates-settings":
-      size = NSSize(width: 520, height: 500)
+      size = NSSize(width: 760, height: 560)
       view = AnyView(SettingsView(store: store, selectedTab: 4))
     case "reflection":
       store.completionSessionID = store.data.sessions.first?.id
       size = NSSize(width: 1000, height: 740)
       view = AnyView(MainView(store: store))
     case "menu":
-      size = NSSize(width: 310, height: 420)
+      size = NSSize(width: 320, height: 460)
       view = AnyView(MenuBarView(store: store))
+    case "focus-compact940x540":
+      store.selection = .focus
+      size = NSSize(width: 940, height: 540)
+      view = AnyView(MainView(store: store))
     default:
       store.selection = .focus
-      size = NSSize(width: 1000, height: 740)
+      size = NSSize(width: 1000, height: 660)
       view = AnyView(MainView(store: store))
     }
 
+    let accessibilityFixture = request.scene == "focus-no-animation"
     let hostingView = NSHostingView(
-      rootView: view.background(Color(nsColor: .windowBackgroundColor)))
+      rootView:
+        view
+        .transaction { transaction in
+          if accessibilityFixture { transaction.disablesAnimations = true }
+        }
+        .preferredColorScheme(.dark)
+        .background(request.composited ? Color.clear : IntervalTheme.surface))
     hostingView.frame = NSRect(origin: .zero, size: size)
     let window = NSWindow(
       contentRect: hostingView.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-    window.backgroundColor = .windowBackgroundColor
-    window.isOpaque = true
+    window.appearance = NSAppearance(named: .darkAqua)
+    window.backgroundColor = request.composited ? .clear : NSColor(IntervalTheme.surface)
+    window.isOpaque = !request.composited
     window.hasShadow = false
     window.contentView = hostingView
     window.makeKeyAndOrderFront(nil)
     try await Task.sleep(for: .milliseconds(350))
     hostingView.layoutSubtreeIfNeeded()
+    if request.scene == "reminder-editor-bottom" {
+      scrollEditorToBottom(in: hostingView)
+      hostingView.layoutSubtreeIfNeeded()
+      try await Task.sleep(for: .milliseconds(100))
+    }
     window.display()
+    if request.composited {
+      try FileManager.default.createDirectory(
+        at: URL(fileURLWithPath: request.path).deletingLastPathComponent(),
+        withIntermediateDirectories: true)
+      let capture = Process()
+      capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+      capture.arguments = ["-x", "-o", "-l", String(window.windowNumber), request.path]
+      try capture.run()
+      capture.waitUntilExit()
+      guard capture.terminationStatus == 0 else { throw CocoaError(.fileWriteUnknown) }
+      window.close()
+      return
+    }
     guard let rep = hostingView.bitmapImageRepForCachingDisplay(in: hostingView.bounds) else {
       throw CocoaError(.fileWriteUnknown)
     }
@@ -181,5 +216,33 @@ struct SnapshotRequest {
       at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try png.write(to: url, options: .atomic)
     window.close()
+  }
+
+  private static func scrollEditorToBottom(in root: NSView) {
+    let scrollViews = descendants(of: root).compactMap { $0 as? NSScrollView }
+    guard
+      let editor =
+        scrollViews
+        .filter({ scrollView in
+          guard let documentView = scrollView.documentView else { return false }
+          let frame = scrollView.convert(scrollView.bounds, to: root)
+          return frame.midX > root.bounds.midX
+            && documentView.bounds.height > scrollView.contentView.bounds.height
+        })
+        .max(by: { $0.bounds.width < $1.bounds.width }),
+      let documentView = editor.documentView
+    else { return }
+
+    let clipView = editor.contentView
+    let bottomY =
+      documentView.isFlipped
+      ? max(0, documentView.bounds.maxY - clipView.bounds.height)
+      : documentView.bounds.minY
+    clipView.scroll(to: NSPoint(x: clipView.bounds.origin.x, y: bottomY))
+    editor.reflectScrolledClipView(clipView)
+  }
+
+  private static func descendants(of view: NSView) -> [NSView] {
+    view.subviews.flatMap { [$0] + descendants(of: $0) }
   }
 }

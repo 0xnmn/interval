@@ -18,13 +18,17 @@ Tests execute real state transitions and storage, including pause/resume/abandon
 
 ## Limits, not implied passes
 
-- Screen-recording access was unavailable. Native off-screen view rendering was used and inspected instead. Some AppKit-composited sidebar/glass layers do not appear fully in those bitmap captures.
+- Initial implementation had no screen-recording access and used off-screen rendering. During the redesign, targeted WindowServer capture succeeded with `--snapshot-composited`. Native bitmap captures remain the repeatable layout check; they do not prove desktop blur. Composited capture checks the real native window, but background-dependent material appearance still merits on-device acceptance.
 - The test suite does not claim to have driven every control using macOS Accessibility automation, exercised VoiceOver end to end, or covered every physical display/notch/Spaces arrangement.
 - Calendar tests use injected events; they do not imply access was granted to the user's real calendars. Calendar and notification permission prompts remain explicit user choices.
 - Audible playback quality, physical headphone disconnect behavior, and real macOS lock/unlock edge cases need on-device acceptance testing.
 - A production Sparkle upgrade was not executed: Developer ID, notarization credentials, and a published signed update feed are not available. Local signature validation is not Apple notarization.
 
 ## Acceptance checks for a signed distribution
+
+Redesign-specific layout checks rendered and inspected focus/paused/reflection, history, reminder list/empty templates/editor, floating/full-screen/max-emoji reminders, paused warning, menu, and settings. The 940×540 focus fixture keeps timer and notes usable. `reminder-editor-bottom` scrolls the actual native editor within a 900×650 viewport and exposes both suppression toggles. `focus-no-animation` disables transactions for a static fixture; it is not a claim of end-to-end Reduce Motion or Reduce Transparency testing.
+
+Example: `.build/Interval.app/Contents/MacOS/Interval --snapshot .build/focus.png --snapshot-scene focus --snapshot-composited`. This creates isolated fixture data, never edits the user's stored sessions, and requires macOS screen-capture access. Omit the final flag for native bitmap layout rendering.
 
 1. Grant Calendar and Notifications access explicitly, then revoke each while running; confirm clear degraded states and no stale suppression.
 2. Complete a focus from the menu bar, start the suggested break, and add feedback/journal without losing either state.
