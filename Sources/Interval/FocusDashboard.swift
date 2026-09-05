@@ -5,10 +5,13 @@ struct FocusControls: View {
   @Bindable var store: AppStore
   @State private var confirmingAbandon = false
   @State private var confirmingBreak = false
-  private var active: Bool { store.timer.status == .running || store.timer.status == .paused }
+  @State private var adjustmentDirection: Int?
+  private var active: Bool { store.timer.status == .running }
   private var accent: Color { store.timer.kind == .focus ? .blue : .teal }
-  private var primaryTitle: String {
-    store.timer.status == .running ? "Pause" : store.timer.status == .paused ? "Resume" : "Start"
+
+  init(store: AppStore, adjustmentDirection: Int? = nil) {
+    self.store = store
+    _adjustmentDirection = State(initialValue: adjustmentDirection)
   }
 
   var body: some View {
@@ -17,38 +20,23 @@ struct FocusControls: View {
         HStack(spacing: 7) {
           Circle().fill(accent).frame(width: 6, height: 6)
           Text(store.timer.kind.title).font(.callout.weight(.medium))
-          if store.timer.status == .paused { Text("· Paused").foregroundStyle(.secondary) }
         }.padding(.top, 8)
         FocusDial(remaining: store.remaining, duration: store.timer.duration, accent: accent)
-        HStack(spacing: 20) {
-          Button {
-            store.adjustCurrentTime(by: -60)
-          } label: {
-            Image(systemName: "minus").frame(width: 32, height: 32)
-              .background(.white.opacity(0.07), in: Circle())
-          }.disabled(store.remaining <= 60)
-            .help("Reduce by one minute").accessibilityLabel("Reduce by one minute")
-          Button(action: store.startOrToggle) {
-            Label(
-              primaryTitle, systemImage: store.timer.status == .running ? "pause.fill" : "play.fill"
-            )
-            .frame(minWidth: 74)
-          }.buttonStyle(IntervalPrimaryButton())
-          Button {
-            store.adjustCurrentTime(by: 60)
-          } label: {
-            Image(systemName: "plus").frame(width: 32, height: 32)
-              .background(.white.opacity(0.07), in: Circle())
-          }.disabled(store.remaining >= 10_800)
-            .help("Add one minute").accessibilityLabel("Add one minute")
-        }.buttonStyle(.plain)
+        timeControls
         HStack(spacing: 24) {
-          Button {
-            if active { confirmingBreak = true } else { store.startBreakNow() }
-          } label: {
-            Label("Break", systemImage: "cup.and.saucer")
+          if store.timer.kind == .focus {
+            Button {
+              if active { confirmingBreak = true } else { store.startBreakNow() }
+            } label: {
+              Label("Break", systemImage: "cup.and.saucer")
+            }.help("Start a break now")
+          } else if active {
+            Button {
+              store.endBreak()
+            } label: {
+              Label("End Break", systemImage: "checkmark.circle")
+            }
           }
-          .disabled(store.timer.kind != .focus).help("Start a break now")
           Button {
             confirmingAbandon = true
           } label: {
@@ -75,6 +63,68 @@ struct FocusControls: View {
         Button("Abandon", role: .destructive, action: store.abandon)
       } message: {
         Text("Elapsed active time will be kept in Stats.")
+      }
+  }
+
+  private var timeControls: some View {
+    VStack(spacing: 6) {
+      HStack(spacing: 12) {
+        adjustmentButton(direction: -1)
+        Group {
+          if active, let start = store.timer.startedAt, let end = store.timer.deadline {
+            Text(
+              "\(start.formatted(date: .omitted, time: .shortened)) → \(end.formatted(date: .omitted, time: .shortened))"
+            )
+            .font(.callout).monospacedDigit().foregroundStyle(.secondary)
+            .lineLimit(1).minimumScaleFactor(0.85)
+            .help("Started \(start.formatted()) · Ends \(end.formatted())")
+            .accessibilityLabel(
+              "Started \(start.formatted(date: .omitted, time: .shortened)), ends \(end.formatted(date: .omitted, time: .shortened))"
+            )
+          } else {
+            Button("Start", action: store.startSession).buttonStyle(IntervalPrimaryButton())
+          }
+        }.frame(maxWidth: .infinity)
+        adjustmentButton(direction: 1)
+      }
+      HStack(spacing: 8) {
+        ForEach([10, 15], id: \.self) { minutes in
+          Button("\((adjustmentDirection ?? 1) > 0 ? "+" : "−")\(minutes)m") {
+            store.adjustCurrentTime(by: Double((adjustmentDirection ?? 1) * minutes * 60))
+          }.buttonStyle(.plain).font(.caption.weight(.medium))
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(.white.opacity(0.07), in: Capsule())
+            .accessibilityLabel(
+              "\((adjustmentDirection ?? 1) > 0 ? "Add" : "Remove") \(minutes) minutes")
+        }
+      }.opacity(adjustmentDirection == nil ? 0 : 1)
+        .allowsHitTesting(adjustmentDirection != nil)
+        .accessibilityHidden(adjustmentDirection == nil)
+    }.contentShape(Rectangle())
+      .onHover { hovering in if !hovering { adjustmentDirection = nil } }
+  }
+
+  private func adjustmentButton(direction: Int) -> some View {
+    Button {
+      store.adjustCurrentTime(by: Double(direction * 300))
+    } label: {
+      Image(systemName: direction > 0 ? "plus" : "minus")
+        .font(.body.weight(.medium)).frame(width: 32, height: 32)
+        .background(.white.opacity(0.07), in: Circle())
+    }.buttonStyle(.plain)
+      .disabled(direction > 0 ? store.remaining >= 10_800 : store.remaining <= 60)
+      .accessibilityLabel(direction > 0 ? "Add 5 minutes" : "Remove 5 minutes")
+      .help(
+        direction > 0
+          ? "Add 5 minutes · Right-click for more" : "Remove 5 minutes · Right-click for more"
+      )
+      .onHover { hovering in if hovering { adjustmentDirection = direction } }
+      .contextMenu {
+        ForEach([5, 10, 15], id: \.self) { minutes in
+          Button("\(direction > 0 ? "Add" : "Remove") \(minutes) minutes") {
+            store.adjustCurrentTime(by: Double(direction * minutes * 60))
+          }
+        }
       }
   }
 
@@ -166,7 +216,7 @@ struct FocusDayPanel: View {
     GeometryReader { geometry in
       ScrollView {
         VStack(alignment: .leading, spacing: 20) {
-          Text("Notes").font(.title3.weight(.semibold))
+          Text("Notes").font(.headline)
           WritingArea(
             text: Binding(get: { store.data.scratchpad }, set: store.updateScratchpad),
             placeholder: "Add a note…", label: "Global scratchpad"

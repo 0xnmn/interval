@@ -479,6 +479,7 @@ struct MenuBarView: View {
   @Bindable var store: AppStore
   @Environment(\.openWindow) private var openWindow
   @State private var confirmingAbandon = false
+  @State private var confirmingBreak = false
   @State private var quickNote = ""
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
@@ -491,14 +492,20 @@ struct MenuBarView: View {
         }
         Spacer()
         HStack(spacing: 8) {
-          Button(store.completionSessionID == nil ? primaryTitle : "Review") {
-            store.startOrToggle()
-            if store.completionSessionID != nil {
+          if store.completionSessionID != nil {
+            Button("Review") {
+              store.showFocus()
               openWindow(id: "main")
               NSApp.activate(ignoringOtherApps: true)
-            }
-          }.buttonStyle(IntervalPrimaryButton())
-          if store.timer.status == .running || store.timer.status == .paused {
+            }.buttonStyle(IntervalPrimaryButton())
+          } else if store.timer.status == .ready {
+            Button("Start", action: store.startSession).buttonStyle(IntervalPrimaryButton())
+          } else if store.timer.kind != .focus {
+            Button("End Break") { store.endBreak() }.buttonStyle(IntervalPrimaryButton())
+          } else {
+            Button("Break") { confirmingBreak = true }.buttonStyle(IntervalPrimaryButton())
+          }
+          if store.timer.status == .running {
             Button {
               confirmingAbandon = true
             } label: {
@@ -506,6 +513,14 @@ struct MenuBarView: View {
             }.buttonStyle(.plain).accessibilityLabel("Abandon cycle").help("Abandon cycle")
           }
         }
+      }
+      if store.timer.status == .running, let start = store.timer.startedAt,
+        let end = store.timer.deadline
+      {
+        Text(
+          "\(start.formatted(date: .omitted, time: .shortened)) → \(end.formatted(date: .omitted, time: .shortened))"
+        )
+        .font(.callout).foregroundStyle(.secondary).monospacedDigit()
       }
       Divider()
       if let warningReminder {
@@ -557,12 +572,12 @@ struct MenuBarView: View {
       } message: {
         Text("Elapsed active time will be kept in Stats.")
       }
-  }
-  private var primaryTitle: String {
-    store.timer.status == .running
-      ? "Pause"
-      : store.timer.status == .paused
-        ? "Resume" : "Start"
+      .alert("Start a break now?", isPresented: $confirmingBreak) {
+        Button("Keep Focusing", role: .cancel) {}
+        Button("Start Break") { store.startBreakNow() }
+      } message: {
+        Text("This unfinished focus session will be saved as abandoned. Your focus time is kept.")
+      }
   }
   private var warningReminder: Reminder? {
     guard case .warning(let id, _, _) = store.reminderOverlay else { return nil }

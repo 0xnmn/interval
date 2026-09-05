@@ -229,7 +229,6 @@ private struct ReminderEditor: View {
             }
             Toggle("Hide during focus", isOn: binding(\.suppressDuringFocus))
               .toggleStyle(SwitchToggleStyle(tint: .blue)).controlSize(.small)
-              .help("Includes paused focus")
             Toggle(
               "Hide during calendar events", isOn: binding(\.suppressDuringCalendar)
             )

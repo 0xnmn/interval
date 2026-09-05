@@ -6,15 +6,12 @@ import Testing
 @Suite("Timer engine") struct TimerEngineTests {
   let origin = Date(timeIntervalSince1970: 1_000)
 
-  @Test func startPauseAndResumeUseInjectedTime() {
+  @Test func startUsesInjectedTime() {
     var timer = TimerState(kind: .focus, duration: 1_500)
     TimerEngine.start(&timer, now: origin)
     #expect(timer.deadline == origin.addingTimeInterval(1_500))
-    TimerEngine.pause(&timer, now: origin.addingTimeInterval(125))
-    #expect(timer.status == .paused)
-    #expect(timer.elapsedBeforePause == 125)
-    TimerEngine.resume(&timer, now: origin.addingTimeInterval(500))
-    #expect(timer.deadline == origin.addingTimeInterval(1_875))
+    TimerEngine.start(&timer, now: origin.addingTimeInterval(125))
+    #expect(timer.deadline == origin.addingTimeInterval(1_500))
   }
 
   @Test func completionIsIdempotent() {
@@ -35,14 +32,12 @@ import Testing
     #expect(ready.status == .abandoned)
   }
 
-  @Test func activeDurationExcludesPausedWallTime() {
-    var timer = TimerState(kind: .focus, duration: 1_500)
-    TimerEngine.start(&timer, now: origin)
-    TimerEngine.pause(&timer, now: origin.addingTimeInterval(100))
-    TimerEngine.resume(&timer, now: origin.addingTimeInterval(1_000))
+  @Test func legacyPausedStateRetainsSavedAccounting() {
+    let timer = TimerState(
+      kind: .focus, duration: 1_500, status: .paused, startedAt: origin,
+      elapsedBeforePause: 150)
     #expect(TimerEngine.activeDuration(timer, now: origin.addingTimeInterval(1_050)) == 150)
-    TimerEngine.pause(&timer, now: origin.addingTimeInterval(1_050))
-    #expect(timer.elapsedBeforePause == 150)
+    #expect(TimerEngine.remaining(timer, now: origin.addingTimeInterval(1_050)) == 1_350)
   }
 
   @Test func adjustingRemainingPreservesElapsedAndClamps() {
@@ -51,10 +46,17 @@ import Testing
     TimerEngine.adjustRemaining(&timer, by: 300, now: origin.addingTimeInterval(100))
     #expect(timer.duration == 1_800)
     #expect(timer.deadline == origin.addingTimeInterval(1_800))
-    TimerEngine.pause(&timer, now: origin.addingTimeInterval(200))
-    TimerEngine.adjustRemaining(&timer, by: -10_000, now: origin.addingTimeInterval(300))
-    #expect(timer.elapsedBeforePause == 200)
+    TimerEngine.adjustRemaining(&timer, by: -10_000, now: origin.addingTimeInterval(200))
     #expect(timer.duration == 260)
-    #expect(TimerEngine.remaining(timer, now: origin.addingTimeInterval(300)) == 60)
+    #expect(timer.deadline == origin.addingTimeInterval(260))
+    #expect(TimerEngine.remaining(timer, now: origin.addingTimeInterval(200)) == 60)
+  }
+
+  @Test func removingTimeDuringFinalMinuteNeverExtendsTimer() {
+    var timer = TimerState(kind: .shortBreak, duration: 300)
+    TimerEngine.start(&timer, now: origin)
+    let original = timer
+    TimerEngine.adjustRemaining(&timer, by: -600, now: origin.addingTimeInterval(280))
+    #expect(timer == original)
   }
 }

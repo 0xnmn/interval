@@ -45,23 +45,21 @@ final class AppStore {
     self.notifications = NotificationService(enabled: runtimeEnabled)
     self.calendarService = calendarService ?? CalendarService()
     self.updates = UpdateService(enabled: runtimeEnabled)
-    var recoveredRunningTimer = false
     do { data = try persistence.load() } catch {
       data = PersistedData()
       persistenceError =
         "Couldn’t read your saved data. Interval is read-only to protect the original file: \(error.localizedDescription)"
       persistenceLocked = true
     }
-    if runtimeEnabled, var restored = data.activeTimer,
-      restored.status == .running
-    {
-      notifications.cancel(restored)
-      restored.status = .paused
-      restored.deadline = nil
-      data.activeTimer = restored
-      recoveryMessage =
-        "Cycle paused while Interval was closed."
-      recoveredRunningTimer = true
+    if var restored = data.activeTimer, restored.status == .paused {
+      let endedAt = restored.startedAt?.addingTimeInterval(restored.elapsedBeforePause) ?? now
+      TimerEngine.abandon(&restored)
+      record(
+        restored, outcome: .abandoned, endedAt: endedAt,
+        activeDuration: restored.elapsedBeforePause)
+      data.activeTimer = timer(for: .focus)
+      recoveryMessage = "A legacy paused cycle was moved to history."
+      save()
     }
     if data.activeTimer == nil { data.activeTimer = timer(for: .focus) }
     if runtimeEnabled {
@@ -74,19 +72,19 @@ final class AppStore {
     {
       completionSessionID = completed.id
     }
+    reconcile(at: now, autoStart: false)
     guard runtimeEnabled else { return }
     updates.shouldDeferInstall = { [weak self] in
       guard let self else { return false }
-      return self.timer.status == .running || self.timer.status == .paused
-        || self.reminderOverlay != nil || self.completionSessionID != nil
+      return self.timer.status == .running || self.reminderOverlay != nil
+        || self.completionSessionID != nil
     }
     updates.prepareForInstall = { [weak self] in self?.checkpointForTermination() }
     updates.start()
     notifications.fallback = { [weak self] message in self?.inAppNotification = message }
     audio.failure = { [weak self] message in self?.audioError = message }
-    if recoveredRunningTimer { save() }
     reconcileReminderBacklog(at: now)
-    reconcile(at: now, autoStart: false)
+    if data.activeTimer?.status == .running { syncServices(for: timer) }
     workspaceSessionIsActive = true
     refreshSessionState()
     ticker = Task { [weak self] in
@@ -110,13 +108,9 @@ final class AppStore {
         [weak self] _ in
         Task { @MainActor in
           guard let self else { return }
-          self.now = Date()
-          if !self.reconcile(at: self.now), self.data.activeTimer?.status == .running {
-            self.syncServices(for: self.timer)
-          }
           self.systemIsSleeping = false
           self.refreshSessionState()
-          self.tickReminders(at: self.now)
+          self.sessionBecameAvailable()
         }
       })
     observers.append(
@@ -135,7 +129,7 @@ final class AppStore {
         Task { @MainActor in
           self?.workspaceSessionIsActive = true
           self?.refreshSessionState()
-          self?.tickReminders(at: Date())
+          self?.sessionBecameAvailable()
         }
       })
     for name in ["com.apple.screensaver.didstart", "com.apple.screensaver.didstop"] {
@@ -149,7 +143,7 @@ final class AppStore {
             if self?.sessionIsActive == false {
               self?.sessionBecameUnavailable()
             } else {
-              self?.tickReminders(at: Date())
+              self?.sessionBecameAvailable()
             }
           }
         })
@@ -165,7 +159,7 @@ final class AppStore {
             if self?.sessionIsActive == false {
               self?.sessionBecameUnavailable()
             } else {
-              self?.tickReminders(at: Date())
+              self?.sessionBecameAvailable()
             }
           }
         })
@@ -266,25 +260,18 @@ final class AppStore {
     if runtimeEnabled { overlayController.update(reminderOverlay, reminder: reminder, store: self) }
   }
 
-  func startOrToggle() {
+  func startSession() {
     if completionSessionID != nil {
       showFocus()
       return
     }
     let actionDate = Date()
     now = actionDate
-    // A Pause click at the deadline must pause the cycle, not start another phase.
     if reconcile(at: actionDate, autoStart: false) { return }
-    guard var value = data.activeTimer else { return }
+    guard var value = data.activeTimer, value.status == .ready else { return }
     inAppNotification = nil
     recoveryMessage = nil
-    switch value.status {
-    case .ready:
-      TimerEngine.start(&value, now: actionDate)
-    case .running: TimerEngine.pause(&value, now: actionDate)
-    case .paused: TimerEngine.resume(&value, now: actionDate)
-    case .completed, .abandoned: return
-    }
+    TimerEngine.start(&value, now: actionDate)
     data.activeTimer = value
     save()
     syncServices(for: value)
@@ -300,7 +287,7 @@ final class AppStore {
       save()
       return
     }
-    guard var value = data.activeTimer, value.status == .running || value.status == .paused else {
+    guard var value = data.activeTimer, value.status == .running else {
       return
     }
     let activeDuration = TimerEngine.activeDuration(value, now: actionDate)
@@ -316,7 +303,7 @@ final class AppStore {
     now = date
     if reconcile(at: date, autoStart: false) { return }
     guard completionSessionID == nil, var value = data.activeTimer,
-      value.status == .ready || value.status == .running || value.status == .paused
+      value.status == .ready || value.status == .running
     else { return }
     TimerEngine.adjustRemaining(&value, by: seconds, now: date)
     data.activeTimer = value
@@ -330,7 +317,7 @@ final class AppStore {
     guard completionSessionID == nil, var focus = data.activeTimer, focus.kind == .focus else {
       return
     }
-    if focus.status == .running || focus.status == .paused {
+    if focus.status == .running {
       let activeDuration = TimerEngine.activeDuration(focus, now: date)
       TimerEngine.abandon(&focus)
       notifications.cancel(focus)
@@ -348,6 +335,25 @@ final class AppStore {
     save()
     syncServices(for: next)
     tickReminders(at: date)
+  }
+
+  func endBreak(at date: Date = Date()) {
+    now = date
+    guard let current = data.activeTimer, current.kind != .focus, current.status == .running else {
+      return
+    }
+    if reconcile(at: date, autoStart: false) { return }
+    guard let value = data.activeTimer, value.id == current.id, value.status == .running else {
+      return
+    }
+    let elapsed = TimerEngine.activeDuration(value, now: date)
+    notifications.cancel(value)
+    audio.stop()
+    record(value, outcome: .completed, endedAt: date, activeDuration: elapsed)
+    data.activeTimer = timer(for: .focus)
+    inAppNotification = nil
+    recoveryMessage = nil
+    save()
   }
 
   func updateScratchpad(_ text: String) {
@@ -437,18 +443,13 @@ final class AppStore {
 
   func checkpointForTermination() {
     guard runtimeEnabled else { return }
-    pauseCycle(at: Date())
+    checkpointForInactivity(at: Date())
   }
 
-  func pauseCycle(at date: Date) {
+  func checkpointForInactivity(at date: Date) {
     now = date
     reconcile(at: date, autoStart: false)
-    if var value = data.activeTimer, value.status == .running {
-      TimerEngine.pause(&value, now: date)
-      data.activeTimer = value
-      notifications.cancel(value)
-      save()
-    }
+    checkpoint(force: true)
     audio.stop()
   }
 
@@ -469,12 +470,21 @@ final class AppStore {
     sessionIsOnConsole = dictionary[kCGSessionOnConsoleKey as String] as? Bool ?? false
   }
   private func sessionBecameUnavailable() {
-    pauseCycle(at: Date())
+    checkpointForInactivity(at: Date())
     reminderEngine.cancel()
     reminderOverlay = nil
     previewReminderID = nil
     previewExpiresAt = nil
     overlayController.close()
+  }
+  private func sessionBecameAvailable() {
+    guard sessionIsActive else { return }
+    let date = Date()
+    now = date
+    if !reconcile(at: date, autoStart: false), data.activeTimer?.status == .running {
+      syncServices(for: timer)
+    }
+    tickReminders(at: date)
   }
 
   private func tickReminders(at date: Date) {
@@ -491,7 +501,7 @@ final class AppStore {
     }
     let before = data.reminders
     let focusBusy =
-      data.activeTimer.map { $0.kind == .focus && ($0.status == .running || $0.status == .paused) }
+      data.activeTimer.map { $0.kind == .focus && $0.status == .running }
       ?? false
     let idleSeconds = UserIdleMonitor.idleSeconds
     let environment = ReminderEnvironment(
@@ -553,14 +563,13 @@ final class AppStore {
       data.activeTimer = timer(for: .focus)
     }
     // Start at the observed transition, never replay phases during time away.
-    var next = timer
-    TimerEngine.start(&next, now: date)
-    if !autoStart || (runtimeEnabled && !sessionIsActive) {
-      TimerEngine.pause(&next, now: date)
+    if autoStart && (!runtimeEnabled || sessionIsActive) {
+      var next = timer
+      TimerEngine.start(&next, now: date)
+      data.activeTimer = next
     }
-    data.activeTimer = next
     save()
-    syncServices(for: next)
+    syncServices(for: timer)
     return true
   }
 

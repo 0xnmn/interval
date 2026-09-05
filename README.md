@@ -18,9 +18,10 @@ The default build targets the build Mac's architecture. It is a local developmen
 
 ## Use Interval
 
-- **Focus cycle:** 25-minute focus sessions alternate with 5-minute breaks, with a 10-minute long break after every four completed focus sessions. All four values are configurable. Focus completion waits for feedback; Continue starts the break. Break completion automatically starts focus. Pause/Resume controls the current phase; the direct stop button abandons the cycle with confirmation.
-- **Reflect:** completed focus sessions are saved immediately. A dedicated completion screen offers Distracted, Neutral, or Focused emoji choices and a thought field. Press Continue or Enter to start the break. Edit reflections later in Stats. Old unanswered feedback never interrupts a new focus session.
-- **Scratchpad:** one autosaved note across every session, always visible below the timer. The menu-bar quick-note field appends to it.
+- **Focus cycle:** 25-minute focus sessions alternate with 5-minute breaks, with a 10-minute long break after every four completed focus sessions. All four values are configurable. Focus completion waits for feedback; Continue starts the break. Natural break completion automatically starts focus while the app is active. There is no pause or resume. Break ends unfinished focus with confirmation; Abandon stops the interval; End Break finishes a break early and leaves focus ready to start.
+- **Time controls:** the running timer shows its start and end time. Click ± to add/remove five minutes from this interval only; hover or right-click for 5-, 10-, and 15-minute choices. Remaining time is limited to one minute–three hours.
+- **Reflect:** completed focus sessions are saved immediately. A dedicated completion screen offers Distracted, Neutral, or Focused emoji choices and a multiline thought field. Press Continue or ⌘Return to start the break; Return inserts a new line. Edit reflections later in Stats. Old unanswered feedback never interrupts a new focus session.
+- **Scratchpad:** one autosaved note across every session, visible to the right of the timer alongside today's stats and calendar. The menu-bar quick-note field appends to it.
 - **Stats:** month calendar and chronological daily sessions, with active duration and outcome. Calendar events are a separate visual category, not fabricated focus records.
 - **Sound:** Silence, Brown Noise, Rain, or Ocean, generated locally with separate focus/break choices and volume.
 - **Calendar:** opt in under Settings → Calendar and choose calendars. Interval never creates, edits, or deletes events. macOS calls the required reading permission “Full Access.”
@@ -32,17 +33,16 @@ The default build targets the build Mac's architecture. It is a local developmen
 ### Deliberate behavior
 
 - Closing the window leaves the timer and reminders in the menu bar. Quit explicitly to exit.
-- The whole cycle pauses on sleep, screen lock, screensaver, user switching, or intentional quit. Resume explicitly when ready. Crash recovery restores either phase from its last checkpoint as paused (up to approximately five seconds of progress may be lost). Automatic transitions start at observation time and never replay missed phases.
+- Running intervals retain their deadline through sleep, screen lock, screensaver, user switching, and quit. On recovery, an expired interval is recorded once; missed phases are never replayed. Focus still requires reflection before a break. A break that expires while unavailable leaves focus ready. Legacy paused intervals are preserved as abandoned history rather than resumed.
 - Only completed focus sessions advance the long-break cadence. Abandoned intervals remain in History but do not advance it.
-- Settings changes affect the next timer, not a running/paused timer.
-- Paused focus still suppresses reminders when that reminder's focus exclusion is enabled.
+- Settings changes affect the next timer, not a running timer.
 - Calendar suppression covers overlapping selected-calendar events, including all-day events, except canceled/declined events. Denied/disabled Calendar access cannot provide suppression.
 - Missed reminders are skipped while the session is unavailable and on relaunch; there is no replay of every missed recurrence. Visible reminders are serialized. Postponement affects only the current occurrence, not the saved interval.
 - Full-screen reminders use ordinary, dismissible floating app panels, not a system lock screen. They respect display work areas and do not disable app switching.
 
 ## Keyboard and accessibility
 
-- `⌘⇧S`: start/pause/resume the cycle.
+- `⌘⇧S`: start a ready session; disabled during an active interval or pending reflection.
 - `⌘1`, `⌘2`, `⌘3`: Focus, Stats, Reminders.
 - `⌘,`: Settings. `⌘Q`: Quit.
 - Native controls, text editing, semantic materials, descriptive accessibility labels, and selected-state semantics. Motion is restrained; there are no flashing reminders.
@@ -73,6 +73,6 @@ See [implementation decisions and review record](docs/IMPLEMENTATION.md) and [ve
   --snapshot .build/focus.png --snapshot-scene focus
 ```
 
-Other scenes include `paused`, `reflection`, `history`, `history-disabled`, `history-no-selection`, `reminders`, `reminder-editor-expanded`, `reminder-countdown-paused`, `reminder-floating`, `reminder-fullscreen`, `menu`, `settings`, `sound-settings`, `calendar-settings`, `general-settings`, and `updates-settings`.
+Other scenes include `dashboard-running`, `dashboard-break`, `time-options`, `time-options-minus`, `reflection`, `history`, `history-disabled`, `history-no-selection`, `reminders`, `reminder-editor-expanded`, `reminder-countdown-paused`, `reminder-floating`, `reminder-fullscreen`, `menu`, `settings`, `sound-settings`, `calendar-settings`, `general-settings`, and `updates-settings`.
 
 Fixtures use ephemeral local data, no permission prompts, and no active updater/timer/reminder services. They render the actual native views. AppKit off-screen caching does not fully capture every composited sidebar/glass layer; these captures are not a replacement for testing on-screen multi-display behavior.

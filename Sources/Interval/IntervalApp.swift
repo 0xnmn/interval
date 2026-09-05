@@ -66,8 +66,10 @@ struct IntervalApp: App {
     Settings { SettingsView(store: store) }
       .commands {
         CommandGroup(after: .newItem) {
-          Button("Start or Pause Cycle") { store.startOrToggle() }.keyboardShortcut(
-            "s", modifiers: [.command, .shift])
+          Button("Start Session") { store.startSession() }.keyboardShortcut(
+            "s", modifiers: [.command, .shift]
+          )
+          .disabled(store.timer.status != .ready || store.completionSessionID != nil)
           Divider()
           Button("Focus") { store.selection = .focus }.keyboardShortcut("1")
           Button("Stats") { store.selection = .history }.keyboardShortcut("2")

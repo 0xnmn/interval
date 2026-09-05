@@ -55,13 +55,12 @@ struct AppStoreTests {
     }
   }
 
-  @Test func pauseCannotBeOverwrittenAndAbandonDoesNotCount() throws {
+  @Test func startingRunningSessionIsNoOpAndAbandonDoesNotCount() throws {
     try withStore { store, _ in
-      store.startOrToggle()
-      let id = store.timer.id
-      store.startOrToggle()
-      #expect(store.timer.status == .paused)
-      #expect(store.timer.id == id)
+      store.startSession()
+      let running = store.timer
+      store.startSession()
+      #expect(store.timer == running)
       store.abandon()
       #expect(store.data.sessions.count == 1)
       #expect(store.data.sessions[0].outcome == .abandoned)
@@ -71,7 +70,7 @@ struct AppStoreTests {
     }
   }
 
-  @Test func lifecyclePausePausesFocusAndBreakWithoutAdvancingLater() throws {
+  @Test func lifecycleCheckpointRetainsRunningDeadline() throws {
     try withStore { store, _ in
       for kind in [TimerKind.focus, .shortBreak] {
         let startedAt = Date(timeIntervalSince1970: kind == .focus ? 10_000 : 20_000)
@@ -81,16 +80,13 @@ struct AppStoreTests {
           deadline: startedAt.addingTimeInterval(duration))
         let pauseDate = startedAt.addingTimeInterval(30)
 
-        store.pauseCycle(at: pauseDate)
+        store.checkpointForInactivity(at: pauseDate)
 
-        let paused = store.timer
-        #expect(paused.kind == kind)
-        #expect(paused.status == .paused)
-        #expect(paused.elapsedBeforePause == 30)
-        #expect(paused.deadline == nil)
-        #expect(!store.reconcile(at: startedAt.addingTimeInterval(duration * 10)))
-        #expect(store.timer == paused)
-        #expect(store.data.sessions.isEmpty)
+        let checkpointed = store.timer
+        #expect(checkpointed.kind == kind)
+        #expect(checkpointed.status == .running)
+        #expect(checkpointed.elapsedBeforePause == 30)
+        #expect(checkpointed.deadline == startedAt.addingTimeInterval(duration))
       }
     }
   }
@@ -102,7 +98,7 @@ struct AppStoreTests {
         kind: .focus, duration: 1500, status: .running,
         startedAt: deadline.addingTimeInterval(-1500), deadline: deadline)
 
-      store.startOrToggle()
+      store.startSession()
 
       #expect(store.data.sessions.count == 1)
       #expect(store.data.sessions[0].outcome == .completed)
@@ -200,7 +196,7 @@ struct AppStoreTests {
     }
   }
 
-  @Test func startOrToggleCannotBypassPendingReflection() throws {
+  @Test func startSessionCannotBypassPendingReflection() throws {
     try withStore { store, _ in
       let deadline = Date().addingTimeInterval(-1)
       store.data.activeTimer = TimerState(
@@ -210,7 +206,7 @@ struct AppStoreTests {
       let sessionID = store.completionSessionID
       store.selection = .history
 
-      store.startOrToggle()
+      store.startSession()
 
       #expect(store.selection == .focus)
       #expect(store.completionSessionID == sessionID)
@@ -285,7 +281,7 @@ struct AppStoreTests {
       let session = SessionRecord(
         timerID: UUID(), kind: .focus, startedAt: endedAt.addingTimeInterval(-1500),
         endedAt: endedAt, plannedDuration: 1500, activeDuration: 1500, outcome: .completed)
-      let focusStart = endedAt.addingTimeInterval(300)
+      let focusStart = Date(timeIntervalSince1970: floor(Date().timeIntervalSince1970) - 300)
       let activeFocus = TimerState(
         kind: .focus, duration: 1500, status: .running, startedAt: focusStart,
         deadline: focusStart.addingTimeInterval(1500))
@@ -296,6 +292,30 @@ struct AppStoreTests {
         runtimeEnabled: false)
 
       #expect(restored.completionSessionID == nil)
+      #expect(restored.timer == activeFocus)
+    }
+  }
+
+  @Test func restoreExpiredBreakRecordsOnceAndLeavesReadyFocus() throws {
+    try withStore { _, persistence in
+      let deadline = Date().addingTimeInterval(-10)
+      let timer = TimerState(
+        kind: .shortBreak, duration: 300, status: .running,
+        startedAt: deadline.addingTimeInterval(-300), deadline: deadline)
+      try persistence.save(PersistedData(activeTimer: timer))
+
+      let restored = AppStore(
+        persistence: persistence, calendarService: CalendarService(fixtureEvents: []),
+        runtimeEnabled: false)
+      let restoredAgain = AppStore(
+        persistence: persistence, calendarService: CalendarService(fixtureEvents: []),
+        runtimeEnabled: false)
+
+      #expect(restored.timer.kind == .focus)
+      #expect(restored.timer.status == .ready)
+      #expect(restored.data.sessions.count == 1)
+      #expect(restoredAgain.data.sessions.count == 1)
+      #expect(restoredAgain.timer.status == .ready)
     }
   }
 
@@ -335,7 +355,7 @@ struct AppStoreTests {
 
   @Test func changingDefaultsDoesNotResizeRunningTimer() throws {
     try withStore { store, _ in
-      store.startOrToggle()
+      store.startSession()
       let original = store.timer
       var settings = store.data.settings
       settings.focusMinutes = 45
@@ -346,7 +366,7 @@ struct AppStoreTests {
     }
   }
 
-  @Test func adjustCurrentTimeHandlesReadyRunningAndPausedWithoutChangingSettings() throws {
+  @Test func adjustCurrentTimeHandlesReadyAndRunningWithoutChangingSettings() throws {
     try withStore { store, _ in
       let settings = store.data.settings
       let start = Date(timeIntervalSince1970: 10_000)
@@ -363,14 +383,51 @@ struct AppStoreTests {
       #expect(store.timer.deadline == start.addingTimeInterval(1_800))
       #expect(TimerEngine.activeDuration(store.timer, now: start.addingTimeInterval(100)) == 100)
 
-      store.data.activeTimer = TimerState(
-        kind: .focus, duration: 1_500, status: .paused, startedAt: start,
-        elapsedBeforePause: 400)
-      store.adjustCurrentTime(by: 20_000, at: start.addingTimeInterval(500))
-      #expect(store.timer.duration == 11_200)
-      #expect(store.timer.elapsedBeforePause == 400)
-      #expect(store.remaining == 10_800)
       #expect(store.data.settings == settings)
+    }
+  }
+
+  @Test(
+    arguments: [
+      (TimerKind.focus, TimeInterval(-300)), (.focus, 300),
+      (.shortBreak, -600), (.shortBreak, 600),
+      (.longBreak, -900), (.longBreak, 900),
+    ])
+  func adjustingRunningTimerPreservesElapsedAndShiftsDeadline(
+    kind: TimerKind, adjustment: TimeInterval
+  ) throws {
+    try withStore { store, _ in
+      let start = Date(timeIntervalSince1970: 10_000)
+      let observedAt = start.addingTimeInterval(120)
+      let originalDeadline = start.addingTimeInterval(3_600)
+      store.data.activeTimer = TimerState(
+        kind: kind, duration: 3_600, status: .running, startedAt: start,
+        deadline: originalDeadline)
+
+      store.adjustCurrentTime(by: adjustment, at: observedAt)
+
+      #expect(store.timer.duration == 3_600 + adjustment)
+      #expect(store.timer.deadline == originalDeadline.addingTimeInterval(adjustment))
+      #expect(TimerEngine.activeDuration(store.timer, now: observedAt) == 120)
+    }
+  }
+
+  @Test(arguments: [(TimeInterval(-20_000), TimeInterval(60)), (20_000, 10_800)])
+  func adjustingRunningTimerClampsRemainingTime(
+    adjustment: TimeInterval, expectedRemaining: TimeInterval
+  ) throws {
+    try withStore { store, _ in
+      let start = Date(timeIntervalSince1970: 10_000)
+      let observedAt = start.addingTimeInterval(120)
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 1_500, status: .running, startedAt: start,
+        deadline: start.addingTimeInterval(1_500))
+
+      store.adjustCurrentTime(by: adjustment, at: observedAt)
+
+      #expect(TimerEngine.remaining(store.timer, now: observedAt) == expectedRemaining)
+      #expect(store.timer.duration == 120 + expectedRemaining)
+      #expect(TimerEngine.activeDuration(store.timer, now: observedAt) == 120)
     }
   }
 
@@ -391,7 +448,7 @@ struct AppStoreTests {
     }
   }
 
-  @Test func startBreakNowAccountsForActiveAndPausedFocusWithoutChangingCadence() throws {
+  @Test func startBreakNowAccountsForActiveFocusWithoutChangingCadence() throws {
     try withStore { store, _ in
       let start = Date(timeIntervalSince1970: 10_000)
       store.data.completedFocusCount = 3
@@ -406,13 +463,91 @@ struct AppStoreTests {
       #expect(store.timer.kind == .shortBreak)
       #expect(store.timer.status == .running)
 
+    }
+  }
+
+  @Test func endBreakRecordsActualElapsedOnceAndStagesReadyFocus() throws {
+    try withStore { store, _ in
+      let start = Date(timeIntervalSince1970: 10_000)
+      store.data.completedFocusCount = 3
       store.data.activeTimer = TimerState(
+        kind: .shortBreak, duration: 300, status: .running, startedAt: start,
+        deadline: start.addingTimeInterval(300))
+
+      store.endBreak(at: start.addingTimeInterval(75))
+      store.endBreak(at: start.addingTimeInterval(80))
+
+      #expect(store.data.sessions.count == 1)
+      #expect(store.data.sessions[0].outcome == .completed)
+      #expect(store.data.sessions[0].activeDuration == 75)
+      #expect(store.data.completedFocusCount == 3)
+      #expect(store.timer.kind == .focus)
+      #expect(store.timer.status == .ready)
+    }
+  }
+
+  @Test func endBreakAtDeadlineRecordsExactlyOnceAndStagesReadyFocus() throws {
+    try withStore { store, _ in
+      let start = Date(timeIntervalSince1970: 10_000)
+      let deadline = start.addingTimeInterval(300)
+      store.data.activeTimer = TimerState(
+        kind: .shortBreak, duration: 300, status: .running, startedAt: start,
+        deadline: deadline)
+
+      store.endBreak(at: deadline)
+      store.endBreak(at: deadline)
+
+      #expect(store.data.sessions.count == 1)
+      #expect(store.data.sessions[0].kind == .shortBreak)
+      #expect(store.data.sessions[0].outcome == .completed)
+      #expect(store.data.sessions[0].endedAt == deadline)
+      #expect(store.data.sessions[0].activeDuration == 300)
+      #expect(store.timer.kind == .focus)
+      #expect(store.timer.status == .ready)
+    }
+  }
+
+  @Test(arguments: [TimerKind.focus, .shortBreak])
+  func inactivityReconcilesExpiredTimerWithoutStartingNextPhase(kind: TimerKind) throws {
+    try withStore { store, _ in
+      let deadline = Date(timeIntervalSince1970: 10_000)
+      let duration: TimeInterval = kind == .focus ? 1_500 : 300
+      store.data.activeTimer = TimerState(
+        kind: kind, duration: duration, status: .running,
+        startedAt: deadline.addingTimeInterval(-duration), deadline: deadline)
+
+      store.checkpointForInactivity(at: deadline.addingTimeInterval(60))
+
+      #expect(store.data.sessions.count == 1)
+      #expect(store.data.sessions[0].endedAt == deadline)
+      #expect(store.timer.status == .ready)
+      if kind == .focus {
+        #expect(store.timer.kind == .shortBreak)
+        #expect(store.completionSessionID == store.data.sessions[0].id)
+      } else {
+        #expect(store.timer.kind == .focus)
+        #expect(store.completionSessionID == nil)
+      }
+    }
+  }
+
+  @Test func legacyPausedRestoreIsAbandonedInsteadOfResumed() throws {
+    try withStore { _, persistence in
+      let start = Date(timeIntervalSince1970: 10_000)
+      let paused = TimerState(
         kind: .focus, duration: 1_500, status: .paused, startedAt: start,
         elapsedBeforePause: 240)
-      store.startBreakNow(at: start.addingTimeInterval(1_000))
-      #expect(store.data.sessions.count == 2)
-      #expect(store.data.sessions[1].activeDuration == 240)
-      #expect(store.data.completedFocusCount == 3)
+      try persistence.save(PersistedData(activeTimer: paused))
+
+      let restored = AppStore(
+        persistence: persistence, calendarService: CalendarService(fixtureEvents: []),
+        runtimeEnabled: false)
+
+      #expect(restored.timer.kind == .focus)
+      #expect(restored.timer.status == .ready)
+      #expect(restored.data.sessions.count == 1)
+      #expect(restored.data.sessions[0].outcome == .abandoned)
+      #expect(restored.data.sessions[0].activeDuration == 240)
     }
   }
 

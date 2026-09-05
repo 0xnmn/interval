@@ -48,12 +48,9 @@ struct SnapshotRequest {
       timer = TimerState(
         id: timerID, kind: .shortBreak, duration: 300, status: .ready)
     }
-    if scene == "paused" || scene == "menu" {
-      timer.status = .paused
-      timer.startedAt = fixtureNow.addingTimeInterval(-510)
-      timer.elapsedBeforePause = 420
-    }
-    if scene == "dashboard-running" {
+    if scene == "dashboard-running" || scene == "menu" || scene == "time-options"
+      || scene == "time-options-minus"
+    {
       timer.status = .running
       timer.startedAt = fixtureNow.addingTimeInterval(-420)
       timer.deadline = fixtureNow.addingTimeInterval(1_080)
@@ -171,8 +168,12 @@ struct SnapshotRequest {
       store.completionSessionID = store.data.sessions.first?.id
       size = NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))
+    case "time-options", "time-options-minus":
+      size = NSSize(width: 360, height: 680)
+      view = AnyView(
+        FocusControls(store: store, adjustmentDirection: request.scene == "time-options" ? 1 : -1))
     case "menu":
-      size = NSSize(width: 320, height: 260)
+      size = NSSize(width: 348, height: 290)
       view = AnyView(MenuBarView(store: store))
     case "notes", "notes-empty":
       store.selection = .focus

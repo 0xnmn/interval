@@ -28,26 +28,15 @@ public enum TimerEngine {
     state.deadline = now.addingTimeInterval(state.duration)
   }
 
-  public static func pause(_ state: inout TimerState, now: Date) {
-    guard state.status == .running else { return }
-    state.elapsedBeforePause = min(state.duration, state.duration - remaining(state, now: now))
-    state.deadline = nil
-    state.status = .paused
-  }
-
-  public static func resume(_ state: inout TimerState, now: Date) {
-    guard state.status == .paused else { return }
-    state.deadline = now.addingTimeInterval(max(0, state.duration - state.elapsedBeforePause))
-    state.status = .running
-  }
-
   public static func adjustRemaining(
     _ state: inout TimerState, by seconds: TimeInterval, now: Date,
     minimum: TimeInterval = 60, maximum: TimeInterval = 10_800
   ) {
-    guard state.status == .ready || state.status == .running || state.status == .paused else {
+    guard state.status == .ready || state.status == .running else {
       return
     }
+    // A stale hover choice must never add time when subtracting near the deadline.
+    if seconds < 0 && remaining(state, now: now) <= minimum { return }
     let elapsed = activeDuration(state, now: now)
     let adjustedRemaining = min(maximum, max(minimum, remaining(state, now: now) + seconds))
     state.duration = elapsed + adjustedRemaining
