@@ -21,6 +21,16 @@ public enum SessionFeedback: String, Codable, CaseIterable, Sendable {
   public var title: String { rawValue.capitalized }
 }
 
+public struct SessionCategory: Identifiable, Codable, Equatable, Sendable {
+  public var id: UUID
+  public var name: String
+
+  public init(id: UUID = UUID(), name: String) {
+    self.id = id
+    self.name = name
+  }
+}
+
 public enum AmbientSound: String, Codable, CaseIterable, Sendable {
   case silence, brownNoise, rain, ocean
   public var title: String {
@@ -42,11 +52,15 @@ public struct TimerState: Codable, Equatable, Sendable {
   public var deadline: Date?
   public var elapsedBeforePause: TimeInterval
   public var completionRecorded: Bool
+  public var title: String?
+  public var categoryID: UUID?
+  public var categoryName: String?
 
   public init(
     id: UUID = UUID(), kind: TimerKind, duration: TimeInterval, status: TimerStatus = .ready,
     startedAt: Date? = nil, deadline: Date? = nil, elapsedBeforePause: TimeInterval = 0,
-    completionRecorded: Bool = false
+    completionRecorded: Bool = false, title: String? = nil, categoryID: UUID? = nil,
+    categoryName: String? = nil
   ) {
     self.id = id
     self.kind = kind
@@ -56,6 +70,9 @@ public struct TimerState: Codable, Equatable, Sendable {
     self.deadline = deadline
     self.elapsedBeforePause = elapsedBeforePause
     self.completionRecorded = completionRecorded
+    self.title = title
+    self.categoryID = categoryID
+    self.categoryName = categoryName
   }
 }
 
@@ -184,11 +201,15 @@ public struct SessionRecord: Identifiable, Codable, Equatable, Sendable {
   public var outcome: TimerStatus
   public var feedback: String?
   public var journal: String?
+  public var title: String?
+  public var categoryID: UUID?
+  public var categoryName: String?
 
   public init(
     id: UUID = UUID(), timerID: UUID, kind: TimerKind, startedAt: Date, endedAt: Date,
     plannedDuration: TimeInterval, activeDuration: TimeInterval, outcome: TimerStatus,
-    feedback: String? = nil, journal: String? = nil
+    feedback: String? = nil, journal: String? = nil, title: String? = nil,
+    categoryID: UUID? = nil, categoryName: String? = nil
   ) {
     self.id = id
     self.timerID = timerID
@@ -200,11 +221,14 @@ public struct SessionRecord: Identifiable, Codable, Equatable, Sendable {
     self.outcome = outcome
     self.feedback = feedback
     self.journal = journal
+    self.title = title
+    self.categoryID = categoryID
+    self.categoryName = categoryName
   }
 
   private enum CodingKeys: String, CodingKey {
     case id, timerID, kind, startedAt, endedAt, plannedDuration, activeDuration
-    case isDurationEstimated, outcome, feedback, journal
+    case isDurationEstimated, outcome, feedback, journal, title, categoryID, categoryName
   }
 
   public init(from decoder: Decoder) throws {
@@ -226,6 +250,9 @@ public struct SessionRecord: Identifiable, Codable, Equatable, Sendable {
       ?? (storedDuration == nil && outcome != .completed)
     feedback = try values.decodeIfPresent(String.self, forKey: .feedback)
     journal = try values.decodeIfPresent(String.self, forKey: .journal)
+    title = try values.decodeIfPresent(String.self, forKey: .title)
+    categoryID = try values.decodeIfPresent(UUID.self, forKey: .categoryID)
+    categoryName = try values.decodeIfPresent(String.self, forKey: .categoryName)
   }
 }
 
@@ -377,12 +404,16 @@ public struct PersistedData: Codable, Equatable, Sendable {
   public var sessions: [SessionRecord]
   public var reminders: [Reminder]
   public var completedFocusCount: Int
+  public var categories: [SessionCategory]
+  public var sessionTitle: String
+  public var selectedCategoryID: UUID?
 
   public init(
     version: Int = currentVersion, settings: IntervalSettings = .init(),
     activeTimer: TimerState? = nil,
     todos: [TodoItem] = [], sessions: [SessionRecord] = [], reminders: [Reminder] = [],
-    completedFocusCount: Int = 0
+    completedFocusCount: Int = 0, categories: [SessionCategory] = [], sessionTitle: String = "",
+    selectedCategoryID: UUID? = nil
   ) {
     self.version = version
     self.settings = settings
@@ -391,10 +422,14 @@ public struct PersistedData: Codable, Equatable, Sendable {
     self.sessions = sessions
     self.reminders = reminders
     self.completedFocusCount = completedFocusCount
+    self.categories = categories
+    self.sessionTitle = sessionTitle
+    self.selectedCategoryID = selectedCategoryID
   }
 
   private enum CodingKeys: String, CodingKey {
     case version, settings, activeTimer, todos, scratchpad, sessions, reminders, completedFocusCount
+    case categories, sessionTitle, selectedCategoryID
   }
 
   public init(from decoder: Decoder) throws {
@@ -414,6 +449,9 @@ public struct PersistedData: Codable, Equatable, Sendable {
     sessions = try values.decode([SessionRecord].self, forKey: .sessions)
     reminders = try values.decode([Reminder].self, forKey: .reminders)
     completedFocusCount = try values.decode(Int.self, forKey: .completedFocusCount)
+    categories = try values.decodeIfPresent([SessionCategory].self, forKey: .categories) ?? []
+    sessionTitle = try values.decodeIfPresent(String.self, forKey: .sessionTitle) ?? ""
+    selectedCategoryID = try values.decodeIfPresent(UUID.self, forKey: .selectedCategoryID)
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -425,5 +463,8 @@ public struct PersistedData: Codable, Equatable, Sendable {
     try values.encode(sessions, forKey: .sessions)
     try values.encode(reminders, forKey: .reminders)
     try values.encode(completedFocusCount, forKey: .completedFocusCount)
+    try values.encode(categories, forKey: .categories)
+    try values.encode(sessionTitle, forKey: .sessionTitle)
+    try values.encodeIfPresent(selectedCategoryID, forKey: .selectedCategoryID)
   }
 }

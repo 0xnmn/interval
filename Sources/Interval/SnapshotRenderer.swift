@@ -42,11 +42,18 @@ struct SnapshotRequest {
   ]
 
   static func fixture(scene: String) -> PersistedData {
+    let deepWork = SessionCategory(
+      id: UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")!, name: "Deep Work")
+    let clientWork = SessionCategory(
+      id: UUID(uuidString: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")!, name: "Client Work")
     let timerID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
-    var timer = TimerState(id: timerID, kind: .focus, duration: 1_500, status: .ready)
+    var timer = TimerState(
+      id: timerID, kind: .focus, duration: 1_500, status: .ready,
+      title: "Polish launch narrative", categoryID: deepWork.id, categoryName: deepWork.name)
     if scene.hasPrefix("reflection") {
       timer = TimerState(
-        id: timerID, kind: .shortBreak, duration: 300, status: .ready)
+        id: timerID, kind: .shortBreak, duration: 300, status: .ready,
+        title: "Polish launch narrative", categoryID: deepWork.id, categoryName: deepWork.name)
     }
     if scene == "dashboard-running" || scene == "menu" || scene == "time-options"
       || scene == "time-options-minus"
@@ -59,7 +66,8 @@ struct SnapshotRequest {
       timer = TimerState(
         id: timerID, kind: .shortBreak, duration: 300, status: .running,
         startedAt: fixtureNow.addingTimeInterval(-60),
-        deadline: fixtureNow.addingTimeInterval(240))
+        deadline: fixtureNow.addingTimeInterval(240), title: "Polish launch narrative",
+        categoryID: deepWork.id, categoryName: deepWork.name)
     }
     var session = SessionRecord(
       id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
@@ -68,7 +76,34 @@ struct SnapshotRequest {
       endedAt: fixtureNow.addingTimeInterval(-2_100),
       plannedDuration: 1_500, activeDuration: 1_500, outcome: .completed,
       feedback: scene == "reflection" ? nil : "focused",
-      journal: "Clear progress on the launch plan.")
+      journal: "Clear progress on the launch plan.", title: "Draft launch brief",
+      categoryID: deepWork.id, categoryName: deepWork.name)
+    let additionalSessions = [
+      SessionRecord(
+        id: UUID(uuidString: "44444444-4444-4444-4444-444444444444")!,
+        timerID: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!, kind: .focus,
+        startedAt: fixtureNow.addingTimeInterval(-8_100),
+        endedAt: fixtureNow.addingTimeInterval(-6_600), plannedDuration: 1_500,
+        activeDuration: 1_500, outcome: .completed, feedback: "focused",
+        journal: "Resolved the remaining navigation edge cases.", title: "Prototype navigation",
+        categoryID: deepWork.id, categoryName: deepWork.name),
+      SessionRecord(
+        id: UUID(uuidString: "66666666-6666-6666-6666-666666666666")!,
+        timerID: UUID(uuidString: "77777777-7777-7777-7777-777777777777")!, kind: .focus,
+        startedAt: fixtureNow.addingTimeInterval(-14_400),
+        endedAt: fixtureNow.addingTimeInterval(-12_900), plannedDuration: 1_500,
+        activeDuration: 1_500, outcome: .completed, feedback: "neutral",
+        journal: "Captured decisions and sent the follow-up.", title: "Acme design review",
+        categoryID: clientWork.id, categoryName: clientWork.name),
+      SessionRecord(
+        id: UUID(uuidString: "88888888-8888-8888-8888-888888888888")!,
+        timerID: UUID(uuidString: "99999999-9999-9999-9999-999999999999")!, kind: .focus,
+        startedAt: fixtureNow.addingTimeInterval(-90_000),
+        endedAt: fixtureNow.addingTimeInterval(-88_800), plannedDuration: 1_500,
+        activeDuration: 1_200, outcome: .abandoned, feedback: "distracted",
+        journal: "Paused when new feedback arrived.", title: "Prepare client workshop",
+        categoryID: clientWork.id, categoryName: clientWork.name),
+    ]
     if scene == "history-legacy" {
       session.outcome = .abandoned
       session.isDurationEstimated = true
@@ -82,7 +117,9 @@ struct SnapshotRequest {
       settings.didChooseInitialCalendars = true
     }
     if scene == "history-no-selection" { settings.selectedCalendarIDs = [] }
-    let sessions = scene == "history-disabled" || scene == "history-no-selection" ? [] : [session]
+    let sessions =
+      scene == "history-disabled" || scene == "history-no-selection"
+      ? [] : [session] + additionalSessions
     var reminders = [
       Reminder(
         title: "Look away", message: "Look at something far away for 20 seconds.", emoji: "👀",
@@ -102,7 +139,10 @@ struct SnapshotRequest {
       ],
       sessions: sessions,
       reminders: reminders,
-      completedFocusCount: 3)
+      completedFocusCount: 3,
+      categories: [deepWork, clientWork],
+      sessionTitle: "Polish launch narrative",
+      selectedCategoryID: deepWork.id)
   }
 
   static func render(request: SnapshotRequest, store: AppStore) async throws {
@@ -118,6 +158,9 @@ struct SnapshotRequest {
       store.selection = .history
       size = NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))
+    case "history-category":
+      size = NSSize(width: 820, height: 680)
+      view = AnyView(HistoryView(store: store, categoryID: store.data.categories.first?.id))
     case "history-legacy":
       size = NSSize(width: 580, height: 650)
       view = AnyView(
@@ -161,6 +204,9 @@ struct SnapshotRequest {
     case "calendar-settings":
       size = NSSize(width: 560, height: 450)
       view = AnyView(SettingsView(store: store, showCalendar: true))
+    case "categories":
+      size = NSSize(width: 400, height: 350)
+      view = AnyView(CategoryManager(store: store))
     case "general-settings":
       size = NSSize(width: 560, height: 450)
       view = AnyView(SettingsView(store: store, selectedTab: 3))

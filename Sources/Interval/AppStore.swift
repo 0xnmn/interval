@@ -379,6 +379,76 @@ final class AppStore {
     data.todos.removeAll { $0.id == id }
     save()
   }
+  func setSessionTitle(_ title: String) {
+    guard title != data.sessionTitle else { return }
+    let date = Date()
+    now = date
+    reconcile(at: date, autoStart: false)
+    data.sessionTitle = title
+    data.activeTimer?.title = title
+    save()
+  }
+  func selectCategory(_ id: UUID?) {
+    let date = Date()
+    now = date
+    reconcile(at: date, autoStart: false)
+    guard id == nil || data.categories.contains(where: { $0.id == id }) else { return }
+    let categoryName = data.categories.first(where: { $0.id == id })?.name
+    data.selectedCategoryID = id
+    data.activeTimer?.categoryID = id
+    data.activeTimer?.categoryName = categoryName
+    save()
+  }
+  @discardableResult func addCategory(_ name: String) -> UUID? {
+    let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !name.isEmpty else { return nil }
+    let date = Date()
+    now = date
+    reconcile(at: date, autoStart: false)
+    if let existing = data.categories.first(where: {
+      $0.name.compare(name, options: [.caseInsensitive]) == .orderedSame
+    }) {
+      data.selectedCategoryID = existing.id
+      data.activeTimer?.categoryID = existing.id
+      data.activeTimer?.categoryName = existing.name
+      save()
+      return existing.id
+    }
+    let category = SessionCategory(name: name)
+    data.categories.append(category)
+    data.selectedCategoryID = category.id
+    data.activeTimer?.categoryID = category.id
+    data.activeTimer?.categoryName = category.name
+    save()
+    return category.id
+  }
+  func renameCategory(_ id: UUID, name: String) {
+    let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !name.isEmpty,
+      !data.categories.contains(where: {
+        $0.id != id && $0.name.compare(name, options: [.caseInsensitive]) == .orderedSame
+      }), let index = data.categories.firstIndex(where: { $0.id == id })
+    else { return }
+    let date = Date()
+    now = date
+    reconcile(at: date, autoStart: false)
+    data.categories[index].name = name
+    if data.activeTimer?.categoryID == id { data.activeTimer?.categoryName = name }
+    save()
+  }
+  func deleteCategory(_ id: UUID) {
+    guard data.categories.contains(where: { $0.id == id }) else { return }
+    let date = Date()
+    now = date
+    reconcile(at: date, autoStart: false)
+    data.categories.removeAll { $0.id == id }
+    if data.selectedCategoryID == id { data.selectedCategoryID = nil }
+    if data.activeTimer?.status == .ready && data.activeTimer?.categoryID == id {
+      data.activeTimer?.categoryID = nil
+      data.activeTimer?.categoryName = nil
+    }
+    save()
+  }
   func updateSession(id: UUID, feedback: SessionFeedback?, journal: String) {
     guard let index = data.sessions.firstIndex(where: { $0.id == id }) else { return }
     data.sessions[index].feedback = feedback?.rawValue
@@ -597,11 +667,15 @@ final class AppStore {
       SessionRecord(
         timerID: timer.id, kind: timer.kind, startedAt: timer.startedAt ?? endedAt,
         endedAt: endedAt, plannedDuration: timer.duration,
-        activeDuration: activeDuration, outcome: outcome))
+        activeDuration: activeDuration, outcome: outcome, title: timer.title,
+        categoryID: timer.categoryID, categoryName: timer.categoryName))
   }
 
   private func timer(for kind: TimerKind) -> TimerState {
-    TimerState(kind: kind, duration: data.settings.duration(for: kind))
+    let category = data.categories.first { $0.id == data.selectedCategoryID }
+    return TimerState(
+      kind: kind, duration: data.settings.duration(for: kind), title: data.sessionTitle,
+      categoryID: category?.id, categoryName: category?.name)
   }
   private func checkpoint(force: Bool = false) {
     guard var value = data.activeTimer, value.status == .running else {

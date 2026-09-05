@@ -70,6 +70,69 @@ struct AppStoreTests {
     }
   }
 
+  @Test func metadataCarriesAcrossFocusBreakAndBackToFocus() throws {
+    try withStore { store, _ in
+      let categoryID = try #require(store.addCategory("Writing"))
+      store.setSessionTitle("Chapter one")
+      let focusDeadline = Date(timeIntervalSince1970: 50_000)
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 60, status: .running,
+        startedAt: focusDeadline.addingTimeInterval(-60), deadline: focusDeadline,
+        title: store.data.sessionTitle, categoryID: categoryID, categoryName: "Writing")
+
+      store.reconcile(at: focusDeadline)
+      #expect(store.data.sessions.last?.title == "Chapter one")
+      #expect(store.timer.title == "Chapter one")
+      #expect(store.timer.categoryID == categoryID)
+      store.continueAfterReflection(at: focusDeadline)
+      store.reconcile(at: focusDeadline.addingTimeInterval(store.timer.duration))
+      #expect(store.data.sessions.last?.categoryName == "Writing")
+      #expect(store.timer.kind == .focus)
+      #expect(store.timer.title == "Chapter one")
+      #expect(store.timer.categoryID == categoryID)
+    }
+  }
+
+  @Test func categoryCRUDValidatesAndSnapshotsRemainStable() throws {
+    try withStore { store, _ in
+      #expect(store.addCategory("   ") == nil)
+      let categoryID = try #require(store.addCategory("  Client  "))
+      #expect(store.addCategory("client") == categoryID)
+      #expect(store.data.categories.count == 1)
+      store.renameCategory(categoryID, name: " Work ")
+      #expect(store.data.categories[0].name == "Work")
+      let otherID = try #require(store.addCategory("Other"))
+      store.renameCategory(otherID, name: "work")
+      #expect(store.data.categories.first(where: { $0.id == otherID })?.name == "Other")
+
+      store.selectCategory(categoryID)
+      store.setSessionTitle("First")
+      store.startSession()
+      store.setSessionTitle("Revised")
+      store.renameCategory(categoryID, name: "Deep Work")
+      store.deleteCategory(categoryID)
+      #expect(store.data.selectedCategoryID == nil)
+      #expect(store.timer.categoryID == categoryID)
+      #expect(store.timer.categoryName == "Deep Work")
+      store.abandon()
+      #expect(store.data.sessions.last?.title == "Revised")
+      #expect(store.data.sessions.last?.categoryID == categoryID)
+      #expect(store.data.sessions.last?.categoryName == "Deep Work")
+      #expect(store.timer.categoryID == nil)
+    }
+  }
+
+  @Test func deletingReadyCategoryClearsNextSession() throws {
+    try withStore { store, _ in
+      let id = try #require(store.addCategory("Writing"))
+      store.deleteCategory(id)
+      #expect(store.timer.categoryID == nil)
+      #expect(store.timer.categoryName == nil)
+      store.startSession()
+      #expect(store.timer.categoryID == nil)
+    }
+  }
+
   @Test func lifecycleCheckpointRetainsRunningDeadline() throws {
     try withStore { store, _ in
       for kind in [TimerKind.focus, .shortBreak] {

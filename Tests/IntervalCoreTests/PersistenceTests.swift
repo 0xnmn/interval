@@ -15,6 +15,30 @@ import Testing
   #expect(try store.load() == value)
 }
 
+@Test func sessionMetadataRoundTripsAndLegacyDataUsesDefaults() throws {
+  let category = SessionCategory(name: "Client")
+  let timer = TimerState(
+    kind: .focus, duration: 60, title: "Proposal", categoryID: category.id,
+    categoryName: category.name)
+  let record = SessionRecord(
+    timerID: timer.id, kind: .focus, startedAt: .distantPast, endedAt: .distantFuture,
+    plannedDuration: 60, activeDuration: 60, outcome: .completed, title: timer.title,
+    categoryID: timer.categoryID, categoryName: timer.categoryName)
+  let value = PersistedData(
+    activeTimer: timer, sessions: [record], categories: [category], sessionTitle: "Proposal",
+    selectedCategoryID: category.id)
+  #expect(try JSONDecoder().decode(PersistedData.self, from: JSONEncoder().encode(value)) == value)
+
+  let legacy = try JSONDecoder().decode(
+    PersistedData.self,
+    from: Data(
+      #"{"version":1,"settings":{"focusMinutes":25,"shortBreakMinutes":5,"longBreakMinutes":10,"longBreakEvery":4},"sessions":[],"reminders":[],"completedFocusCount":0}"#
+        .utf8))
+  #expect(legacy.categories.isEmpty)
+  #expect(legacy.sessionTitle.isEmpty)
+  #expect(legacy.selectedCategoryID == nil)
+}
+
 @Test func legacyScratchpadMigratesOnceAndRoundTripsAsTodos() throws {
   let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
   try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

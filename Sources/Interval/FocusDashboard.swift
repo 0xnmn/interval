@@ -16,11 +16,8 @@ struct FocusControls: View {
 
   var body: some View {
     ScrollView {
-      VStack(spacing: 24) {
-        HStack(spacing: 7) {
-          Circle().fill(accent).frame(width: 6, height: 6)
-          Text(store.timer.kind.title).font(.callout.weight(.medium))
-        }.padding(.top, 8)
+      VStack(spacing: 18) {
+        SessionIdentity(store: store).padding(.top, 8)
         FocusDial(remaining: store.remaining, duration: store.timer.duration, accent: accent)
         timeControls
         HStack(spacing: 24) {
@@ -208,6 +205,7 @@ private struct FocusDial: View {
 struct FocusDayPanel: View {
   @Bindable var store: AppStore
   @State private var newTodo = ""
+  @State private var selectedSessionID: UUID?
   private var sessions: [SessionRecord] {
     store.data.sessions.filter {
       $0.kind == .focus && Calendar.autoupdatingCurrent.isDate($0.endedAt, inSameDayAs: store.now)
@@ -257,13 +255,28 @@ struct FocusDayPanel: View {
         }
         Divider()
         HStack {
-          Text("Calendar").font(.headline)
+          Text("Timeline").font(.headline)
           Spacer()
           Text(store.now.formatted(.dateTime.month(.abbreviated).day()))
             .font(.caption).foregroundStyle(.secondary)
         }
-        calendarAgenda
+        dayTimeline
       }.padding(24)
+    }.sheet(
+      isPresented: Binding(
+        get: { selectedSessionID != nil }, set: { if !$0 { selectedSessionID = nil } }
+      )
+    ) {
+      if let session = store.data.sessions.first(where: { $0.id == selectedSessionID }) {
+        VStack(spacing: 0) {
+          HStack {
+            Text("Session").font(.headline)
+            Spacer()
+            Button("Done") { selectedSessionID = nil }.keyboardShortcut(.cancelAction)
+          }.padding(20)
+          SessionInspector(store: store, session: session)
+        }.frame(width: 460, height: 500).background(GlassBackground())
+      }
     }
   }
 
@@ -272,30 +285,51 @@ struct FocusDayPanel: View {
     newTodo = ""
   }
 
-  @ViewBuilder private var calendarAgenda: some View {
-    if !store.calendarService.isEnabled || store.calendarService.authorizationState != .fullAccess {
-      SettingsLink { Label("Connect your calendar", systemImage: "calendar.badge.plus") }
-        .buttonStyle(.plain).font(.callout).foregroundStyle(.secondary)
-    } else if store.calendarService.selectedCalendarIDs.isEmpty {
-      SettingsLink { Label("Choose calendars", systemImage: "calendar.badge.plus") }
-        .buttonStyle(.plain).font(.callout).foregroundStyle(.secondary)
-    } else if store.calendarService.todayEvents.isEmpty {
-      Text("No events today").font(.callout).foregroundStyle(.secondary)
-    } else {
-      ForEach(store.calendarService.todayEvents.sorted { $0.start < $1.start }) { event in
-        HStack(alignment: .top, spacing: 12) {
-          RoundedRectangle(cornerRadius: 2).fill(.blue.opacity(0.7)).frame(width: 3, height: 32)
-          VStack(alignment: .leading, spacing: 4) {
-            Text(event.title).font(.callout).lineLimit(2)
-            Text(
-              event.allDay
-                ? "All day"
-                : "\(event.start.formatted(date: .omitted, time: .shortened)) – \(event.end.formatted(date: .omitted, time: .shortened))"
-            )
-            .font(.caption).foregroundStyle(.secondary)
+  private var dayItems: [HistoryItem] {
+    let logs = store.data.sessions.filter {
+      Calendar.autoupdatingCurrent.isDate($0.endedAt, inSameDayAs: store.now)
+    }.map(HistoryItem.session)
+    let events =
+      store.calendarService.isEnabled && store.calendarService.authorizationState == .fullAccess
+      ? store.calendarService.todayEvents.map(HistoryItem.calendar) : []
+    return (logs + events).sorted {
+      $0.start == $1.start ? $0.id < $1.id : $0.start < $1.start
+    }
+  }
+
+  private var dayTimeline: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      if dayItems.isEmpty {
+        Text("No activity yet today").font(.callout).foregroundStyle(.secondary)
+      }
+      ForEach(dayItems) { item in
+        HStack(alignment: .top, spacing: 10) {
+          VStack(spacing: 4) {
+            Circle().fill(.white.opacity(0.4)).frame(width: 5, height: 5)
+            Rectangle().fill(IntervalTheme.border).frame(width: 1)
+          }.frame(width: 6).padding(.top, 8)
+          Group {
+            switch item {
+            case .session(let session):
+              Button {
+                selectedSessionID = session.id
+              } label: {
+                SessionRow(session: session, showsReflection: false)
+                  .frame(maxWidth: .infinity, alignment: .leading)
+              }.buttonStyle(.plain)
+            case .calendar(let event): CalendarEventRow(event: event)
+            }
           }
-          Spacer(minLength: 0)
-        }
+          .padding(.bottom, 18)
+        }.fixedSize(horizontal: false, vertical: true)
+      }
+      if !store.calendarService.isEnabled || store.calendarService.authorizationState != .fullAccess
+      {
+        SettingsLink { Label("Connect your calendar", systemImage: "calendar.badge.plus") }
+          .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary).padding(.top, 12)
+      } else if store.calendarService.selectedCalendarIDs.isEmpty {
+        SettingsLink { Label("Choose calendars", systemImage: "calendar.badge.plus") }
+          .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary).padding(.top, 12)
       }
     }
   }

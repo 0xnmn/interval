@@ -91,17 +91,25 @@ struct HistoryView: View {
   @State private var month = Date()
   @State private var selectedDay = Date()
   @State private var selectedSession: UUID?
+  @State private var categoryFilter: CategoryFilter = .all
   private var calendar: Calendar { .autoupdatingCurrent }
-  init(store: AppStore) {
+  init(store: AppStore, categoryID: UUID? = nil) {
     self.store = store
     _month = State(initialValue: store.now)
     _selectedDay = State(initialValue: store.now)
+    _categoryFilter = State(initialValue: categoryID.map(CategoryFilter.category) ?? .all)
   }
   var body: some View {
     VStack(spacing: 0) {
       HStack {
         Text("Stats").font(.headline)
         Spacer()
+        Picker("Category", selection: $categoryFilter) {
+          ForEach(categoryFilters) { filter in
+            Text(categoryFilterName(filter)).tag(filter)
+          }
+        }
+        .labelsHidden().frame(maxWidth: 190)
         Button("Today") {
           month = store.now
           selectedDay = store.now
@@ -163,13 +171,17 @@ struct HistoryView: View {
           }.font(.caption).accessibilityElement(children: .combine).accessibilityLabel(
             "Legend: teal marks sessions; blue marks calendar events")
           Divider().opacity(0.6)
-          daySummary
-          if let calendarStatus {
-            Label(calendarStatus, systemImage: "calendar.badge.exclamationmark")
-              .font(.caption).foregroundStyle(.secondary).frame(
-                maxWidth: .infinity, alignment: .leading)
+          ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+              daySummary
+              categoryBreakdown
+              if let calendarStatus {
+                Label(calendarStatus, systemImage: "calendar.badge.exclamationmark")
+                  .font(.caption).foregroundStyle(.secondary).frame(
+                    maxWidth: .infinity, alignment: .leading)
+              }
+            }.frame(maxWidth: .infinity, alignment: .leading)
           }
-          Spacer(minLength: 0)
         }.padding(14).frame(width: 280).frame(maxHeight: .infinity)
         Rectangle().fill(IntervalTheme.border).frame(width: 1)
         if let id = selectedSession, let session = store.data.sessions.first(where: { $0.id == id })
@@ -193,6 +205,7 @@ struct HistoryView: View {
         }
       }
     }.task { store.calendarService.show(month: month) }
+      .onChange(of: categoryFilter) { _, _ in selectedSession = nil }
   }
   private var daySummary: some View {
     VStack(alignment: .leading, spacing: 8) {
@@ -230,9 +243,9 @@ struct HistoryView: View {
     }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
   }
   private var daySessions: [SessionRecord] {
-    store.data.sessions.filter { calendar.isDate($0.endedAt, inSameDayAs: selectedDay) }.sorted {
-      $0.endedAt < $1.endedAt
-    }
+    store.data.sessions.filter {
+      calendar.isDate($0.endedAt, inSameDayAs: selectedDay) && categoryFilter.matches($0)
+    }.sorted { $0.endedAt < $1.endedAt }
   }
   private var dayCalendarEvents: [CalendarEventSnapshot] {
     store.calendarService.events(on: selectedDay, calendar: calendar)
@@ -244,6 +257,58 @@ struct HistoryView: View {
   }
   private var summaryText: String {
     "\(daySessions.count) session\(daySessions.count == 1 ? "" : "s") · \(dayCalendarEvents.count) event\(dayCalendarEvents.count == 1 ? "" : "s")"
+  }
+  private var categoryBreakdown: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Focus time").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+      if focusCategoryStats.isEmpty {
+        Text("No focus sessions").font(.caption).foregroundStyle(.secondary)
+      } else {
+        ForEach(focusCategoryStats) { stat in
+          VStack(alignment: .leading, spacing: 2) {
+            Text(stat.name).font(.callout)
+            Text("\(durationString(stat.duration)) · \(stat.completedCount) completed")
+              .font(.caption).foregroundStyle(.secondary)
+          }
+        }
+      }
+    }
+  }
+  private var focusCategoryStats: [CategoryStat] {
+    let focusSessions = daySessions.filter { $0.kind == .focus }
+    let grouped = Dictionary(grouping: focusSessions) { $0.categoryID }
+    return grouped.map { id, sessions in
+      CategoryStat(
+        id: id,
+        name: categoryName(id: id, savedName: sessions.first?.categoryName),
+        duration: sessions.reduce(0) { $0 + $1.activeDuration },
+        completedCount: sessions.count { $0.outcome == .completed })
+    }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+  }
+  private var categoryFilters: [CategoryFilter] {
+    var result: [CategoryFilter] = [.all, .uncategorized]
+    result += store.data.categories.map { .category($0.id) }
+    let configuredIDs = Set(store.data.categories.map(\.id))
+    let deletedIDs = Set(store.data.sessions.compactMap(\.categoryID)).subtracting(configuredIDs)
+    result += deletedIDs.sorted {
+      categoryName(id: $0, savedName: nil).localizedCaseInsensitiveCompare(
+        categoryName(id: $1, savedName: nil)) == .orderedAscending
+    }.map { .category($0) }
+    return result
+  }
+  private func categoryFilterName(_ filter: CategoryFilter) -> String {
+    switch filter {
+    case .all: "All categories"
+    case .uncategorized: "Uncategorized"
+    case .category(let id): categoryName(id: id, savedName: nil)
+    }
+  }
+  private func categoryName(id: UUID?, savedName: String?) -> String {
+    guard let id else { return "Uncategorized" }
+    if let current = store.data.categories.first(where: { $0.id == id }) { return current.name }
+    return savedName
+      ?? store.data.sessions.first(where: { $0.categoryID == id })?.categoryName
+      ?? "Deleted category"
   }
   private var calendarStatus: String? {
     if !store.data.settings.calendarIntegrationEnabled {
@@ -261,7 +326,9 @@ struct HistoryView: View {
     "No activity on this day."
   }
   private func sessionCount(on date: Date) -> Int {
-    store.data.sessions.count { calendar.isDate($0.endedAt, inSameDayAs: date) }
+    store.data.sessions.count {
+      calendar.isDate($0.endedAt, inSameDayAs: date) && categoryFilter.matches($0)
+    }
   }
   private func dayAccessibilityLabel(_ date: Date, _ sessionCount: Int, _ eventCount: Int) -> String
   {
@@ -287,7 +354,29 @@ struct HistoryView: View {
   }
 }
 
-private enum HistoryItem: Identifiable {
+private enum CategoryFilter: Hashable, Identifiable {
+  case all
+  case uncategorized
+  case category(UUID)
+
+  var id: Self { self }
+  func matches(_ session: SessionRecord) -> Bool {
+    switch self {
+    case .all: true
+    case .uncategorized: session.categoryID == nil
+    case .category(let id): session.categoryID == id
+    }
+  }
+}
+
+private struct CategoryStat: Identifiable {
+  let id: UUID?
+  let name: String
+  let duration: TimeInterval
+  let completedCount: Int
+}
+
+enum HistoryItem: Identifiable {
   case session(SessionRecord)
   case calendar(CalendarEventSnapshot)
 
@@ -335,22 +424,27 @@ struct CalendarEventRow: View {
 
 struct SessionRow: View {
   let session: SessionRecord
+  var showsReflection = true
   var body: some View {
     HStack {
       Image(systemName: session.outcome == .completed ? "checkmark.circle.fill" : "xmark.circle")
         .foregroundStyle(session.outcome == .completed ? .teal : .secondary)
       VStack(alignment: .leading) {
-        HStack(spacing: 6) {
-          Text(session.kind.title).font(.headline)
-          Text(session.outcome.rawValue.capitalized).font(.caption).foregroundStyle(.secondary)
-        }
+        Text(session.title?.nilIfBlank ?? session.kind.title).font(.headline)
+        Text(session.categoryName?.nilIfBlank ?? "Uncategorized")
+          .font(.caption.weight(.medium)).foregroundStyle(.teal)
         Text(
-          "\(session.startedAt.formatted(date: .omitted, time: .shortened))–\(session.endedAt.formatted(date: .omitted, time: .shortened)) · \(session.isDurationEstimated ? "≈ " : "")\(durationString(session.activeDuration))"
+          "\(session.kind.title) · \(session.outcome.rawValue.capitalized) · \(session.startedAt.formatted(date: .omitted, time: .shortened))–\(session.endedAt.formatted(date: .omitted, time: .shortened)) · \(session.isDurationEstimated ? "≈ " : "")\(durationString(session.activeDuration))"
         ).font(.caption).foregroundStyle(.secondary)
         if session.isDurationEstimated {
           Text("Estimated duration").font(.caption).foregroundStyle(.secondary)
         }
-        if let feedback = session.feedback { Text(feedback.capitalized).font(.caption) }
+        if showsReflection, let feedback = session.feedback {
+          Text(feedback.capitalized).font(.caption)
+        }
+        if showsReflection, let journal = session.journal?.nilIfBlank {
+          Text(journal).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        }
       }
     }.padding(.vertical, 3)
   }
@@ -439,6 +533,8 @@ struct SessionInspector: View {
   var body: some View {
     Form {
       Section("Session") {
+        LabeledContent("Title", value: session.title?.nilIfBlank ?? session.kind.title)
+        LabeledContent("Category", value: categoryName)
         LabeledContent("Started", value: session.startedAt.formatted())
         LabeledContent(
           session.isDurationEstimated ? "Estimated active" : "Active",
@@ -472,6 +568,19 @@ struct SessionInspector: View {
         ).frame(minHeight: 120)
       }
     }.formStyle(.grouped).scrollContentBackground(.hidden).padding(12)
+  }
+  private var categoryName: String {
+    guard let id = session.categoryID else { return "Uncategorized" }
+    return session.categoryName?.nilIfBlank
+      ?? store.data.categories.first(where: { $0.id == id })?.name
+      ?? "Deleted category"
+  }
+}
+
+extension String {
+  fileprivate var nilIfBlank: String? {
+    let value = trimmingCharacters(in: .whitespacesAndNewlines)
+    return value.isEmpty ? nil : value
   }
 }
 
