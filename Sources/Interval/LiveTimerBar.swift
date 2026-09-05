@@ -23,17 +23,21 @@ struct LiveTimerBar: View {
         store.showFocus()
       } label: {
         HStack(spacing: 10) {
-          Image(systemName: store.timer.kind == .focus ? "timer" : "cup.and.saucer")
-            .font(.system(size: 17, weight: .medium)).foregroundStyle(accent)
-          VStack(alignment: .leading, spacing: 3) {
+          Image(
+            systemName: store.completionSessionID != nil || store.timer.kind == .focus
+              ? "timer" : "cup.and.saucer"
+          )
+          .font(.system(size: 17, weight: .medium)).foregroundStyle(accent)
+          HStack(spacing: 8) {
             Text(title)
               .font(.callout.weight(.medium)).lineLimit(1)
             Text(
               store.completionSessionID != nil
-                ? "Ready for reflection"
-                : "\(store.timer.status == .running ? "Live" : "Ready") · \(store.timer.categoryName ?? "Uncategorized") · \(store.timer.kind.title)"
+                ? "Review"
+                : store.timer.status == .running ? store.timer.kind.title : "Ready"
             )
             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            .fixedSize()
           }
         }
       }.buttonStyle(.plain).help("Open focus timer")
@@ -79,7 +83,7 @@ struct LiveTimerBar: View {
         }
       }
     }.buttonStyle(IntervalIconButton())
-      .padding(.horizontal, 20).padding(.vertical, 12)
+      .padding(.horizontal, 20).padding(.vertical, 8)
       .background(accent.opacity(0.07))
       .alert("Start a break now?", isPresented: $confirmingBreak) {
         Button("Keep Focusing", role: .cancel) {}

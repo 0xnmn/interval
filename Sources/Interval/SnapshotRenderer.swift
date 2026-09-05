@@ -188,10 +188,17 @@ struct SnapshotRequest {
           SessionRow(session: store.data.sessions[0]).padding()
           SessionInspector(store: store, session: store.data.sessions[0])
         })
-    case "reminders", "reminders-empty":
+    case "reminders", "reminders-empty", "reminders-compact":
       store.selection = .reminders
-      size = NSSize(width: 880, height: 680)
+      size =
+        request.scene == "reminders-compact"
+        ? NSSize(width: 780, height: 620) : NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))
+    case "reminders-expanded":
+      size = NSSize(width: 780, height: 620)
+      view = AnyView(
+        RemindersView(store: store, selection: store.data.reminders[0].id, advanced: true)
+          .safeAreaInset(edge: .bottom, spacing: 0) { LiveTimerBar(store: store) })
     case "reminder-editor", "reminder-editor-expanded", "reminder-editor-bottom":
       size = NSSize(width: 420, height: 474)
       view = AnyView(

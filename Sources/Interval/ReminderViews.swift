@@ -14,68 +14,126 @@ struct RemindersView: View {
   }
 
   var body: some View {
+    GeometryReader { geometry in
+      let isWide = geometry.size.width >= 650
+      Group {
+        if isWide {
+          HStack(spacing: 0) {
+            reminderList(showsEmptyTemplates: false).frame(width: 240)
+            Divider()
+            if let reminder = selectedReminder {
+              editor(reminder, showsBackButton: false)
+            } else {
+              emptyTemplates
+            }
+          }
+          .onAppear { selectInitialReminder() }
+          .onChange(of: isWide) { _, wide in
+            if wide { selectInitialReminder() }
+          }
+        } else if let reminder = selectedReminder {
+          editor(reminder, showsBackButton: true)
+        } else {
+          reminderList(showsEmptyTemplates: true)
+        }
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity).background(GlassBackground())
+    .navigationTitle("Reminders")
+    .preferredColorScheme(.dark)
+    .alert(
+      "Delete \(deleting?.title ?? "reminder")?",
+      isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })
+    ) {
+      Button("Cancel", role: .cancel) { deleting = nil }
+      Button("Delete", role: .destructive) {
+        if let id = deleting?.id {
+          let reminders = store.data.reminders
+          let deletedIndex = reminders.firstIndex(where: { $0.id == id })
+          store.deleteReminder(id)
+          if let deletedIndex {
+            let remaining = store.data.reminders
+            selection =
+              remaining.isEmpty ? nil : remaining[min(deletedIndex, remaining.count - 1)].id
+          }
+        }
+        deleting = nil
+      }
+    } message: {
+      Text("This reminder and its current schedule will be removed.")
+    }
+  }
+
+  private var selectedReminder: Reminder? {
+    guard let selection else { return nil }
+    return store.data.reminders.first(where: { $0.id == selection })
+  }
+
+  private func reminderList(showsEmptyTemplates: Bool) -> some View {
     VStack(spacing: 0) {
-      if let selection,
-        let reminder = store.data.reminders.first(where: { $0.id == selection })
-      {
-        HStack {
+      HStack {
+        Text("Reminders").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+        Spacer()
+        addMenu
+      }
+      .padding(.horizontal, 12).padding(.vertical, 8)
+
+      if store.data.reminders.isEmpty {
+        if showsEmptyTemplates {
+          emptyTemplates
+        } else {
+          Spacer()
+        }
+      } else {
+        ScrollView {
+          LazyVStack(spacing: 7) {
+            ForEach(store.data.reminders) { reminder in
+              reminderRow(reminder)
+            }
+          }
+          .padding(.horizontal, 10).padding(.bottom, 10)
+        }
+      }
+    }
+  }
+
+  private func editor(_ reminder: Reminder, showsBackButton: Bool) -> some View {
+    VStack(spacing: 0) {
+      HStack {
+        if showsBackButton {
           Button {
-            self.selection = nil
+            selection = nil
           } label: {
             Label("Back", systemImage: "chevron.left")
           }
           .buttonStyle(IntervalIconButton()).help("Back to reminders")
-          Spacer()
-          Menu {
-            Button("Delete Reminder…", role: .destructive) { deleting = reminder }
-          } label: {
-            Image(systemName: "ellipsis").font(.system(size: 17, weight: .medium)).frame(
-              width: 36, height: 36)
-          }
-          .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-          .accessibilityLabel("Reminder actions")
-        }.padding(16)
-        ReminderEditor(reminder: reminder, store: store, advanced: $advanced)
-      } else {
-        HStack {
-          Text("Reminders").font(.headline)
-          Spacer()
-          addMenu
         }
-        .padding(14)
-
-        if store.data.reminders.isEmpty {
-          emptyTemplates
-        } else {
-          ScrollView {
-            LazyVStack(spacing: 7) {
-              ForEach(store.data.reminders) { reminder in
-                reminderRow(reminder)
-              }
-            }
-            .padding(.horizontal, 10).padding(.bottom, 10)
-          }
+        Text("Reminder").font(.headline)
+        Spacer()
+        Button {
+          store.previewReminder(reminder.id)
+        } label: {
+          Label("Preview reminder", systemImage: "eye")
+        }.buttonStyle(IntervalIconButton()).help("Preview reminder")
+        Menu {
+          Button("Delete Reminder…", role: .destructive) { deleting = reminder }
+        } label: {
+          Image(systemName: "ellipsis").font(.system(size: 17, weight: .medium)).frame(
+            width: 36, height: 36)
         }
-
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .accessibilityLabel("Reminder actions")
       }
-    }.frame(maxWidth: .infinity, maxHeight: .infinity).background(GlassBackground())
-      .navigationTitle("Reminders")
-      .preferredColorScheme(.dark)
-      .alert(
-        "Delete \(deleting?.title ?? "reminder")?",
-        isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })
-      ) {
-        Button("Cancel", role: .cancel) { deleting = nil }
-        Button("Delete", role: .destructive) {
-          if let id = deleting?.id {
-            store.deleteReminder(id)
-            selection = nil
-          }
-          deleting = nil
-        }
-      } message: {
-        Text("This reminder and its current schedule will be removed.")
-      }
+      .padding(.horizontal, 18).padding(.vertical, 8)
+      ReminderEditor(reminder: reminder, store: store, advanced: $advanced)
+        .id(reminder.id)
+    }
+  }
+
+  private func selectInitialReminder() {
+    if selectedReminder == nil {
+      selection = store.data.reminders.first?.id
+    }
   }
 
   private func reminderRow(_ reminder: Reminder) -> some View {
@@ -190,52 +248,89 @@ private struct ReminderEditor: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 12) {
-        HStack(alignment: .top) {
-          Text("Reminder").font(.headline)
-          Spacer()
-          Button("Preview") { store.previewReminder(reminder.id) }
-            .buttonStyle(IntervalPrimaryButton())
-        }
-
+      VStack(alignment: .leading, spacing: 18) {
         editorSection("Content") {
           TextField("Title", text: binding(\.title))
+            .accessibilityLabel("Reminder title")
           TextField("Message", text: binding(\.message), axis: .vertical).lineLimit(2...5)
-          LabeledContent("Emoji") {
+            .accessibilityLabel("Reminder message")
+          HStack {
+            Text("Emoji")
+            Spacer()
             TextField("Emoji", text: binding(\.emoji)).frame(width: 90)
               .multilineTextAlignment(.trailing)
+              .accessibilityLabel("Reminder emoji")
           }
         }
 
         editorSection("Schedule") {
-          Stepper(
-            "Every \(Int(binding(\.intervalSeconds).wrappedValue / 60)) minutes",
-            value: binding(\.intervalSeconds), in: 60...86_400, step: 60)
-          Picker("Presentation", selection: binding(\.presentation)) {
-            ForEach(ReminderPresentation.allCases, id: \.self) { Text($0.title).tag($0) }
+          HStack {
+            Text("Repeat")
+            Spacer()
+            Text("\(Int(binding(\.intervalSeconds).wrappedValue / 60)) min").monospacedDigit()
+            Stepper(
+              "Repeat interval in minutes",
+              value: binding(\.intervalSeconds), in: 60...86_400, step: 60
+            )
+            .labelsHidden()
+            .accessibilityValue("\(Int(binding(\.intervalSeconds).wrappedValue / 60)) minutes")
+            Menu {
+              ForEach([10, 20, 30, 60], id: \.self) { minutes in
+                Button("\(minutes) minutes") {
+                  binding(\.intervalSeconds).wrappedValue = TimeInterval(minutes * 60)
+                }
+              }
+            } label: {
+              Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 17, weight: .medium)).frame(width: 36, height: 36)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .accessibilityLabel("Interval presets")
+            .help("Choose an interval preset")
           }
-          .pickerStyle(.segmented)
+          HStack {
+            Text("Show as")
+            Spacer()
+            Picker("Presentation", selection: binding(\.presentation)) {
+              ForEach(ReminderPresentation.allCases, id: \.self) { Text($0.title).tag($0) }
+            }.pickerStyle(.segmented).labelsHidden().frame(width: 190)
+          }
         }
 
         DisclosureGroup(isExpanded: $advanced) {
-          VStack(spacing: 10) {
-            Divider()
-            Stepper(
-              "Display for \(Int(binding(\.displaySeconds).wrappedValue)) seconds",
-              value: binding(\.displaySeconds), in: 3...600)
+          VStack(alignment: .leading, spacing: 12) {
+            HStack {
+              Text("Display for")
+              Spacer()
+              Text("\(Int(binding(\.displaySeconds).wrappedValue)) sec").monospacedDigit()
+              Stepper("Display duration in seconds", value: binding(\.displaySeconds), in: 3...600)
+                .labelsHidden()
+                .accessibilityValue("\(Int(binding(\.displaySeconds).wrappedValue)) seconds")
+            }
             HStack {
               Text("Emoji size")
-              Slider(value: binding(\.emojiSize), in: 32...180).accessibilityLabel("Emoji size")
+              Spacer()
+              Slider(value: binding(\.emojiSize), in: 32...180)
+                .frame(width: 130).accessibilityLabel("Emoji size")
               Text("\(Int(binding(\.emojiSize).wrappedValue)) pt").monospacedDigit().frame(
                 width: 48)
             }
-            Toggle("Hide during focus", isOn: binding(\.suppressDuringFocus))
-              .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
-            Toggle(
-              "Hide during calendar events", isOn: binding(\.suppressDuringCalendar)
-            )
-            .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
-            .help("Uses selected calendars")
+            HStack {
+              Text("Hide during focus")
+              Spacer()
+              Toggle("Hide during focus", isOn: binding(\.suppressDuringFocus))
+                .labelsHidden().toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(
+                  .small)
+            }
+            HStack {
+              Text("Hide during calendar events")
+              Spacer()
+              Toggle("Hide during calendar events", isOn: binding(\.suppressDuringCalendar))
+                .labelsHidden().toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(
+                  .small
+                )
+                .help("Uses selected calendars")
+            }
           }
           .padding(.top, 8)
         } label: {
@@ -244,7 +339,7 @@ private struct ReminderEditor: View {
         }
         .padding(.vertical, 8)
       }
-      .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+      .padding(18).frame(maxWidth: .infinity, alignment: .leading)
     }
     .background(GlassBackground()).preferredColorScheme(.dark)
   }
@@ -253,10 +348,9 @@ private struct ReminderEditor: View {
     _ title: String, @ViewBuilder content: () -> Content
   ) -> some View {
     VStack(alignment: .leading, spacing: 10) {
-      Text(title).font(.headline)
+      Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
       content()
     }
-    .padding(.vertical, 6)
   }
 }
 

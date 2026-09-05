@@ -34,27 +34,38 @@ struct SettingsView: View {
   var body: some View {
     ZStack {
       GlassBackground()
-      VStack(alignment: .leading, spacing: 16) {
-        Picker("Settings page", selection: $selectedTab) {
+      HStack(spacing: 0) {
+        List(
+          selection: Binding<Int?>(
+            get: { selectedTab }, set: { if let tab = $0 { selectedTab = tab } })
+        ) {
           ForEach(destinations) { destination in
             Label(destination.title, systemImage: destination.systemImage)
+              .frame(height: 28)
               .tag(destination.id)
           }
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
+        .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .accessibilityLabel("Settings pages")
+        .frame(width: 140)
+        .background(.ultraThinMaterial.opacity(0.35))
 
-        if let error = store.persistenceError ?? store.notificationError {
-          Label(error, systemImage: "exclamationmark.triangle.fill")
-            .font(.caption)
-            .foregroundStyle(.red)
-            .padding(.horizontal, 4)
+        VStack(alignment: .leading, spacing: 12) {
+          Text(destinations.first(where: { $0.id == selectedTab })?.title ?? "Settings")
+            .font(.title2.weight(.semibold))
+
+          if let error = store.persistenceError ?? store.notificationError {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+              .font(.caption)
+              .foregroundStyle(.red)
+          }
+
+          selectedContent
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-
-        selectedContent
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(18)
       }
-      .padding(20)
     }
     .frame(width: 560, height: 450)
     .tint(.accentColor)
@@ -69,24 +80,23 @@ struct SettingsView: View {
     case 0:
       SettingsPage {
         SettingsSection("Durations") {
-          Stepper(
-            "Focus: \(store.data.settings.focusMinutes) minutes", value: setting(\.focusMinutes),
-            in: 1...180)
-          Stepper(
-            "Short break: \(store.data.settings.shortBreakMinutes) minutes",
-            value: setting(\.shortBreakMinutes), in: 1...60)
-          Stepper(
-            "Long break: \(store.data.settings.longBreakMinutes) minutes",
-            value: setting(\.longBreakMinutes), in: 1...90)
+          minuteRow("Focus", value: setting(\.focusMinutes), range: 1...180)
+          minuteRow("Short break", value: setting(\.shortBreakMinutes), range: 1...60)
+          minuteRow("Long break", value: setting(\.longBreakMinutes), range: 1...90)
         }
-        SettingsSection("Cadence", divided: true) {
-          Stepper(
-            "Long break every \(store.data.settings.longBreakEvery) focus completions",
-            value: setting(\.longBreakEvery), in: 1...12)
-          Text("Continue after feedback to start your break.")
+        SettingsSection("Cadence") {
+          SettingsRow("Long break") {
+            HStack(spacing: 7) {
+              Text("Every \(store.data.settings.longBreakEvery) sessions")
+                .monospacedDigit()
+              Stepper("Long break cadence", value: setting(\.longBreakEvery), in: 1...12)
+                .labelsHidden()
+            }
+          }
+          Text("Continue from feedback to begin your break.")
             .font(.caption).foregroundStyle(.secondary)
         }
-        SettingsSection("Colors", divided: true) {
+        SettingsSection("Colors") {
           phaseColorPicker("Focus color", selection: phaseColorSetting(\.focusColor))
           phaseColorPicker("Break color", selection: phaseColorSetting(\.breakColor))
         }
@@ -94,31 +104,32 @@ struct SettingsView: View {
     case 1:
       SettingsPage {
         SettingsSection("Ambient sound") {
-          HStack {
-            Text("Focus")
-            Spacer()
+          SettingsRow("Focus") {
             Picker("Focus", selection: soundSetting(\.focusSound)) {
               ForEach(AmbientSound.allCases, id: \.self) { Text($0.title).tag($0) }
             }
             .labelsHidden()
-            .frame(width: 180)
           }
-          HStack {
-            Text("Break")
-            Spacer()
+          SettingsRow("Break") {
             Picker("Break", selection: soundSetting(\.breakSound)) {
               ForEach(AmbientSound.allCases, id: \.self) { Text($0.title).tag($0) }
             }
             .labelsHidden()
-            .frame(width: 180)
           }
-          HStack(spacing: 14) {
-            Text("Volume")
-            Slider(value: volumeSetting, in: 0...1)
-              .accessibilityLabel("Volume")
+          SettingsRow("Volume") {
+            HStack(spacing: 8) {
+              Slider(value: volumeSetting, in: 0...1)
+                .accessibilityLabel("Volume")
+              Text("\(Int(store.data.settings.soundVolume * 100))%")
+                .monospacedDigit()
+                .frame(width: 34, alignment: .trailing)
+                .accessibilityHidden(true)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityValue("\(Int(store.data.settings.soundVolume * 100)) percent")
           }
         }
-        SettingsSection("Alerts", divided: true) {
+        SettingsSection("Alerts") {
           if notificationStatus == .authorized {
             Label("Notifications enabled", systemImage: "checkmark.circle.fill").foregroundStyle(
               .green)
@@ -194,9 +205,7 @@ struct SettingsView: View {
       })
   }
   private func phaseColorPicker(_ title: String, selection: Binding<PhaseColor>) -> some View {
-    HStack {
-      Text(title)
-      Spacer()
+    SettingsRow(title) {
       Picker(title, selection: selection) {
         ForEach(PhaseColor.allCases, id: \.rawValue) { phaseColor in
           Label {
@@ -208,7 +217,20 @@ struct SettingsView: View {
         }
       }
       .labelsHidden()
-      .frame(width: 140)
+    }
+  }
+  private func minuteRow(_ title: String, value: Binding<Int>, range: ClosedRange<Int>)
+    -> some View
+  {
+    SettingsRow(title) {
+      HStack(spacing: 7) {
+        Text("\(value.wrappedValue) min")
+          .monospacedDigit()
+          .frame(maxWidth: .infinity, alignment: .trailing)
+        Stepper("\(title) duration", value: value, in: range)
+          .labelsHidden()
+          .accessibilityValue("\(value.wrappedValue) minutes")
+      }
     }
   }
   private var volumeSetting: Binding<Double> {
@@ -227,7 +249,7 @@ private struct SettingsPage<Content: View>: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 16) { content }
+      VStack(alignment: .leading, spacing: 18) { content }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.trailing, 6)
     }
@@ -236,26 +258,39 @@ private struct SettingsPage<Content: View>: View {
 
 private struct SettingsSection<Content: View>: View {
   let title: String
-  let divided: Bool
   @ViewBuilder let content: Content
 
-  init(_ title: String, divided: Bool = false, @ViewBuilder content: () -> Content) {
+  init(_ title: String, @ViewBuilder content: () -> Content) {
     self.title = title
-    self.divided = divided
     self.content = content()
   }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
-      if divided {
-        Divider().overlay(IntervalTheme.border)
-          .padding(.bottom, 2)
-      }
-      Text(title.uppercased())
-        .font(.caption2.weight(.semibold))
+      Text(title)
+        .font(.caption.weight(.semibold))
         .foregroundStyle(.secondary)
       VStack(alignment: .leading, spacing: 10) { content }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+}
+
+private struct SettingsRow<Control: View>: View {
+  let title: String
+  @ViewBuilder let control: Control
+
+  init(_ title: String, @ViewBuilder control: () -> Control) {
+    self.title = title
+    self.control = control()
+  }
+
+  var body: some View {
+    HStack(spacing: 12) {
+      Text(title)
+      Spacer(minLength: 8)
+      control
+        .frame(width: 140, alignment: .trailing)
     }
   }
 }
@@ -268,8 +303,9 @@ private struct GeneralSettingsView: View {
   var body: some View {
     SettingsPage {
       SettingsSection("Startup") {
-        Toggle("Launch Interval at login", isOn: Binding(get: { loginEnabled }, set: setLogin))
-          .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
+        Toggle(isOn: Binding(get: { loginEnabled }, set: setLogin)) {
+          Text("Launch at login").frame(maxWidth: .infinity, alignment: .leading)
+        }.toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
         if SMAppService.mainApp.status == .requiresApproval {
           Label(
             "Approval is required in System Settings → General → Login Items.",
@@ -277,17 +313,20 @@ private struct GeneralSettingsView: View {
         }
         if let loginMessage { Text(loginMessage).font(.caption).foregroundStyle(.red) }
       }
-      SettingsSection("Local data", divided: true) {
+      SettingsSection("Local data") {
         DisclosureGroup("Storage location") {
           Text(store.storageURL.path(percentEncoded: false))
-            .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
         }
         Button("Export Data…", action: exportData)
         if let exportMessage { Text(exportMessage).font(.caption).foregroundStyle(.secondary) }
         Text("Exports local settings and activity; calendar event contents are excluded.")
           .font(.caption).foregroundStyle(.secondary)
       }
-      SettingsSection("Privacy", divided: true) {
+      SettingsSection("Privacy") {
         Text("No analytics or cloud storage; network access is only for updates.")
       }
     }
@@ -322,23 +361,26 @@ private struct UpdatesSettingsView: View {
   @Bindable var store: AppStore
   var body: some View {
     SettingsPage {
-      SettingsSection("Sparkle updates") {
-        Text(store.updates.configurationMessage).foregroundStyle(
-          store.updates.isConfigured ? Color.secondary : Color.orange)
+      SettingsSection(store.updates.isConfigured ? "Updates" : "Updates unavailable") {
+        Text(store.updates.configurationMessage)
+          .font(.caption)
+          .foregroundStyle(store.updates.isConfigured ? Color.secondary : Color.orange)
         Toggle(
-          "Automatically check for updates",
           isOn: Binding(
             get: { store.updates.automaticallyChecks },
             set: { store.updates.automaticallyChecks = $0 })
-        )
+        ) {
+          Text("Check automatically").frame(maxWidth: .infinity, alignment: .leading)
+        }
         .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
         .disabled(!store.updates.isConfigured)
         Toggle(
-          "Automatically download updates",
           isOn: Binding(
             get: { store.updates.automaticallyDownloads },
             set: { store.updates.automaticallyDownloads = $0 })
-        )
+        ) {
+          Text("Download automatically").frame(maxWidth: .infinity, alignment: .leading)
+        }
         .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
         .disabled(!store.updates.isConfigured)
         Button("Check Now") { store.updates.checkNow() }.disabled(!store.updates.isConfigured)
@@ -354,17 +396,16 @@ private struct CalendarSettingsView: View {
       SettingsSection("Apple Calendar") {
         switch store.calendarService.authorizationState {
         case .notDetermined:
-          Text("Calendar access is off. Interval continues to work without it.").foregroundStyle(
-            .secondary)
+          Text("Connect Calendar to show events and suppress reminders during meetings.")
+            .foregroundStyle(.secondary)
           Button("Enable Calendar Integration") { Task { await store.enableCalendarIntegration() } }
             .buttonStyle(.borderedProminent)
           Text(
-            "macOS calls this Full Access. Interval only reads selected calendars; it never creates, edits, or deletes events."
+            "macOS calls this Full Access. Interval only reads selected calendars and never changes events."
           )
           .font(.caption).foregroundStyle(.secondary)
         case .fullAccess:
           Toggle(
-            "Calendar integration",
             isOn: Binding(
               get: { store.data.settings.calendarIntegrationEnabled },
               set: { enabled in
@@ -374,7 +415,9 @@ private struct CalendarSettingsView: View {
                   store.disableCalendarIntegration()
                 }
               })
-          )
+          ) {
+            Text("Calendar integration").frame(maxWidth: .infinity, alignment: .leading)
+          }
           .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
           if store.data.settings.calendarIntegrationEnabled {
             if store.calendarService.calendars.isEmpty {
@@ -387,7 +430,9 @@ private struct CalendarSettingsView: View {
                     get: { store.data.settings.selectedCalendarIDs.contains(calendar.id) },
                     set: { store.setCalendarSelected(calendar.id, selected: $0) })
                 )
-                .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
+                .toggleStyle(.checkbox)
+                .controlSize(.small)
+                .padding(.leading, 18)
               }
               if store.data.settings.selectedCalendarIDs.isEmpty {
                 Text("No calendars selected. No events will be displayed or suppress reminders.")

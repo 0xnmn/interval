@@ -158,14 +158,13 @@ struct HistoryView: View {
           }
           Picker("Category", selection: $categoryFilter) {
             ForEach(categoryFilters) { filter in Text(categoryFilterName(filter)).tag(filter) }
-          }.labelsHidden().frame(width: 170)
+          }.labelsHidden().frame(width: 150)
         }
       }.padding(.horizontal, 18).padding(.vertical, 10)
-      Divider().opacity(0.6)
       HStack(spacing: 0) {
         VStack(spacing: 10) {
           ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 24) {
               daySummary
               categoryBreakdown
               feedbackBreakdown
@@ -176,7 +175,7 @@ struct HistoryView: View {
               }
             }.frame(maxWidth: .infinity, alignment: .leading)
           }
-        }.padding(14).frame(width: 270).frame(maxHeight: .infinity)
+        }.padding(20).frame(width: 240).frame(maxHeight: .infinity)
         Rectangle().fill(IntervalTheme.border).frame(width: 1)
         if let id = selectedSession, let session = store.data.sessions.first(where: { $0.id == id })
         {
@@ -212,25 +211,25 @@ struct HistoryView: View {
   }
   private var daySummary: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text(selectedDay.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
-        .font(.caption).foregroundStyle(.secondary)
-      Text(durationString(focusDuration)).font(.title2.weight(.semibold))
-      Text("Focus time · \(completedFocusCount) completed").font(.caption).foregroundStyle(
+      Text("Focus time").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+      Text(durationString(focusDuration)).font(.largeTitle.weight(.light)).monospacedDigit()
+      Text("\(completedFocusCount) completed").font(.caption).foregroundStyle(
         .secondary)
-      Text(summaryText).font(.caption).foregroundStyle(.secondary)
     }.frame(maxWidth: .infinity, alignment: .leading)
   }
   private var timeline: some View {
     VStack(alignment: .leading, spacing: 0) {
-      Text(selectedDay.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
-        .font(.headline).padding(.horizontal, 20).frame(height: 44)
-      Divider().opacity(0.6)
+      HStack {
+        Text("Timeline").font(.headline)
+        Spacer()
+        Text(summaryText).font(.caption).foregroundStyle(.secondary)
+      }.padding(.horizontal, 20).frame(height: 44)
       if dayItems.isEmpty {
         Text(emptyStatus).font(.callout).foregroundStyle(.secondary)
           .padding(20).frame(maxWidth: .infinity, alignment: .leading)
       } else {
         ScrollView {
-          LazyVStack(alignment: .leading, spacing: 4) {
+          LazyVStack(alignment: .leading, spacing: 10) {
             ForEach(dayItems) { item in
               switch item {
               case .calendar(let event): CalendarEventRow(event: event)
@@ -287,11 +286,21 @@ struct HistoryView: View {
   private var feedbackBreakdown: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text("Focus feedback").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-      ForEach(feedbackStats) { stat in
-        HStack {
-          Text(stat.label).font(.callout)
-          Spacer()
-          Text("\(stat.count)").font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+      if focusSessions.isEmpty {
+        Text("No feedback yet").font(.caption).foregroundStyle(.secondary)
+      } else {
+        ForEach(feedbackStats) { stat in
+          VStack(spacing: 4) {
+            HStack {
+              Text(stat.label).font(.callout)
+              Spacer()
+              Text("\(stat.count)").font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+            }
+            ProgressView(value: Double(stat.count), total: Double(max(focusSessions.count, 1)))
+              .tint(stat.count == 0 ? Color.clear : Color.secondary)
+              .accessibilityLabel(stat.label)
+              .accessibilityValue("\(stat.count) of \(focusSessions.count) focus sessions")
+          }
         }
       }
     }
