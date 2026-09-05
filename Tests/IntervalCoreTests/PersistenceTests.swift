@@ -41,3 +41,20 @@ import Testing
     let settings = try store.load().settings
     #expect(settings == .init(focusMinutes: 1, shortBreakMinutes: 1, longBreakMinutes: 90, longBreakEvery: 1))
 }
+
+@Test func calendarGridHonorsFirstWeekdayAndLeapYear() {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    calendar.firstWeekday = 2
+    let date = calendar.date(from: DateComponents(year: 2024, month: 2, day: 15))!
+    let grid = CalendarDates.monthGrid(containing: date, calendar: calendar)
+    #expect(grid.compactMap { $0 }.count == 29)
+    #expect(grid.count == 35)
+}
+
+@Test func ambientSettingsRoundTripAndClampVolume() {
+    let value = IntervalSettings(focusSound: .rain, breakSound: .ocean, soundVolume: 2).clamped()
+    #expect(value.focusSound == .rain)
+    #expect(value.breakSound == .ocean)
+    #expect(value.soundVolume == 1)
+}

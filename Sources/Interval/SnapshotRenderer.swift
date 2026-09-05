@@ -31,7 +31,8 @@ struct SnapshotRequest {
         let session = SessionRecord(id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
             timerID: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!, kind: .focus,
             startedAt: fixtureNow.addingTimeInterval(-3_600), endedAt: fixtureNow.addingTimeInterval(-2_100),
-            plannedDuration: 1_500, activeDuration: 1_500, outcome: .completed)
+            plannedDuration: 1_500, activeDuration: 1_500, outcome: .completed,
+            feedback: scene == "reflection" ? nil : "focused", journal: "Clear progress on the launch plan.")
         return PersistedData(activeTimer: timer, scratchpad: "Outline the launch notes\nReview accessibility labels",
             sessions: [session], reminders: [Reminder(title: "Plan tomorrow", dueAt: fixtureNow.addingTimeInterval(3_600))],
             completedFocusCount: 3)
@@ -44,7 +45,9 @@ struct SnapshotRequest {
         case "history": size = NSSize(width: 900, height: 650); view = AnyView(MainView(store: store, selection: .history))
         case "reminders": size = NSSize(width: 900, height: 650); view = AnyView(MainView(store: store, selection: .reminders))
         case "settings": size = NSSize(width: 480, height: 320); view = AnyView(SettingsView(store: store))
-        case "menu": size = NSSize(width: 310, height: 210); view = AnyView(MenuBarView(store: store))
+        case "sound-settings": size = NSSize(width: 500, height: 370); view = AnyView(SettingsView(store: store, showSound: true))
+        case "reflection": store.completionSessionID = store.data.sessions.first?.id; size = NSSize(width: 900, height: 650); view = AnyView(MainView(store: store))
+        case "menu": size = NSSize(width: 310, height: 280); view = AnyView(MenuBarView(store: store))
         default: size = NSSize(width: 900, height: 650); view = AnyView(MainView(store: store))
         }
 
@@ -58,6 +61,7 @@ struct SnapshotRequest {
         window.makeKeyAndOrderFront(nil)
         try await Task.sleep(for: .milliseconds(350))
         hostingView.layoutSubtreeIfNeeded()
+        window.display()
         guard let rep = hostingView.bitmapImageRepForCachingDisplay(in: hostingView.bounds) else {
             throw CocoaError(.fileWriteUnknown)
         }

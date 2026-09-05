@@ -5,7 +5,7 @@ public enum TimerEngine {
         switch state.status {
         case .ready: 0
         case .running:
-            min(state.duration, state.elapsedBeforePause + max(0, state.duration - state.elapsedBeforePause - remaining(state, now: now)))
+            min(state.duration, max(state.elapsedBeforePause, state.duration - remaining(state, now: now)))
         case .paused, .abandoned: min(state.duration, state.elapsedBeforePause)
         case .completed: state.duration
         }

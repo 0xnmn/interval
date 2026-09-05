@@ -10,6 +10,18 @@ public enum TimerKind: String, Codable, CaseIterable, Sendable {
 
 public enum TimerStatus: String, Codable, Sendable { case ready, running, paused, completed, abandoned }
 
+public enum SessionFeedback: String, Codable, CaseIterable, Sendable {
+    case distracted, neutral, focused
+    public var title: String { rawValue.capitalized }
+}
+
+public enum AmbientSound: String, Codable, CaseIterable, Sendable {
+    case silence, brownNoise, rain, ocean
+    public var title: String {
+        switch self { case .silence: "Silence"; case .brownNoise: "Brown Noise"; case .rain: "Rain"; case .ocean: "Ocean" }
+    }
+}
+
 public struct TimerState: Codable, Equatable, Sendable {
     public var id: UUID
     public var kind: TimerKind
@@ -34,10 +46,15 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
     public var shortBreakMinutes: Int
     public var longBreakMinutes: Int
     public var longBreakEvery: Int
+    public var focusSound: AmbientSound
+    public var breakSound: AmbientSound
+    public var soundVolume: Double
 
-    public init(focusMinutes: Int = 25, shortBreakMinutes: Int = 5, longBreakMinutes: Int = 10, longBreakEvery: Int = 4) {
+    public init(focusMinutes: Int = 25, shortBreakMinutes: Int = 5, longBreakMinutes: Int = 10, longBreakEvery: Int = 4,
+                focusSound: AmbientSound = .silence, breakSound: AmbientSound = .silence, soundVolume: Double = 0.35) {
         self.focusMinutes = focusMinutes; self.shortBreakMinutes = shortBreakMinutes
         self.longBreakMinutes = longBreakMinutes; self.longBreakEvery = longBreakEvery
+        self.focusSound = focusSound; self.breakSound = breakSound; self.soundVolume = soundVolume
     }
 
     public func duration(for kind: TimerKind) -> TimeInterval {
@@ -48,7 +65,18 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
         .init(focusMinutes: focusMinutes.clamped(to: 1...180),
               shortBreakMinutes: shortBreakMinutes.clamped(to: 1...60),
               longBreakMinutes: longBreakMinutes.clamped(to: 1...90),
-              longBreakEvery: longBreakEvery.clamped(to: 1...12))
+              longBreakEvery: longBreakEvery.clamped(to: 1...12), focusSound: focusSound, breakSound: breakSound,
+              soundVolume: soundVolume.clamped(to: 0...1))
+    }
+
+    private enum CodingKeys: String, CodingKey { case focusMinutes, shortBreakMinutes, longBreakMinutes, longBreakEvery, focusSound, breakSound, soundVolume }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        focusMinutes = try c.decode(Int.self, forKey: .focusMinutes); shortBreakMinutes = try c.decode(Int.self, forKey: .shortBreakMinutes)
+        longBreakMinutes = try c.decode(Int.self, forKey: .longBreakMinutes); longBreakEvery = try c.decode(Int.self, forKey: .longBreakEvery)
+        focusSound = try c.decodeIfPresent(AmbientSound.self, forKey: .focusSound) ?? .silence
+        breakSound = try c.decodeIfPresent(AmbientSound.self, forKey: .breakSound) ?? .silence
+        soundVolume = try c.decodeIfPresent(Double.self, forKey: .soundVolume) ?? 0.35
     }
 }
 
@@ -69,6 +97,25 @@ public struct SessionRecord: Identifiable, Codable, Equatable, Sendable {
         self.id = id; self.timerID = timerID; self.kind = kind; self.startedAt = startedAt; self.endedAt = endedAt
         self.plannedDuration = plannedDuration; self.activeDuration = activeDuration
         self.outcome = outcome; self.feedback = feedback; self.journal = journal
+    }
+}
+
+public enum CalendarDates {
+    public static func monthGrid(containing date: Date, calendar: Calendar) -> [Date?] {
+        guard let month = calendar.dateInterval(of: .month, for: date),
+              let days = calendar.range(of: .day, in: .month, for: date) else { return [] }
+        let weekday = calendar.component(.weekday, from: month.start)
+        let leading = (weekday - calendar.firstWeekday + 7) % 7
+        var result = Array<Date?>(repeating: nil, count: leading)
+        result += days.compactMap { calendar.date(byAdding: .day, value: $0 - 1, to: month.start) }.map(Optional.some)
+        while result.count % 7 != 0 { result.append(nil) }
+        return result
+    }
+
+    public static func weekdaySymbols(calendar: Calendar) -> [String] {
+        let symbols = calendar.shortStandaloneWeekdaySymbols
+        let offset = max(0, min(6, calendar.firstWeekday - 1))
+        return Array(symbols[offset...] + symbols[..<offset])
     }
 }
 

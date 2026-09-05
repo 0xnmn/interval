@@ -5,6 +5,7 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static var snapshotRequest: SnapshotRequest?
     static var snapshotStore: AppStore?
+    static var snapshotURL: URL?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard let request = Self.snapshotRequest, let store = Self.snapshotStore else { return }
@@ -15,6 +16,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    func applicationWillTerminate(_ notification: Notification) {
+        Self.snapshotStore?.checkpointForTermination()
+        if let snapshotURL = Self.snapshotURL { try? FileManager.default.removeItem(at: snapshotURL) }
+    }
 }
 
 @main
@@ -32,9 +37,11 @@ struct IntervalApp: App {
             _store = State(initialValue: snapshotStore)
             AppDelegate.snapshotRequest = request
             AppDelegate.snapshotStore = snapshotStore
+            AppDelegate.snapshotURL = ephemeral
         } else {
             _store = State(initialValue: AppStore())
         }
+        AppDelegate.snapshotStore = _store.wrappedValue
     }
     var body: some Scene {
         Window("Interval", id: "main") { MainView(store: store) }

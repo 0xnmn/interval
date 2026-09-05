@@ -10,6 +10,12 @@ final class AppStore {
     var persistenceError: String?
     var recoveryMessage: String?
     var didSave = false
+    var completionSessionID: UUID?
+    var inAppNotification: String?
+    var audioError: String?
+    var notificationError: String?
+    let notifications = NotificationService()
+    private let audio = AmbientAudio()
     private let persistence: JSONStore
     private var persistenceLocked = false
     private var ticker: Task<Void, Never>?
@@ -24,6 +30,7 @@ final class AppStore {
             persistenceLocked = true
         }
         if var restored = data.activeTimer, restored.kind == .focus, restored.status == .running {
+            notifications.cancel(restored)
             restored.status = .paused
             restored.deadline = nil
             data.activeTimer = restored
@@ -31,21 +38,30 @@ final class AppStore {
             recoveredRunningFocus = true
         }
         if data.activeTimer == nil { data.activeTimer = timer(for: .focus) }
+        completionSessionID = data.sessions.last(where: { $0.kind == .focus && $0.outcome == .completed && $0.feedback == nil })?.id
+        notifications.fallback = { [weak self] message in self?.inAppNotification = message }
+        audio.failure = { [weak self] message in self?.audioError = message }
         if recoveredRunningFocus { save() }
         reconcile(at: now)
+        if data.activeTimer?.kind != .focus, data.activeTimer?.status == .running { syncServices(for: timer) }
         ticker = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 guard let self else { return }
                 self.now = Date(); self.reconcile(at: self.now)
+                if Int(self.now.timeIntervalSince1970) % 5 == 0 { self.checkpoint() }
             }
         }
         let center = NSWorkspace.shared.notificationCenter
         observers.append(center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.pauseFocusForSleep() }
+            Task { @MainActor in self?.prepareForSleep() }
         })
         observers.append(center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in guard let self else { return }; self.now = Date(); self.reconcile(at: self.now) }
+            Task { @MainActor in
+                guard let self else { return }
+                self.now = Date()
+                if !self.reconcile(at: self.now), self.data.activeTimer?.status == .running { self.syncServices(for: self.timer) }
+            }
         })
     }
 
@@ -62,12 +78,15 @@ final class AppStore {
         if reconcile(at: actionDate) { return }
         guard var value = data.activeTimer else { return }
         switch value.status {
-        case .ready: TimerEngine.start(&value, now: actionDate)
+        case .ready:
+            inAppNotification = nil
+            TimerEngine.start(&value, now: actionDate)
         case .running: TimerEngine.pause(&value, now: actionDate)
         case .paused: TimerEngine.resume(&value, now: actionDate)
         case .completed, .abandoned: return
         }
         data.activeTimer = value; save()
+        syncServices(for: value)
     }
 
     func abandon() {
@@ -77,6 +96,7 @@ final class AppStore {
         guard var value = data.activeTimer, value.status == .running || value.status == .paused else { return }
         let activeDuration = TimerEngine.activeDuration(value, now: actionDate)
         TimerEngine.abandon(&value)
+        notifications.cancel(value); audio.stop()
         record(value, outcome: .abandoned, endedAt: actionDate, activeDuration: activeDuration)
         data.activeTimer = timer(for: .focus); save()
     }
@@ -87,17 +107,39 @@ final class AppStore {
     }
 
     func updateScratchpad(_ text: String) { data.scratchpad = text; save() }
+    func appendQuickNote(_ text: String) { guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }; data.scratchpad += (data.scratchpad.isEmpty ? "" : "\n") + text; save() }
+    func updateSession(id: UUID, feedback: SessionFeedback?, journal: String) {
+        guard let index = data.sessions.firstIndex(where: { $0.id == id }) else { return }
+        data.sessions[index].feedback = feedback?.rawValue; data.sessions[index].journal = journal.isEmpty ? nil : journal; save()
+    }
+    func deferReflection() { completionSessionID = nil }
     func updateSettings(_ settings: IntervalSettings) {
         data.settings = settings
         if data.activeTimer?.status == .ready { data.activeTimer = timer(for: data.activeTimer?.kind ?? .focus) }
         save()
+        if data.activeTimer?.status == .running { syncServices(for: timer) }
     }
 
-    private func pauseFocusForSleep() {
+    func checkpointForTermination() {
+        let actionDate = Date()
+        now = actionDate
+        reconcile(at: actionDate)
+        if var value = data.activeTimer, value.kind == .focus, value.status == .running {
+            TimerEngine.pause(&value, now: actionDate)
+            data.activeTimer = value
+            notifications.cancel(value)
+            save()
+        }
+        audio.stop()
+    }
+
+    private func prepareForSleep() {
         now = Date()
         reconcile(at: now)
+        audio.stop()
         guard var value = data.activeTimer, value.kind == .focus, value.status == .running else { return }
         TimerEngine.pause(&value, now: now); data.activeTimer = value; save()
+        notifications.cancel(value)
     }
 
     @discardableResult private func reconcile(at date: Date) -> Bool {
@@ -105,8 +147,11 @@ final class AppStore {
         let priorDeadline = value.deadline
         guard TimerEngine.reconcile(&value, now: date) else { return false }
         record(value, outcome: .completed, endedAt: priorDeadline ?? date, activeDuration: value.duration)
+        let completedSession = data.sessions.last?.id
+        notifications.completed(value); audio.stop()
         if value.kind == .focus {
             data.completedFocusCount += 1
+            completionSessionID = completedSession
             data.activeTimer = timer(for: suggestedBreak)
         } else {
             data.activeTimer = timer(for: .focus)
@@ -123,6 +168,20 @@ final class AppStore {
     }
 
     private func timer(for kind: TimerKind) -> TimerState { TimerState(kind: kind, duration: data.settings.duration(for: kind)) }
+    private func checkpoint(force: Bool = false) {
+        guard var value = data.activeTimer, value.kind == .focus, value.status == .running else { return }
+        let elapsed = TimerEngine.activeDuration(value, now: now)
+        guard force || elapsed - value.elapsedBeforePause >= 5 else { return }
+        value.elapsedBeforePause = elapsed // Deadline remains authoritative while running.
+        data.activeTimer = value; save()
+    }
+    private func syncServices(for value: TimerState) {
+        if value.status == .running {
+            notifications.schedule(timer: value)
+            do { try audio.play(value.kind == .focus ? data.settings.focusSound : data.settings.breakSound, volume: data.settings.soundVolume); audioError = nil }
+            catch { audioError = "Ambient sound unavailable: \(error.localizedDescription)" }
+        } else { notifications.cancel(value); audio.stop() }
+    }
     private func save() {
         guard !persistenceLocked else { return }
         do {
