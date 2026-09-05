@@ -24,7 +24,12 @@ struct MainView: View {
       VStack(spacing: 0) {
         Group {
           switch store.selection ?? .focus {
-          case .focus: FocusView(store: store)
+          case .focus:
+            if let id = store.completionSessionID {
+              ReflectionView(store: store, sessionID: id).padding(24)
+            } else {
+              FocusView(store: store)
+            }
           case .history: HistoryView(store: store)
           case .reminders: RemindersView(store: store)
           }
@@ -53,7 +58,7 @@ struct MainView: View {
     }
     .frame(
       width: store.selection == .history ? 640 : 420,
-      height: (store.selection ?? .focus) == .focus && store.completionSessionID != nil ? 600 : 520
+      height: 520
     )
     .tint(IntervalTheme.accent).preferredColorScheme(.dark)
     .safeAreaInset(edge: .bottom) {
@@ -73,12 +78,12 @@ struct FocusView: View {
   var body: some View {
     VStack(spacing: 0) {
       ScrollView {
-        VStack(spacing: store.completionSessionID == nil ? 12 : 8) {
+        VStack(spacing: 12) {
           VStack(spacing: 4) {
             Text(store.timer.kind.title).font(.callout).foregroundStyle(.secondary)
             Text(durationString(store.remaining)).font(
               .system(
-                size: store.completionSessionID == nil ? 68 : 48, weight: .light, design: .rounded)
+                size: 68, weight: .light, design: .rounded)
             )
             .monospacedDigit().contentTransition(reduceMotion ? .identity : .numericText())
             .accessibilityLabel(timerAccessibilityLabel)
@@ -97,9 +102,6 @@ struct FocusView: View {
           }
           .overlay(alignment: .trailing) { cycleActions.offset(x: 38) }
           cycleIndicator
-          if let id = store.completionSessionID {
-            ReflectionView(store: store, sessionID: id).frame(maxWidth: 440)
-          }
           messageStack.font(.caption)
         }.padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 16)
           .frame(maxWidth: .infinity)
@@ -118,13 +120,12 @@ struct FocusView: View {
   }
   @ViewBuilder private var cycleActions: some View {
     if store.timer.status == .running || store.timer.status == .paused {
-      Menu {
-        Button("Abandon Cycle…", role: .destructive) { confirmingAbandon = true }
+      Button {
+        confirmingAbandon = true
       } label: {
-        Image(systemName: "ellipsis").font(.system(size: 14)).frame(width: 26, height: 26)
-      }
-      .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-      .accessibilityLabel("Cycle actions").help("Cycle actions")
+        Image(systemName: "stop.fill").font(.system(size: 11)).frame(width: 26, height: 26)
+      }.buttonStyle(.plain).foregroundStyle(.secondary)
+        .accessibilityLabel("Abandon cycle").help("Abandon cycle")
     }
   }
   private var progress: Double {
@@ -463,25 +464,33 @@ struct ReflectionView: View {
       set: { store.updateSession(id: sessionID, feedback: feedback.wrappedValue, journal: $0) })
   }
   var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      Text("How did that focus feel?").font(.headline)
-      HStack {
+    VStack(spacing: 22) {
+      Spacer(minLength: 0)
+      Text("Focus complete").font(.title2.weight(.semibold))
+      HStack(spacing: 8) {
         ForEach(SessionFeedback.allCases, id: \.self) { value in
           let selected = feedback.wrappedValue == value
           Button {
             setFeedback(value)
           } label: {
-            Label(value.title, systemImage: selected ? "checkmark.circle.fill" : "circle")
+            VStack(spacing: 8) {
+              Text(value == .distracted ? "🫠" : value == .neutral ? "😐" : "🎯").font(
+                .system(size: 28))
+              Text(value.title).font(.caption)
+            }.frame(maxWidth: .infinity).padding(.vertical, 14)
+              .background(
+                selected ? Color.blue.opacity(0.22) : .white.opacity(0.05),
+                in: RoundedRectangle(cornerRadius: 12))
           }
-          .buttonStyle(.bordered).tint(selected ? IntervalTheme.accent : .secondary)
+          .buttonStyle(.plain).accessibilityLabel(value.title)
           .accessibilityAddTraits(feedback.wrappedValue == value ? .isSelected : [])
         }
       }
-      LabeledContent("Journal (optional)") { TextField("Add a thought", text: journal) }
-      HStack {
-        Spacer()
-        Button("Done", action: store.deferReflection).buttonStyle(.bordered)
-      }
+      TextField("Add a thought…", text: journal).accessibilityLabel("Journal")
+        .onSubmit { store.continueAfterReflection() }
+      Button("Continue") { store.continueAfterReflection() }
+        .buttonStyle(IntervalPrimaryButton()).keyboardShortcut(.defaultAction)
+      Spacer(minLength: 0)
     }
   }
   private func setFeedback(_ value: SessionFeedback) { feedback.wrappedValue = value }
@@ -545,23 +554,20 @@ struct MenuBarView: View {
         }
         Spacer()
         HStack(spacing: 8) {
-          Button(primaryTitle, action: store.startOrToggle).buttonStyle(IntervalPrimaryButton())
-          if store.timer.status == .running || store.timer.status == .paused {
-            Menu {
-              Button("Abandon Cycle…", role: .destructive) { confirmingAbandon = true }
-            } label: {
-              Image(systemName: "ellipsis")
+          Button(store.completionSessionID == nil ? primaryTitle : "Review") {
+            store.startOrToggle()
+            if store.completionSessionID != nil {
+              openWindow(id: "main")
+              NSApp.activate(ignoringOtherApps: true)
             }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().accessibilityLabel(
-              "Cycle actions")
+          }.buttonStyle(IntervalPrimaryButton())
+          if store.timer.status == .running || store.timer.status == .paused {
+            Button {
+              confirmingAbandon = true
+            } label: {
+              Image(systemName: "stop.fill").frame(width: 26, height: 26)
+            }.buttonStyle(.plain).accessibilityLabel("Abandon cycle").help("Abandon cycle")
           }
-        }
-      }
-      if store.completionSessionID != nil {
-        Button("Open Reflection") {
-          store.showFocus()
-          openWindow(id: "main")
-          NSApp.activate(ignoringOtherApps: true)
         }
       }
       Divider()

@@ -25,12 +25,18 @@ struct AppStoreTests {
           startedAt: deadline.addingTimeInterval(-1500), deadline: deadline)
         store.reconcile(at: deadline)
         #expect(store.data.completedFocusCount == count)
-        #expect(store.timer.status == .running)
+        #expect(store.timer.status == .ready)
         #expect(store.timer.kind == (count == 4 ? .longBreak : .shortBreak))
-        #expect(store.timer.startedAt == deadline)
+        #expect(store.timer.startedAt == nil)
+        #expect(store.completionSessionID == store.data.sessions.last?.id)
         #expect(store.data.sessions.count == count * 2 - 1)
         #expect(store.data.sessions.last?.endedAt == deadline)
         #expect(store.data.sessions.last?.activeDuration == 1500)
+
+        store.continueAfterReflection(at: deadline)
+        #expect(store.completionSessionID == nil)
+        #expect(store.timer.status == .running)
+        #expect(store.timer.startedAt == deadline)
 
         let breakDeadline = deadline.addingTimeInterval(store.timer.duration)
         store.reconcile(at: breakDeadline)
@@ -89,7 +95,7 @@ struct AppStoreTests {
     }
   }
 
-  @Test func pauseAtBoundaryCompletesButDoesNotRunNextPhase() throws {
+  @Test func startAtBoundaryCompletesButDoesNotRunNextPhase() throws {
     try withStore { store, _ in
       let deadline = Date().addingTimeInterval(-1)
       store.data.activeTimer = TimerState(
@@ -101,8 +107,9 @@ struct AppStoreTests {
       #expect(store.data.sessions.count == 1)
       #expect(store.data.sessions[0].outcome == .completed)
       #expect(store.timer.kind == .shortBreak)
-      #expect(store.timer.status == .paused)
+      #expect(store.timer.status == .ready)
       #expect(store.timer.elapsedBeforePause == 0)
+      #expect(store.completionSessionID == store.data.sessions[0].id)
     }
   }
 
@@ -120,6 +127,7 @@ struct AppStoreTests {
       #expect(store.data.completedFocusCount == 1)
       #expect(store.timer.kind == .focus)
       #expect(store.timer.status == .ready)
+      #expect(store.completionSessionID == nil)
     }
   }
 
@@ -142,7 +150,7 @@ struct AppStoreTests {
     }
   }
 
-  @Test func lateTransitionRecordsOnceAndStartsNextAtObservationDate() throws {
+  @Test func lateFocusTransitionWaitsForReflectionAndStartsAtContinueDate() throws {
     try withStore { store, _ in
       let deadline = Date(timeIntervalSince1970: 10_000)
       let observedAt = deadline.addingTimeInterval(86_400)
@@ -154,11 +162,60 @@ struct AppStoreTests {
       #expect(store.data.sessions.count == 1)
       #expect(store.data.sessions[0].endedAt == deadline)
       #expect(store.timer.kind == .shortBreak)
-      #expect(store.timer.status == .running)
-      #expect(store.timer.startedAt == observedAt)
-      #expect(store.timer.deadline == observedAt.addingTimeInterval(300))
+      #expect(store.timer.status == .ready)
+      #expect(store.timer.startedAt == nil)
+      #expect(store.timer.deadline == nil)
+      #expect(store.completionSessionID == store.data.sessions[0].id)
       #expect(!store.reconcile(at: observedAt))
+      #expect(!store.reconcile(at: observedAt.addingTimeInterval(86_400)))
       #expect(store.data.sessions.count == 1)
+
+      let continuedAt = observedAt.addingTimeInterval(90_000)
+      store.continueAfterReflection(at: continuedAt)
+      #expect(store.completionSessionID == nil)
+      #expect(store.timer.status == .running)
+      #expect(store.timer.startedAt == continuedAt)
+      #expect(store.timer.deadline == continuedAt.addingTimeInterval(300))
+
+      let startedBreak = store.timer
+      store.continueAfterReflection(at: continuedAt.addingTimeInterval(1))
+      #expect(store.timer == startedBreak)
+    }
+  }
+
+  @Test func selectingFeedbackDoesNotStartPendingBreak() throws {
+    try withStore { store, _ in
+      let deadline = Date(timeIntervalSince1970: 10_000)
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 1500, status: .running,
+        startedAt: deadline.addingTimeInterval(-1500), deadline: deadline)
+      store.reconcile(at: deadline)
+      let sessionID = try #require(store.completionSessionID)
+
+      store.updateSession(id: sessionID, feedback: .focused, journal: "Done")
+
+      #expect(store.completionSessionID == sessionID)
+      #expect(store.timer.kind == .shortBreak)
+      #expect(store.timer.status == .ready)
+    }
+  }
+
+  @Test func startOrToggleCannotBypassPendingReflection() throws {
+    try withStore { store, _ in
+      let deadline = Date().addingTimeInterval(-1)
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 1500, status: .running,
+        startedAt: deadline.addingTimeInterval(-1500), deadline: deadline)
+      store.reconcile(at: deadline)
+      let sessionID = store.completionSessionID
+      store.selection = .history
+
+      store.startOrToggle()
+
+      #expect(store.selection == .focus)
+      #expect(store.completionSessionID == sessionID)
+      #expect(store.timer.kind == .shortBreak)
+      #expect(store.timer.status == .ready)
     }
   }
 
@@ -190,16 +247,55 @@ struct AppStoreTests {
         timerID: UUID(), kind: .focus, startedAt: now.addingTimeInterval(-1500),
         endedAt: now, plannedDuration: 1500, activeDuration: 1500, outcome: .completed)
       store.data.sessions = [session]
+      store.data.activeTimer = TimerState(kind: .shortBreak, duration: 300, status: .ready)
       store.completionSessionID = session.id
       store.updateSession(id: session.id, feedback: .focused, journal: "A useful insight")
       #expect(store.completionSessionID == session.id)
       store.updateScratchpad("Keep this across sessions")
       store.appendQuickNote("Another thought")
-      store.deferReflection()
+      store.continueAfterReflection(at: now.addingTimeInterval(1))
       let saved = try persistence.load()
       #expect(saved.sessions[0].feedback == "focused")
       #expect(saved.sessions[0].journal == "A useful insight")
       #expect(saved.scratchpad == "Keep this across sessions\nAnother thought")
+    }
+  }
+
+  @Test func restorePendingReflectionDespiteSavedFeedback() throws {
+    try withStore { _, persistence in
+      let endedAt = Date(timeIntervalSince1970: 10_000)
+      let session = SessionRecord(
+        timerID: UUID(), kind: .focus, startedAt: endedAt.addingTimeInterval(-1500),
+        endedAt: endedAt, plannedDuration: 1500, activeDuration: 1500, outcome: .completed,
+        feedback: "focused")
+      let breakTimer = TimerState(kind: .shortBreak, duration: 300, status: .ready)
+      try persistence.save(PersistedData(activeTimer: breakTimer, sessions: [session]))
+
+      let restored = AppStore(
+        persistence: persistence, calendarService: CalendarService(fixtureEvents: []),
+        runtimeEnabled: false)
+
+      #expect(restored.completionSessionID == session.id)
+    }
+  }
+
+  @Test func restoreDoesNotShowOldReflectionDuringActiveFocus() throws {
+    try withStore { _, persistence in
+      let endedAt = Date(timeIntervalSince1970: 10_000)
+      let session = SessionRecord(
+        timerID: UUID(), kind: .focus, startedAt: endedAt.addingTimeInterval(-1500),
+        endedAt: endedAt, plannedDuration: 1500, activeDuration: 1500, outcome: .completed)
+      let focusStart = endedAt.addingTimeInterval(300)
+      let activeFocus = TimerState(
+        kind: .focus, duration: 1500, status: .running, startedAt: focusStart,
+        deadline: focusStart.addingTimeInterval(1500))
+      try persistence.save(PersistedData(activeTimer: activeFocus, sessions: [session]))
+
+      let restored = AppStore(
+        persistence: persistence, calendarService: CalendarService(fixtureEvents: []),
+        runtimeEnabled: false)
+
+      #expect(restored.completionSessionID == nil)
     }
   }
 

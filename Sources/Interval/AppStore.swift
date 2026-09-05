@@ -69,15 +69,16 @@ final class AppStore {
         enabled: data.settings.calendarIntegrationEnabled,
         selectedCalendarIDs: data.settings.selectedCalendarIDs)
     }
-    completionSessionID =
-      data.sessions.last(where: {
-        $0.kind == .focus && $0.outcome == .completed && $0.feedback == nil
-      })?.id
+    if timer.kind != .focus, timer.status == .ready,
+      let completed = data.sessions.last, completed.kind == .focus, completed.outcome == .completed
+    {
+      completionSessionID = completed.id
+    }
     guard runtimeEnabled else { return }
     updates.shouldDeferInstall = { [weak self] in
       guard let self else { return false }
       return self.timer.status == .running || self.timer.status == .paused
-        || self.reminderOverlay != nil
+        || self.reminderOverlay != nil || self.completionSessionID != nil
     }
     updates.prepareForInstall = { [weak self] in self?.checkpointForTermination() }
     updates.start()
@@ -266,6 +267,10 @@ final class AppStore {
   }
 
   func startOrToggle() {
+    if completionSessionID != nil {
+      showFocus()
+      return
+    }
     let actionDate = Date()
     now = actionDate
     // A Pause click at the deadline must pause the cycle, not start another phase.
@@ -290,6 +295,7 @@ final class AppStore {
     let actionDate = Date()
     now = actionDate
     if reconcile(at: actionDate, autoStart: false) {
+      completionSessionID = nil
       data.activeTimer = timer(for: .focus)
       save()
       return
@@ -321,7 +327,18 @@ final class AppStore {
     data.sessions[index].journal = journal.isEmpty ? nil : journal
     save()
   }
-  func deferReflection() { completionSessionID = nil }
+  func continueAfterReflection(at date: Date = Date()) {
+    guard completionSessionID != nil else { return }
+    completionSessionID = nil
+    guard var next = data.activeTimer, next.kind != .focus, next.status == .ready else { return }
+    now = date
+    TimerEngine.start(&next, now: date)
+    data.activeTimer = next
+    inAppNotification = nil
+    save()
+    syncServices(for: next)
+    tickReminders(at: date)
+  }
   func showFocus() { selection = .focus }
   func exportData(to url: URL) throws {
     let encoder = JSONEncoder()
@@ -489,7 +506,11 @@ final class AppStore {
     if value.kind == .focus {
       data.completedFocusCount += 1
       completionSessionID = completedSession
+      showFocus()
       data.activeTimer = timer(for: suggestedBreak)
+      save()
+      syncServices(for: timer)
+      return true
     } else {
       data.activeTimer = timer(for: .focus)
     }

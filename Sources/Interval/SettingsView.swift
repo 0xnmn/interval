@@ -83,7 +83,7 @@ struct SettingsView: View {
           Stepper(
             "Long break every \(store.data.settings.longBreakEvery) focus completions",
             value: setting(\.longBreakEvery), in: 1...12)
-          Text("Focus and breaks advance automatically.")
+          Text("Continue after feedback to start your break.")
             .font(.caption).foregroundStyle(.secondary)
         }
       }

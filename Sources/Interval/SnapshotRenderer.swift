@@ -44,10 +44,9 @@ struct SnapshotRequest {
   static func fixture(scene: String) -> PersistedData {
     let timerID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
     var timer = TimerState(id: timerID, kind: .focus, duration: 1_500, status: .ready)
-    if scene == "reflection" {
+    if scene.hasPrefix("reflection") {
       timer = TimerState(
-        id: timerID, kind: .shortBreak, duration: 300, status: .running,
-        startedAt: fixtureNow, deadline: fixtureNow.addingTimeInterval(300))
+        id: timerID, kind: .shortBreak, duration: 300, status: .ready)
     }
     if scene == "paused" || scene == "menu" {
       timer.status = .paused
@@ -150,9 +149,9 @@ struct SnapshotRequest {
     case "updates-settings":
       size = NSSize(width: 560, height: 450)
       view = AnyView(SettingsView(store: store, selectedTab: 4))
-    case "reflection":
+    case "reflection", "reflection-selected":
       store.completionSessionID = store.data.sessions.first?.id
-      size = NSSize(width: 420, height: 600)
+      size = NSSize(width: 420, height: 520)
       view = AnyView(MainView(store: store))
     case "menu":
       size = NSSize(width: 320, height: 260)

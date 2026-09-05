@@ -18,8 +18,8 @@ The default build targets the build Mac's architecture. It is a local developmen
 
 ## Use Interval
 
-- **Focus cycle:** Start once. Interval automatically alternates 25-minute focus sessions and 5-minute breaks, with a 10-minute long break after every four completed focus sessions. All four values are configurable. Pause/Resume controls the current phase; Abandon stops the cycle. There is no manual mode picker.
-- **Reflect:** completed focus sessions are saved immediately. Choose Distracted, Neutral, or Focused and optionally journal without delaying your break. Edit reflections later in Stats.
+- **Focus cycle:** 25-minute focus sessions alternate with 5-minute breaks, with a 10-minute long break after every four completed focus sessions. All four values are configurable. Focus completion waits for feedback; Continue starts the break. Break completion automatically starts focus. Pause/Resume controls the current phase; the direct stop button abandons the cycle with confirmation.
+- **Reflect:** completed focus sessions are saved immediately. A dedicated completion screen offers Distracted, Neutral, or Focused emoji choices and a thought field. Press Continue or Enter to start the break. Edit reflections later in Stats. Old unanswered feedback never interrupts a new focus session.
 - **Scratchpad:** one autosaved note across every session, always visible below the timer. The menu-bar quick-note field appends to it.
 - **Stats:** month calendar and chronological daily sessions, with active duration and outcome. Calendar events are a separate visual category, not fabricated focus records.
 - **Sound:** Silence, Brown Noise, Rain, or Ocean, generated locally with separate focus/break choices and volume.
