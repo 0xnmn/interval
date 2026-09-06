@@ -302,6 +302,24 @@ public enum ReminderPresentation: String, Codable, CaseIterable, Sendable {
   public var title: String { rawValue.capitalized }
 }
 
+public enum ReminderPosition: String, Codable, CaseIterable, Sendable {
+  case topLeft, topRight, bottomLeft, bottomRight, center
+  public var title: String {
+    switch self {
+    case .topLeft: "Top left"
+    case .topRight: "Top right"
+    case .bottomLeft: "Bottom left"
+    case .bottomRight: "Bottom right"
+    case .center: "Center"
+    }
+  }
+}
+
+public enum ReminderSound: String, Codable, CaseIterable, Sendable {
+  case none, glass, ping, pop
+  public var title: String { rawValue.capitalized }
+}
+
 public struct Reminder: Identifiable, Codable, Equatable, Sendable {
   public var id: UUID
   public var title: String
@@ -311,6 +329,8 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
   public var intervalSeconds: TimeInterval
   public var displaySeconds: TimeInterval
   public var presentation: ReminderPresentation
+  public var position: ReminderPosition
+  public var sound: ReminderSound
   public var suppressDuringFocus: Bool
   public var suppressDuringCalendar: Bool
   public var dueAt: Date?
@@ -325,7 +345,7 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
     displaySeconds: TimeInterval = 10,
     presentation: ReminderPresentation = .floating, suppressDuringFocus: Bool = true,
     suppressDuringCalendar: Bool = true, dueAt: Date? = nil, snoozedUntil: Date? = nil,
-    isEnabled: Bool = true
+    isEnabled: Bool = true, position: ReminderPosition = .center, sound: ReminderSound = .none
   ) {
     self.id = id
     self.title = title
@@ -335,6 +355,8 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
     self.intervalSeconds = intervalSeconds
     self.displaySeconds = displaySeconds
     self.presentation = presentation
+    self.position = position
+    self.sound = sound
     self.suppressDuringFocus = suppressDuringFocus
     self.suppressDuringCalendar = suppressDuringCalendar
     self.dueAt = dueAt
@@ -352,13 +374,15 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
     value.emojiSize = emojiSize.isFinite ? emojiSize.clamped(to: 32...180) : 72
     value.intervalSeconds =
       intervalSeconds.isFinite ? intervalSeconds.clamped(to: 60...86_400) : 1_200
-    value.displaySeconds = displaySeconds.isFinite ? displaySeconds.clamped(to: 3...600) : 10
+    value.displaySeconds =
+      displaySeconds.isFinite
+      ? displaySeconds.clamped(to: (presentation == .fullscreen ? 5 : 2)...600) : 10
     return value
   }
 
   private enum CodingKeys: String, CodingKey {
     case id, title, message, emoji, emojiSize, intervalSeconds, displaySeconds, presentation,
-      suppressDuringFocus, suppressDuringCalendar, dueAt, snoozedUntil, isEnabled
+      suppressDuringFocus, suppressDuringCalendar, dueAt, snoozedUntil, isEnabled, position, sound
   }
   public init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -371,6 +395,8 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
     displaySeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .displaySeconds) ?? 10
     presentation =
       try c.decodeIfPresent(ReminderPresentation.self, forKey: .presentation) ?? .floating
+    position = try c.decodeIfPresent(ReminderPosition.self, forKey: .position) ?? .center
+    sound = try c.decodeIfPresent(ReminderSound.self, forKey: .sound) ?? .none
     suppressDuringFocus = try c.decodeIfPresent(Bool.self, forKey: .suppressDuringFocus) ?? true
     suppressDuringCalendar =
       try c.decodeIfPresent(Bool.self, forKey: .suppressDuringCalendar) ?? true

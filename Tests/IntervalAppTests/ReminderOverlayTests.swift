@@ -77,17 +77,35 @@ struct ReminderOverlayTests {
       .reminder(reminderID: reminder.id, shownAt: Date()), reminder: reminder, store: store)
     let panel = try #require(
       NSApp.windows.first { !existing.contains($0.windowNumber) } as? NSPanel)
-    let expected = NSRect(
-      x: screen.visibleFrame.midX - 260, y: screen.visibleFrame.midY - 240,
-      width: 520, height: 480)
+    let expected = ReminderOverlayController.floatingFrame(
+      size: ReminderOverlayController.floatingSize(for: reminder), in: screen.visibleFrame,
+      position: .center)
 
     #expect(panel.frame == expected)
     #expect(panel.level == .floating)
     #expect(panel.styleMask == [.borderless, .nonactivatingPanel])
     #expect(!panel.styleMask.contains(.fullScreen))
     #expect(panel.hasShadow)
+    #expect(panel.isMovable)
+    #expect(panel.isMovableByWindowBackground)
     controller.close()
     #expect(!panel.isVisible)
+  }
+
+  @Test(arguments: ReminderPosition.allCases)
+  func floatingGeometryUsesVisibleFrameAndSelectedPosition(position: ReminderPosition) {
+    let visible = NSRect(x: -1440, y: 25, width: 1400, height: 875)
+    let size = NSSize(width: 480, height: 300)
+    let frame = ReminderOverlayController.floatingFrame(
+      size: size, in: visible, position: position)
+    let expectedOrigins: [ReminderPosition: NSPoint] = [
+      .topLeft: NSPoint(x: -1416, y: 576),
+      .topRight: NSPoint(x: -544, y: 576),
+      .bottomLeft: NSPoint(x: -1416, y: 49),
+      .bottomRight: NSPoint(x: -544, y: 49),
+      .center: NSPoint(x: -980, y: 312.5),
+    ]
+    #expect(frame == NSRect(origin: expectedOrigins[position]!, size: size))
   }
 
   @Test(arguments: [ReminderPresentation.floating, .fullscreen])
@@ -119,10 +137,69 @@ struct ReminderOverlayTests {
         charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53))
     panel.sendEvent(escape)
 
+    #expect(store.reminderOverlay != nil)
+    if case .reminder(let id, let shownAt) = store.reminderOverlay {
+      store.dismissReminder(id, at: shownAt.addingTimeInterval(5))
+    }
+
     #expect(store.reminderOverlay == nil)
     #expect(store.data.reminders == before)
     controller.close()
     #expect(!panel.isVisible)
+  }
+
+  @Test func cuePlaysOnceForOccurrenceAndNotForWarningOrDisplayRebuild() {
+    _ = NSApplication.shared
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = AppStore(
+      persistence: JSONStore(fileURL: directory.appendingPathComponent("data.json")),
+      runtimeEnabled: false)
+    let reminder = Reminder(title: "Look away", sound: .ping)
+    var cues: [ReminderSound] = []
+    let controller = ReminderOverlayController(playCue: { cues.append($0) })
+    defer { controller.close() }
+    controller.update(
+      .warning(reminderID: reminder.id, remaining: 1, isPaused: false), reminder: reminder,
+      store: store)
+    #expect(cues.isEmpty)
+    let shownAt = Date()
+    controller.update(
+      .reminder(reminderID: reminder.id, shownAt: shownAt), reminder: reminder, store: store)
+    controller.update(
+      .reminder(reminderID: reminder.id, shownAt: shownAt), reminder: reminder, store: store)
+    NotificationCenter.default.post(
+      name: NSApplication.didChangeScreenParametersNotification, object: NSApp)
+    #expect(cues == [.ping])
+    controller.update(
+      .reminder(reminderID: reminder.id, shownAt: shownAt.addingTimeInterval(60)),
+      reminder: reminder, store: store)
+    #expect(cues == [.ping, .ping])
+  }
+
+  @Test func dismissRequiresActiveReminderAndFiveSeconds() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = AppStore(
+      persistence: JSONStore(fileURL: directory.appendingPathComponent("data.json")),
+      runtimeEnabled: false)
+    var reminder = Reminder(title: "Look away")
+    let dueAt = Date(timeIntervalSince1970: 10_000)
+    reminder.dueAt = dueAt
+    store.data.reminders = [reminder]
+    let shownAt = Date(timeIntervalSince1970: 20_000)
+
+    store.reminderOverlay = .warning(reminderID: reminder.id, remaining: 1, isPaused: false)
+    store.dismissReminder(reminder.id, at: shownAt.addingTimeInterval(10))
+    #expect(store.data.reminders[0].dueAt == dueAt)
+    store.reminderOverlay = .reminder(reminderID: reminder.id, shownAt: shownAt)
+    store.dismissReminder(reminder.id, at: shownAt.addingTimeInterval(4.99))
+    #expect(store.reminderOverlay != nil)
+    #expect(store.data.reminders[0].dueAt == dueAt)
+    store.dismissReminder(reminder.id, at: shownAt.addingTimeInterval(5))
+    #expect(store.reminderOverlay == nil)
+    // Preserve the recurrence anchor, coalescing missed intervals into the next future slot.
+    #expect(store.data.reminders[0].dueAt == dueAt.addingTimeInterval(9 * reminder.intervalSeconds))
   }
 
   @Test func warningReusesHostingViewAndReleasesController() throws {
@@ -179,7 +256,10 @@ struct ReminderOverlayTests {
     let panel = try #require(NSApp.windows.first { !existing.contains($0.windowNumber) })
     let initialOrigin = panel.frame.origin
     // No reminder update calls: movement must be driven by display refresh, not the 250ms ticker.
-    try await Task.sleep(for: .milliseconds(200))
+    for _ in 0..<20 {
+      if samples > 2 { break }
+      try await Task.sleep(for: .milliseconds(50))
+    }
     #expect(samples > 2)
     #expect(panel.frame.origin != initialOrigin)
     controller.close()

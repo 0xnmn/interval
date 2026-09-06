@@ -681,6 +681,11 @@ struct AppStoreTests {
       #expect(store.data.reminders == before)
       store.previewReminder(id)
       store.dismissReminder(id)
+      #expect(store.reminderOverlay != nil)
+      if case .reminder(_, let shownAt) = store.reminderOverlay {
+        store.dismissReminder(id, at: shownAt.addingTimeInterval(5))
+      }
+      #expect(store.reminderOverlay == nil)
       #expect(store.data.reminders == before)
     }
   }

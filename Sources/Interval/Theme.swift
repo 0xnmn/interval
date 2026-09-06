@@ -6,6 +6,8 @@ enum IntervalTheme {
   static let accent = Color.accentColor
   static let surface = Color(white: 0.12)
   static let border = Color.white.opacity(0.07)
+  static let body = Font.system(size: 14)
+  static let heading = Font.system(size: 14, weight: .semibold)
 }
 
 extension PhaseColor {
@@ -31,7 +33,7 @@ struct IntervalIconButton: ButtonStyle {
       .font(.system(size: 17, weight: .medium))
       .frame(width: 36, height: 36)
       .background(
-        .white.opacity(configuration.isPressed ? 0.14 : hovering ? 0.08 : 0),
+        .white.opacity(configuration.isPressed ? 0.18 : hovering ? 0.12 : 0.06),
         in: RoundedRectangle(cornerRadius: 9)
       )
       .contentShape(RoundedRectangle(cornerRadius: 9))

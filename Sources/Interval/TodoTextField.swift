@@ -20,7 +20,7 @@ struct TodoTextField: NSViewRepresentable {
     field.isSelectable = true
     field.isBordered = false
     field.drawsBackground = false
-    field.font = .preferredFont(forTextStyle: .body)
+    field.font = .systemFont(ofSize: 14)
     field.placeholderString = "To-do"
     field.maximumNumberOfLines = 5
     field.delegate = context.coordinator

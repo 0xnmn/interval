@@ -41,6 +41,7 @@ struct SettingsView: View {
         ) {
           ForEach(destinations) { destination in
             Label(destination.title, systemImage: destination.systemImage)
+              .font(.system(size: 14))
               .frame(height: 28)
               .tag(destination.id)
           }
@@ -57,11 +58,12 @@ struct SettingsView: View {
 
           if let error = store.persistenceError ?? store.notificationError {
             Label(error, systemImage: "exclamationmark.triangle.fill")
-              .font(.caption)
+              .font(.system(size: 14))
               .foregroundStyle(.red)
           }
 
           selectedContent
+            .font(.system(size: 14))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .padding(18)
@@ -94,7 +96,7 @@ struct SettingsView: View {
             }
           }
           Text("Continue from feedback to begin your break.")
-            .font(.caption).foregroundStyle(.secondary)
+            .font(.system(size: 14)).foregroundStyle(.secondary)
         }
         SettingsSection("Colors") {
           phaseColorPicker("Focus color", selection: phaseColorSetting(\.focusColor))
@@ -268,7 +270,7 @@ private struct SettingsSection<Content: View>: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       Text(title)
-        .font(.caption.weight(.semibold))
+        .font(.system(size: 14, weight: .semibold))
         .foregroundStyle(.secondary)
       VStack(alignment: .leading, spacing: 10) { content }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -311,20 +313,22 @@ private struct GeneralSettingsView: View {
             "Approval is required in System Settings → General → Login Items.",
             systemImage: "exclamationmark.circle")
         }
-        if let loginMessage { Text(loginMessage).font(.caption).foregroundStyle(.red) }
+        if let loginMessage { Text(loginMessage).font(.system(size: 14)).foregroundStyle(.red) }
       }
       SettingsSection("Local data") {
         DisclosureGroup("Storage location") {
           Text(store.storageURL.path(percentEncoded: false))
-            .font(.caption)
+            .font(.system(size: 14))
             .foregroundStyle(.secondary)
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
         }
         Button("Export Data…", action: exportData)
-        if let exportMessage { Text(exportMessage).font(.caption).foregroundStyle(.secondary) }
+        if let exportMessage {
+          Text(exportMessage).font(.system(size: 14)).foregroundStyle(.secondary)
+        }
         Text("Exports local settings and activity; calendar event contents are excluded.")
-          .font(.caption).foregroundStyle(.secondary)
+          .font(.system(size: 14)).foregroundStyle(.secondary)
       }
       SettingsSection("Privacy") {
         Text("No analytics or cloud storage; network access is only for updates.")
@@ -363,7 +367,7 @@ private struct UpdatesSettingsView: View {
     SettingsPage {
       SettingsSection(store.updates.isConfigured ? "Updates" : "Updates unavailable") {
         Text(store.updates.configurationMessage)
-          .font(.caption)
+          .font(.system(size: 14))
           .foregroundStyle(store.updates.isConfigured ? Color.secondary : Color.orange)
         Toggle(
           isOn: Binding(
@@ -403,7 +407,7 @@ private struct CalendarSettingsView: View {
           Text(
             "macOS calls this Full Access. Interval only reads selected calendars and never changes events."
           )
-          .font(.caption).foregroundStyle(.secondary)
+          .font(.system(size: 14)).foregroundStyle(.secondary)
         case .fullAccess:
           Toggle(
             isOn: Binding(
@@ -436,7 +440,7 @@ private struct CalendarSettingsView: View {
               }
               if store.data.settings.selectedCalendarIDs.isEmpty {
                 Text("No calendars selected. No events will be displayed or suppress reminders.")
-                  .font(.caption).foregroundStyle(.secondary)
+                  .font(.system(size: 14)).foregroundStyle(.secondary)
               }
             }
           }

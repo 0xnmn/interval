@@ -231,12 +231,15 @@ final class AppStore {
     cancelOverlay(for: id)
     save()
   }
-  func dismissReminder(_ id: UUID) {
+  func dismissReminder(_ id: UUID, at date: Date = Date()) {
+    guard case .reminder(let visibleID, let shownAt) = reminderOverlay,
+      visibleID == id, date.timeIntervalSince(shownAt) >= 5
+    else { return }
     if previewReminderID == id {
       cancelOverlay(for: id)
       return
     }
-    reminderEngine.dismiss(id, reminders: &data.reminders, now: Date())
+    reminderEngine.dismiss(id, reminders: &data.reminders, now: date)
     cancelOverlay(for: id)
     save()
   }

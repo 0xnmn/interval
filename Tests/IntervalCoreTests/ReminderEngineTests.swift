@@ -110,6 +110,36 @@ import Testing
     #expect(value.message == "Time for a short break.")
     #expect(value.intervalSeconds == 1200)
     #expect(value.presentation == .floating)
+    #expect(value.position == .center)
+    #expect(value.sound == .none)
     #expect(value.suppressDuringFocus)
+  }
+
+  @Test func displayPreferencesRoundTripAndRespectPresentationMinimums() throws {
+    var value = Reminder(title: "Stretch", displaySeconds: 1, position: .bottomRight, sound: .glass)
+    #expect(value.clamped().displaySeconds == 2)
+    value.presentation = .fullscreen
+    #expect(value.clamped().displaySeconds == 5)
+    let restored = try JSONDecoder().decode(Reminder.self, from: JSONEncoder().encode(value))
+    #expect(restored.position == .bottomRight)
+    #expect(restored.sound == .glass)
+  }
+
+  @Test func twoSecondFloatingReminderFinishesWithoutSkip() {
+    var value = reminder()
+    value.displaySeconds = 2
+    var values = [value.clamped()]
+    var engine = ReminderEngine()
+    _ = engine.tick(reminders: &values, now: zero, environment: .init())
+    _ = engine.tick(
+      reminders: &values, now: zero.addingTimeInterval(10),
+      environment: .init(idleSeconds: 10))
+    #expect(engine.overlay == .reminder(reminderID: value.id, shownAt: zero.addingTimeInterval(10)))
+    _ = engine.tick(reminders: &values, now: zero.addingTimeInterval(11.9), environment: .init())
+    #expect(engine.overlay != nil)
+    _ = engine.tick(reminders: &values, now: zero.addingTimeInterval(12), environment: .init())
+    #expect(engine.overlay == nil)
+    #expect(values[0].dueAt == zero.addingTimeInterval(70))
+    #expect(values[0].intervalSeconds == 60)
   }
 }

@@ -26,9 +26,16 @@ enum UserIdleMonitor {
   private var cursorDisplayLink: CADisplayLink?
   private var previousActivationPolicy: NSApplication.ActivationPolicy?
   private let cursorLocation: () -> NSPoint
+  private let cueCallback: ((ReminderSound) -> Void)?
+  private var cueSound: NSSound?
+  private var lastCueOccurrence: CueOccurrence?
 
-  init(cursorLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation }) {
+  init(
+    cursorLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation },
+    playCue: ((ReminderSound) -> Void)? = nil
+  ) {
     self.cursorLocation = cursorLocation
+    self.cueCallback = playCue
     super.init()
     NotificationCenter.default.addObserver(
       self, selector: #selector(screensChanged),
@@ -55,7 +62,13 @@ enum UserIdleMonitor {
       return
     }
     guard overlay != shown else { return }
-    close()
+    let preservesCue: Bool
+    if case .reminder(let id, let shownAt) = overlay {
+      preservesCue = lastCueOccurrence == CueOccurrence(reminderID: id, shownAt: shownAt)
+    } else {
+      preservesCue = false
+    }
+    close(preservingCue: preservesCue)
     shown = overlay
     shownReminder = reminder
     shownStore = store
@@ -79,7 +92,8 @@ enum UserIdleMonitor {
       let link = panel.displayLink(target: target, selector: #selector(CursorFrameTarget.frame))
       link.add(to: .main, forMode: .common)
       cursorDisplayLink = link
-    case .reminder:
+    case .reminder(_, let shownAt):
+      playCueOnce(reminder.sound, reminderID: reminder.id, shownAt: shownAt)
       if reminder.presentation == .fullscreen {
         // Foreground apps cannot join another app's native fullscreen Space.
         // Act as an overlay utility only for the takeover, then restore the Dock presence.
@@ -97,7 +111,9 @@ enum UserIdleMonitor {
         let rect =
           reminder.presentation == .fullscreen
           ? screen.frame
-          : centered(size: NSSize(width: 520, height: 480), in: screen.visibleFrame)
+          : Self.floatingFrame(
+            size: Self.floatingSize(for: reminder), in: screen.visibleFrame,
+            position: reminder.position)
         let panel = EscapePanel(
           contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered,
           defer: false)
@@ -108,7 +124,8 @@ enum UserIdleMonitor {
         panel.isFloatingPanel = true
         // isFloatingPanel resets the level; apply the overlay level afterward.
         panel.level = fullscreen ? .screenSaver : .floating
-        panel.isMovable = false
+        panel.isMovable = !fullscreen
+        panel.isMovableByWindowBackground = !fullscreen
         panel.animationBehavior = .none
         panel.collectionBehavior = [
           .canJoinAllSpaces, .canJoinAllApplications, .fullScreenAuxiliary, .stationary,
@@ -120,8 +137,9 @@ enum UserIdleMonitor {
         panel.contentView = NSHostingView(
           rootView: ReminderTakeoverView(
             reminder: reminder,
-            dismiss: { store.dismissReminder(reminder.id) },
-            snooze: { store.snoozeReminder(reminder.id) }))
+            shownAt: shownAt,
+            skip: { store.dismissReminder(reminder.id) },
+            extend: { store.snoozeReminder(reminder.id, seconds: $0) }))
         panel.onEscape = { store.dismissReminder(reminder.id) }
         panel.sharingType = .none
         if screen == cursorScreen {
@@ -134,8 +152,12 @@ enum UserIdleMonitor {
     }
   }
 
-  func close() {
+  func close(preservingCue: Bool = false) {
     shownStore = nil
+    if !preservingCue {
+      cueSound?.stop()
+      cueSound = nil
+    }
     cursorDisplayLink?.invalidate()
     cursorDisplayLink = nil
     warningHost = nil
@@ -181,11 +203,55 @@ enum UserIdleMonitor {
       panel.setFrameOrigin(origin)
     }
   }
-  private func centered(size: NSSize, in rect: NSRect) -> NSRect {
-    NSRect(
-      x: rect.midX - size.width / 2, y: rect.midY - size.height / 2, width: size.width,
-      height: size.height)
+
+  static func floatingSize(for reminder: Reminder) -> NSSize {
+    NSSize(width: 480, height: max(320, reminder.clamped().emojiSize + 240))
   }
+
+  static func floatingFrame(
+    size: NSSize, in visibleFrame: NSRect, position: ReminderPosition, margin: CGFloat = 24
+  ) -> NSRect {
+    let x: CGFloat
+    let y: CGFloat
+    switch position {
+    case .topLeft:
+      x = visibleFrame.minX + margin
+      y = visibleFrame.maxY - size.height - margin
+    case .topRight:
+      x = visibleFrame.maxX - size.width - margin
+      y = visibleFrame.maxY - size.height - margin
+    case .bottomLeft:
+      x = visibleFrame.minX + margin
+      y = visibleFrame.minY + margin
+    case .bottomRight:
+      x = visibleFrame.maxX - size.width - margin
+      y = visibleFrame.minY + margin
+    case .center:
+      x = visibleFrame.midX - size.width / 2
+      y = visibleFrame.midY - size.height / 2
+    }
+    return NSRect(origin: NSPoint(x: x, y: y), size: size)
+  }
+
+  private func playCueOnce(_ sound: ReminderSound, reminderID: UUID, shownAt: Date) {
+    let occurrence = CueOccurrence(reminderID: reminderID, shownAt: shownAt)
+    guard occurrence != lastCueOccurrence else { return }
+    lastCueOccurrence = occurrence
+    guard sound != .none else { return }
+    if let cueCallback {
+      cueCallback(sound)
+      return
+    }
+    cueSound?.stop()
+    let systemSound = NSSound(named: NSSound.Name(sound.title))
+    cueSound = systemSound
+    systemSound?.play()
+  }
+}
+
+private struct CueOccurrence: Equatable {
+  let reminderID: UUID
+  let shownAt: Date
 }
 
 @MainActor private final class CursorFrameTarget: NSObject {

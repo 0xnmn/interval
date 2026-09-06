@@ -9,7 +9,7 @@ struct SessionIdentity: View {
     VStack(spacing: 12) {
       HStack(spacing: 10) {
         Menu {
-          Button("Uncategorized") { store.selectCategory(nil) }
+          Button("Others") { store.selectCategory(nil) }
           ForEach(store.data.categories) { category in
             Button {
               store.selectCategory(category.id)
@@ -24,15 +24,14 @@ struct SessionIdentity: View {
           Divider()
           Button("Manage Categories…") { managingCategories = true }
         } label: {
-          Text(store.timer.categoryName ?? "Uncategorized").lineLimit(1)
+          Text(store.timer.categoryName ?? "Category").lineLimit(1)
         }.menuStyle(.borderlessButton).frame(maxWidth: 170)
           .accessibilityLabel("Session category")
-        Text("· \(store.timer.kind.title)").foregroundStyle(.secondary)
-      }.font(.callout)
+      }.font(IntervalTheme.body)
       TextField(
-        "Session title",
+        "",
         text: Binding(get: { store.data.sessionTitle }, set: store.setSessionTitle), axis: .vertical
-      ).textFieldStyle(.plain).font(.headline).multilineTextAlignment(.center)
+      ).textFieldStyle(.plain).font(IntervalTheme.heading).multilineTextAlignment(.center)
         .lineLimit(1...2).accessibilityLabel("Session title")
     }.sheet(isPresented: $managingCategories) {
       CategoryManager(store: store)
@@ -49,7 +48,7 @@ struct CategoryManager: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 18) {
       HStack {
-        Text("Categories").font(.headline)
+        Text("Categories").font(IntervalTheme.heading)
         Spacer()
         Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
       }
@@ -79,7 +78,7 @@ struct CategoryManager: View {
           deleting = nil
         }
       } message: {
-        Text("Saved sessions keep their category. New sessions will use Uncategorized.")
+        Text("Saved sessions keep their category. New sessions will use Others.")
       }
   }
 
@@ -113,7 +112,7 @@ private struct CategoryNameRow: View {
         Button(action: delete) { Image(systemName: "trash") }
           .help("Delete category").accessibilityLabel("Delete \(category.name)")
       }
-      if let error { Text(error).font(.caption).foregroundStyle(.orange) }
+      if let error { Text(error).font(IntervalTheme.body).foregroundStyle(.orange) }
     }
   }
 

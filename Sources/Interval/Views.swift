@@ -65,6 +65,7 @@ struct MainView: View {
           }
       }
     }
+    .font(IntervalTheme.body)
     .frame(
       minWidth: 780, maxWidth: .infinity,
       minHeight: 620, maxHeight: .infinity
@@ -73,7 +74,7 @@ struct MainView: View {
     .safeAreaInset(edge: .bottom) {
       if let error = store.persistenceError {
         Label(error, systemImage: "exclamationmark.triangle.fill")
-          .font(.callout).foregroundStyle(.red).padding(12)
+          .font(IntervalTheme.body).foregroundStyle(.red).padding(12)
           .frame(maxWidth: .infinity).background(.regularMaterial)
       }
     }
@@ -107,7 +108,7 @@ struct HistoryView: View {
     VStack(spacing: 0) {
       VStack(spacing: 8) {
         HStack(spacing: 8) {
-          Text("Stats").font(.headline)
+          Text("Stats").font(IntervalTheme.heading)
           Spacer()
           Button {
             selectDay(calendar.date(byAdding: .day, value: -1, to: selectedDay) ?? selectedDay)
@@ -141,8 +142,8 @@ struct HistoryView: View {
               selectDay(date)
             } label: {
               VStack(spacing: 3) {
-                Text(date.formatted(.dateTime.weekday(.abbreviated))).font(.caption)
-                Text(date.formatted(.dateTime.day())).font(.callout.weight(.semibold))
+                Text(date.formatted(.dateTime.weekday(.abbreviated))).font(IntervalTheme.body)
+                Text(date.formatted(.dateTime.day())).font(IntervalTheme.heading)
               }.frame(maxWidth: .infinity).padding(.vertical, 5)
                 .background(
                   calendar.isDate(date, inSameDayAs: selectedDay)
@@ -170,7 +171,7 @@ struct HistoryView: View {
               feedbackBreakdown
               if let calendarStatus {
                 Label(calendarStatus, systemImage: "calendar.badge.exclamationmark")
-                  .font(.caption).foregroundStyle(.secondary).frame(
+                  .font(IntervalTheme.body).foregroundStyle(.secondary).frame(
                     maxWidth: .infinity, alignment: .leading)
               }
             }.frame(maxWidth: .infinity, alignment: .leading)
@@ -187,7 +188,7 @@ struct HistoryView: View {
                 Label("Back", systemImage: "chevron.left")
               }.buttonStyle(IntervalIconButton()).help("Back to timeline")
               Spacer()
-              Text("Session").font(.headline)
+              Text("Session").font(IntervalTheme.heading)
               Spacer()
             }.padding(.horizontal, 18).frame(height: 44)
             Divider().opacity(0.6)
@@ -211,21 +212,21 @@ struct HistoryView: View {
   }
   private var daySummary: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("Focus time").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+      Text("Focus time").font(IntervalTheme.heading).foregroundStyle(.secondary)
       Text(durationString(focusDuration)).font(.largeTitle.weight(.light)).monospacedDigit()
-      Text("\(completedFocusCount) completed").font(.caption).foregroundStyle(
+      Text("\(completedFocusCount) completed").font(IntervalTheme.body).foregroundStyle(
         .secondary)
     }.frame(maxWidth: .infinity, alignment: .leading)
   }
   private var timeline: some View {
     VStack(alignment: .leading, spacing: 0) {
       HStack {
-        Text("Timeline").font(.headline)
+        Text("Activity timeline").font(IntervalTheme.heading)
         Spacer()
-        Text(summaryText).font(.caption).foregroundStyle(.secondary)
+        Text(summaryText).font(IntervalTheme.body).foregroundStyle(.secondary)
       }.padding(.horizontal, 20).frame(height: 44)
       if dayItems.isEmpty {
-        Text(emptyStatus).font(.callout).foregroundStyle(.secondary)
+        Text(emptyStatus).font(IntervalTheme.body).foregroundStyle(.secondary)
           .padding(20).frame(maxWidth: .infinity, alignment: .leading)
       } else {
         ScrollView {
@@ -265,16 +266,17 @@ struct HistoryView: View {
   }
   private var categoryBreakdown: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("Categories").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+      Text("Focus by category").font(IntervalTheme.heading).foregroundStyle(.secondary)
       if focusCategoryStats.isEmpty {
-        Text("No focus sessions").font(.caption).foregroundStyle(.secondary)
+        Text("No focus sessions").font(IntervalTheme.body).foregroundStyle(.secondary)
       } else {
         ForEach(focusCategoryStats) { stat in
           VStack(alignment: .leading, spacing: 4) {
             HStack {
-              Text(stat.name).font(.callout)
+              Text(stat.name).font(IntervalTheme.body)
               Spacer()
-              Text(durationString(stat.duration)).font(.caption).foregroundStyle(.secondary)
+              Text(durationString(stat.duration)).font(IntervalTheme.body).foregroundStyle(
+                .secondary)
             }
             ProgressView(value: stat.duration, total: max(focusDuration, 1))
               .tint(store.data.settings.focusColor.color)
@@ -285,16 +287,17 @@ struct HistoryView: View {
   }
   private var feedbackBreakdown: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("Focus feedback").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+      Text("Focus feedback").font(IntervalTheme.heading).foregroundStyle(.secondary)
       if focusSessions.isEmpty {
-        Text("No feedback yet").font(.caption).foregroundStyle(.secondary)
+        Text("No feedback yet").font(IntervalTheme.body).foregroundStyle(.secondary)
       } else {
         ForEach(feedbackStats) { stat in
           VStack(spacing: 4) {
             HStack {
-              Text(stat.label).font(.callout)
+              Text(stat.label).font(IntervalTheme.body)
               Spacer()
-              Text("\(stat.count)").font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+              Text("\(stat.count)").font(IntervalTheme.body.monospacedDigit()).foregroundStyle(
+                .secondary)
             }
             ProgressView(value: Double(stat.count), total: Double(max(focusSessions.count, 1)))
               .tint(stat.count == 0 ? Color.clear : Color.secondary)
@@ -343,12 +346,12 @@ struct HistoryView: View {
   private func categoryFilterName(_ filter: CategoryFilter) -> String {
     switch filter {
     case .all: "All categories"
-    case .uncategorized: "Uncategorized"
+    case .uncategorized: "Others"
     case .category(let id): categoryName(id: id, savedName: nil)
     }
   }
   private func categoryName(id: UUID?, savedName: String?) -> String {
-    guard let id else { return "Uncategorized" }
+    guard let id else { return "Others" }
     if let current = store.data.categories.first(where: { $0.id == id }) { return current.name }
     return savedName
       ?? store.data.sessions.first(where: { $0.categoryID == id })?.categoryName
@@ -443,10 +446,11 @@ struct CalendarEventRow: View {
     HStack(alignment: .top) {
       Image(systemName: "calendar").foregroundStyle(.blue)
       VStack(alignment: .leading, spacing: 2) {
-        Text(event.title).font(.headline)
-        Text("Apple Calendar · \(event.calendarName)").font(.caption.weight(.medium))
+        Text(event.title).font(IntervalTheme.heading)
+        Text("Apple Calendar · \(event.calendarName)").font(IntervalTheme.body.weight(.medium))
           .foregroundStyle(.blue)
-        Text(timeDescription + statusDescription).font(.caption).foregroundStyle(.secondary)
+        Text(timeDescription + statusDescription).font(IntervalTheme.body).foregroundStyle(
+          .secondary)
       }
     }.padding(.vertical, 5).padding(.horizontal, 8).frame(maxWidth: .infinity, alignment: .leading)
   }
@@ -473,20 +477,20 @@ struct SessionRow: View {
       Image(systemName: session.outcome == .completed ? "checkmark.circle.fill" : "xmark.circle")
         .foregroundStyle(session.outcome == .completed ? .teal : .secondary)
       VStack(alignment: .leading) {
-        Text(session.title?.nilIfBlank ?? session.kind.title).font(.headline)
-        Text(session.categoryName?.nilIfBlank ?? "Uncategorized")
-          .font(.caption.weight(.medium)).foregroundStyle(.teal)
+        Text(session.title?.nilIfBlank ?? session.kind.title).font(IntervalTheme.heading)
+        Text(session.categoryName?.nilIfBlank ?? "Others")
+          .font(IntervalTheme.body.weight(.medium)).foregroundStyle(.teal)
         Text(
           "\(session.kind.title) · \(session.outcome.rawValue.capitalized) · \(session.startedAt.formatted(date: .omitted, time: .shortened))–\(session.endedAt.formatted(date: .omitted, time: .shortened)) · \(session.isDurationEstimated ? "≈ " : "")\(durationString(session.activeDuration))"
-        ).font(.caption).foregroundStyle(.secondary)
+        ).font(IntervalTheme.body).foregroundStyle(.secondary)
         if session.isDurationEstimated {
-          Text("Estimated duration").font(.caption).foregroundStyle(.secondary)
+          Text("Estimated duration").font(IntervalTheme.body).foregroundStyle(.secondary)
         }
         if showsReflection, let feedback = session.feedback {
-          Text(feedback.capitalized).font(.caption)
+          Text(feedback.capitalized).font(IntervalTheme.body)
         }
         if showsReflection, let journal = session.journal?.nilIfBlank {
-          Text(journal).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+          Text(journal).font(IntervalTheme.body).foregroundStyle(.secondary).lineLimit(2)
         }
       }
     }.padding(.vertical, 3)
@@ -520,7 +524,7 @@ struct ReflectionView: View {
             VStack(spacing: 8) {
               Text(value == .distracted ? "🫠" : value == .neutral ? "😐" : "🎯").font(
                 .system(size: 28))
-              Text(value.title).font(.caption)
+              Text(value.title).font(IntervalTheme.body)
             }.frame(maxWidth: .infinity).padding(.vertical, 14)
               .background(
                 selected ? Color.accentColor.opacity(0.22) : .white.opacity(0.05),
@@ -549,12 +553,12 @@ struct WritingArea: View {
 
   var body: some View {
     TextEditor(text: $text)
-      .font(.system(size: 13)).lineSpacing(4)
+      .font(IntervalTheme.body).lineSpacing(4)
       .scrollContentBackground(.hidden)
       .focused($isFocused)
       .overlay(alignment: .topLeading) {
         if text.isEmpty {
-          Text(placeholder).font(.system(size: 13)).foregroundStyle(.secondary)
+          Text(placeholder).font(IntervalTheme.body).foregroundStyle(.secondary)
             .padding(.horizontal, 5)
             .allowsHitTesting(false)
         }
@@ -586,7 +590,7 @@ struct SessionInspector: View {
           value: (session.isDurationEstimated ? "≈ " : "") + durationString(session.activeDuration))
         if session.isDurationEstimated {
           Text("Estimated from the recorded time range; this early version did not record pauses.")
-            .font(.caption).foregroundStyle(.secondary)
+            .font(IntervalTheme.body).foregroundStyle(.secondary)
         }
         LabeledContent("Outcome", value: session.outcome.rawValue.capitalized)
       }
@@ -615,7 +619,7 @@ struct SessionInspector: View {
     }.formStyle(.grouped).scrollContentBackground(.hidden).padding(12)
   }
   private var categoryName: String {
-    guard let id = session.categoryID else { return "Uncategorized" }
+    guard let id = session.categoryID else { return "Others" }
     return session.categoryName?.nilIfBlank
       ?? store.data.categories.first(where: { $0.id == id })?.name
       ?? "Deleted category"
@@ -639,7 +643,7 @@ struct MenuBarView: View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(alignment: .center, spacing: 12) {
         VStack(alignment: .leading, spacing: 2) {
-          Text(store.timer.kind.title).font(.caption).foregroundStyle(.secondary)
+          Text(store.timer.kind.title).font(IntervalTheme.body).foregroundStyle(.secondary)
           Text(durationString(store.remaining)).font(
             .system(size: 34, weight: .medium, design: .rounded)
           ).monospacedDigit()
@@ -689,24 +693,30 @@ struct MenuBarView: View {
         Text(
           "\(start.formatted(date: .omitted, time: .shortened)) → \(end.formatted(date: .omitted, time: .shortened))"
         )
-        .font(.callout).foregroundStyle(.secondary).monospacedDigit()
+        .font(IntervalTheme.body).foregroundStyle(.secondary).monospacedDigit()
       }
       Divider()
-      if let warningReminder {
+      if let reminder = activeReminder {
         VStack(alignment: .leading, spacing: 5) {
-          Text("Warning: \(warningReminder.title)").font(.caption.weight(.semibold))
+          Text(reminder.title).font(IntervalTheme.heading)
           HStack {
-            Button("Snooze 5 min") { store.snoozeReminder(warningReminder.id) }
-            Button("Skip") { store.dismissReminder(warningReminder.id) }
+            extendMenu(reminder)
+            Button("Skip") { store.dismissReminder(reminder.id) }
+              .disabled(!canSkipActiveReminder)
           }
+        }.frame(maxWidth: .infinity, alignment: .leading)
+      } else if let warningReminder {
+        VStack(alignment: .leading, spacing: 5) {
+          Text("Coming up: \(warningReminder.title)").font(IntervalTheme.heading)
+          extendMenu(warningReminder)
         }.frame(maxWidth: .infinity, alignment: .leading)
       } else if let reminder = store.nextReminder {
         VStack(alignment: .leading, spacing: 5) {
-          Text("Next: \(reminder.title)").font(.caption.weight(.semibold))
+          Text("Next: \(reminder.title)").font(IntervalTheme.heading)
           Text(
             reminder.effectiveDueAt?.formatted(date: .omitted, time: .shortened) ?? "Not scheduled"
-          ).font(.caption).foregroundStyle(.secondary)
-          Button("Snooze 5 min") { store.snoozeReminder(reminder.id) }
+          ).font(IntervalTheme.body).foregroundStyle(.secondary)
+          extendMenu(reminder)
         }.frame(maxWidth: .infinity, alignment: .leading)
       }
       HStack(spacing: 7) {
@@ -729,7 +739,8 @@ struct MenuBarView: View {
         Spacer()
         Button("Quit") { NSApp.terminate(nil) }
       }
-    }.padding(14).frame(width: 320).background(GlassBackground()).tint(IntervalTheme.accent)
+    }.font(IntervalTheme.body)
+      .padding(14).frame(width: 320).background(GlassBackground()).tint(IntervalTheme.accent)
       .preferredColorScheme(.dark)
       .accessibilityElement(children: .contain)
       .accessibilityLabel(
@@ -751,6 +762,23 @@ struct MenuBarView: View {
   private var warningReminder: Reminder? {
     guard case .warning(let id, _, _) = store.reminderOverlay else { return nil }
     return store.data.reminders.first { $0.id == id }
+  }
+  private var activeReminder: Reminder? {
+    guard case .reminder(let id, _) = store.reminderOverlay else { return nil }
+    return store.data.reminders.first { $0.id == id }
+  }
+  private var canSkipActiveReminder: Bool {
+    guard case .reminder(_, let shownAt) = store.reminderOverlay else { return false }
+    return store.now.timeIntervalSince(shownAt) >= 5
+  }
+  private func extendMenu(_ reminder: Reminder) -> some View {
+    Menu("Extend") {
+      ForEach([5, 10, 15], id: \.self) { minutes in
+        Button("\(minutes) minutes") {
+          store.snoozeReminder(reminder.id, seconds: Double(minutes * 60))
+        }
+      }
+    }
   }
 }
 

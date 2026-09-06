@@ -30,13 +30,13 @@ struct LiveTimerBar: View {
           .font(.system(size: 17, weight: .medium)).foregroundStyle(accent)
           HStack(spacing: 8) {
             Text(title)
-              .font(.callout.weight(.medium)).lineLimit(1)
+              .font(IntervalTheme.heading).lineLimit(1)
             Text(
               store.completionSessionID != nil
                 ? "Review"
                 : store.timer.status == .running ? store.timer.kind.title : "Ready"
             )
-            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            .font(IntervalTheme.body).foregroundStyle(.secondary).lineLimit(1)
             .fixedSize()
           }
         }

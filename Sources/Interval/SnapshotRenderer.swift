@@ -157,7 +157,7 @@ struct SnapshotRequest {
       let reminder = store.data.reminders[1]
       let existing = Set(NSApp.windows.map(\.windowNumber))
       controller.update(
-        .reminder(reminderID: reminder.id, shownAt: fixtureNow),
+        .reminder(reminderID: reminder.id, shownAt: Date().addingTimeInterval(-6)),
         reminder: reminder, store: store)
       // Production excludes reminder panels from legacy screen captures. This fixture
       // contains no user content and explicitly opts in so the compositor is tested.
@@ -241,13 +241,16 @@ struct SnapshotRequest {
             reminderID: reminder.id, remaining: 7,
             isPaused: request.scene == "reminder-countdown-paused")))
     case "reminder-floating", "reminder-max-emoji":
-      size = NSSize(width: 520, height: 480)
+      size = ReminderOverlayController.floatingSize(for: store.data.reminders[0])
       view = AnyView(
-        ReminderTakeoverView(reminder: store.data.reminders[0], dismiss: {}, snooze: {}))
+        ReminderTakeoverView(
+          reminder: store.data.reminders[0], shownAt: Date(), skip: {}, extend: { _ in }))
     case "reminder-fullscreen":
       size = NSSize(width: 900, height: 650)
       view = AnyView(
-        ReminderTakeoverView(reminder: store.data.reminders[1], dismiss: {}, snooze: {}))
+        ReminderTakeoverView(
+          reminder: store.data.reminders[1], shownAt: Date().addingTimeInterval(-6), skip: {},
+          extend: { _ in }))
     case "settings":
       size = NSSize(width: 560, height: 450)
       view = AnyView(SettingsView(store: store))
@@ -273,7 +276,7 @@ struct SnapshotRequest {
     case "time-options", "time-options-minus":
       size = NSSize(width: 360, height: 680)
       view = AnyView(
-        FocusControls(store: store, adjustmentDirection: request.scene == "time-options" ? 1 : -1))
+        FocusControls(store: store))
     case "menu":
       size = NSSize(width: 348, height: 290)
       view = AnyView(MenuBarView(store: store))

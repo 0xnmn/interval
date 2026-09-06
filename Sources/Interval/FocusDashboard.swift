@@ -5,16 +5,10 @@ struct FocusControls: View {
   @Bindable var store: AppStore
   @State private var confirmingAbandon = false
   @State private var confirmingBreak = false
-  @State private var adjustmentDirection: Int?
   private var active: Bool { store.timer.status == .running }
   private var accent: Color {
     (store.timer.kind == .focus ? store.data.settings.focusColor : store.data.settings.breakColor)
       .color
-  }
-
-  init(store: AppStore, adjustmentDirection: Int? = nil) {
-    self.store = store
-    _adjustmentDirection = State(initialValue: adjustmentDirection)
   }
 
   var body: some View {
@@ -45,10 +39,11 @@ struct FocusControls: View {
           }.disabled(!active).help("Abandon interval")
         }.buttonStyle(IntervalIconButton()).foregroundStyle(.primary)
         if let message = store.inAppNotification ?? store.recoveryMessage {
-          Text(message).font(.caption).foregroundStyle(.secondary)
+          Text(message).font(IntervalTheme.body).foregroundStyle(.secondary)
         }
         if let error = store.audioError {
-          Label(error, systemImage: "speaker.slash").font(.caption).foregroundStyle(.orange)
+          Label(error, systemImage: "speaker.slash").font(IntervalTheme.body).foregroundStyle(
+            .orange)
         }
         upcomingReminders
       }.padding(24).frame(maxWidth: .infinity)
@@ -68,43 +63,27 @@ struct FocusControls: View {
   }
 
   private var timeControls: some View {
-    VStack(spacing: 6) {
-      HStack(spacing: 12) {
-        adjustmentButton(direction: -1)
-        Group {
-          if active, let start = store.timer.startedAt, let end = store.timer.deadline {
-            Text(
-              "\(start.formatted(date: .omitted, time: .shortened)) → \(end.formatted(date: .omitted, time: .shortened))"
-            )
-            .font(.callout).monospacedDigit().foregroundStyle(.secondary)
-            .lineLimit(1).minimumScaleFactor(0.85)
-            .help("Started \(start.formatted()) · Ends \(end.formatted())")
-            .accessibilityLabel(
-              "Started \(start.formatted(date: .omitted, time: .shortened)), ends \(end.formatted(date: .omitted, time: .shortened))"
-            )
-          } else {
-            Button(action: store.startSession) {
-              Label("Start", systemImage: "play.fill")
-            }.buttonStyle(IntervalIconButton()).foregroundStyle(accent).help("Start interval")
-          }
-        }.frame(maxWidth: .infinity)
-        adjustmentButton(direction: 1)
-      }
-      HStack(spacing: 8) {
-        ForEach([10, 15], id: \.self) { minutes in
-          Button("\((adjustmentDirection ?? 1) > 0 ? "+" : "−")\(minutes)m") {
-            store.adjustCurrentTime(by: Double((adjustmentDirection ?? 1) * minutes * 60))
-          }.buttonStyle(.plain).font(.caption.weight(.medium))
-            .padding(.horizontal, 10).padding(.vertical, 5)
-            .background(.white.opacity(0.07), in: Capsule())
-            .accessibilityLabel(
-              "\((adjustmentDirection ?? 1) > 0 ? "Add" : "Remove") \(minutes) minutes")
+    HStack(spacing: 12) {
+      adjustmentButton(direction: -1)
+      Group {
+        if active, let start = store.timer.startedAt, let end = store.timer.deadline {
+          Text(
+            "\(start.formatted(date: .omitted, time: .shortened)) → \(end.formatted(date: .omitted, time: .shortened))"
+          )
+          .font(IntervalTheme.body).monospacedDigit().foregroundStyle(.secondary)
+          .lineLimit(1).minimumScaleFactor(0.85)
+          .help("Started \(start.formatted()) · Ends \(end.formatted())")
+          .accessibilityLabel(
+            "Started \(start.formatted(date: .omitted, time: .shortened)), ends \(end.formatted(date: .omitted, time: .shortened))"
+          )
+        } else {
+          Button(action: store.startSession) {
+            Label("Start", systemImage: "play.fill")
+          }.buttonStyle(IntervalIconButton()).foregroundStyle(accent).help("Start interval")
         }
-      }.opacity(adjustmentDirection == nil ? 0 : 1)
-        .allowsHitTesting(adjustmentDirection != nil)
-        .accessibilityHidden(adjustmentDirection == nil)
-    }.contentShape(Rectangle())
-      .onHover { hovering in if !hovering { adjustmentDirection = nil } }
+      }.frame(maxWidth: .infinity)
+      adjustmentButton(direction: 1)
+    }
   }
 
   private func adjustmentButton(direction: Int) -> some View {
@@ -119,10 +98,9 @@ struct FocusControls: View {
         direction > 0
           ? "Add 5 minutes · Right-click for more" : "Remove 5 minutes · Right-click for more"
       )
-      .onHover { hovering in if hovering { adjustmentDirection = direction } }
       .contextMenu {
         ForEach([5, 10, 15], id: \.self) { minutes in
-          Button("\(direction > 0 ? "Add" : "Remove") \(minutes) minutes") {
+          Button("\(direction > 0 ? "+" : "−") \(minutes) minutes") {
             store.adjustCurrentTime(by: Double(direction * minutes * 60))
           }
         }
@@ -133,16 +111,16 @@ struct FocusControls: View {
     let reminders = store.data.reminders.filter { $0.isEnabled && $0.effectiveDueAt != nil }
       .sorted { $0.effectiveDueAt! < $1.effectiveDueAt! }
     return VStack(alignment: .leading, spacing: 14) {
-      Text("Upcoming").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+      Text("Upcoming reminders").font(IntervalTheme.heading).foregroundStyle(.secondary)
       if reminders.isEmpty {
-        Text("No reminders scheduled").font(.caption).foregroundStyle(.secondary)
+        Text("No reminders scheduled").font(IntervalTheme.body).foregroundStyle(.secondary)
       }
       ForEach(Array(reminders.prefix(3))) { reminder in
         HStack(spacing: 10) {
           Text(reminder.emoji).font(.system(size: 19)).frame(width: 24)
-          Text(reminder.title).font(.callout).lineLimit(1)
+          Text(reminder.title).font(IntervalTheme.body).lineLimit(1)
           Spacer(minLength: 8)
-          Text(reminderStatus(reminder)).font(.caption).monospacedDigit().foregroundStyle(
+          Text(reminderStatus(reminder)).font(IntervalTheme.body).monospacedDigit().foregroundStyle(
             .secondary)
         }
       }
@@ -204,31 +182,37 @@ struct FocusDayPanel: View {
     }
   }
   var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
-        Text("To-dos").font(.headline)
-        TodoList(store: store)
-        Text("Today").font(.headline).padding(.top, 12)
-        HStack(spacing: 28) {
-          VStack(alignment: .leading, spacing: 4) {
-            Text("\(Int(sessions.reduce(0) { $0 + $1.activeDuration } / 60))m")
-              .font(.title2.weight(.medium)).monospacedDigit()
-            Text("Logged focus").font(.caption).foregroundStyle(.secondary)
+    VSplitView {
+      ScrollView {
+        VStack(alignment: .leading, spacing: 16) {
+          Text("To-dos").font(IntervalTheme.heading)
+          TodoList(store: store)
+        }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
+      }.frame(minHeight: 140, idealHeight: 300, maxHeight: .infinity)
+      ScrollView {
+        VStack(alignment: .leading, spacing: 20) {
+          Text("Today's focus").font(IntervalTheme.heading)
+          HStack(spacing: 28) {
+            VStack(alignment: .leading, spacing: 4) {
+              Text("\(Int(sessions.reduce(0) { $0 + $1.activeDuration } / 60))m")
+                .font(.title2.weight(.medium)).monospacedDigit()
+              Text("Focus time").font(IntervalTheme.body).foregroundStyle(.secondary)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+              Text("\(sessions.filter { $0.outcome == .completed }.count)")
+                .font(.title2.weight(.medium)).monospacedDigit()
+              Text("Completed").font(IntervalTheme.body).foregroundStyle(.secondary)
+            }
           }
-          VStack(alignment: .leading, spacing: 4) {
-            Text("\(sessions.filter { $0.outcome == .completed }.count)")
-              .font(.title2.weight(.medium)).monospacedDigit()
-            Text("Completed").font(.caption).foregroundStyle(.secondary)
-          }
-        }
-        HStack {
-          Text("Timeline").font(.headline)
-          Spacer()
-          Text(store.now.formatted(.dateTime.month(.abbreviated).day()))
-            .font(.caption).foregroundStyle(.secondary)
-        }.padding(.top, 12)
-        dayTimeline
-      }.padding(24)
+          HStack {
+            Text("Today's timeline").font(IntervalTheme.heading)
+            Spacer()
+            Text(store.now.formatted(.dateTime.month(.abbreviated).day()))
+              .font(IntervalTheme.body).foregroundStyle(.secondary)
+          }.padding(.top, 12)
+          dayTimeline
+        }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
+      }.frame(minHeight: 200, idealHeight: 320, maxHeight: .infinity)
     }.sheet(
       isPresented: Binding(
         get: { selectedSessionID != nil }, set: { if !$0 { selectedSessionID = nil } }
@@ -237,7 +221,7 @@ struct FocusDayPanel: View {
       if let session = store.data.sessions.first(where: { $0.id == selectedSessionID }) {
         VStack(spacing: 0) {
           HStack {
-            Text("Session").font(.headline)
+            Text("Session").font(IntervalTheme.heading)
             Spacer()
             Button("Done") { selectedSessionID = nil }.keyboardShortcut(.cancelAction)
           }.padding(20)
@@ -262,7 +246,7 @@ struct FocusDayPanel: View {
   private var dayTimeline: some View {
     VStack(alignment: .leading, spacing: 0) {
       if dayItems.isEmpty {
-        Text("No activity yet today").font(.callout).foregroundStyle(.secondary)
+        Text("No activity yet today").font(IntervalTheme.body).foregroundStyle(.secondary)
       }
       ForEach(dayItems) { item in
         HStack(alignment: .top, spacing: 10) {
@@ -288,10 +272,12 @@ struct FocusDayPanel: View {
       if !store.calendarService.isEnabled || store.calendarService.authorizationState != .fullAccess
       {
         SettingsLink { Label("Connect your calendar", systemImage: "calendar.badge.plus") }
-          .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary).padding(.top, 12)
+          .buttonStyle(.plain).font(IntervalTheme.body).foregroundStyle(.secondary).padding(
+            .top, 12)
       } else if store.calendarService.selectedCalendarIDs.isEmpty {
         SettingsLink { Label("Choose calendars", systemImage: "calendar.badge.plus") }
-          .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary).padding(.top, 12)
+          .buttonStyle(.plain).font(IntervalTheme.body).foregroundStyle(.secondary).padding(
+            .top, 12)
       }
     }
   }
