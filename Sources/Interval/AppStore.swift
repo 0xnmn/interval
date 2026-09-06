@@ -25,6 +25,8 @@ final class AppStore {
   private var observers: [NSObjectProtocol] = []
   private var reminderEngine = ReminderEngine()
   private let overlayController = ReminderOverlayController()
+  private let notchController = NotchController()
+  private let completionController = SessionCompletionController()
   private var systemIsSleeping = false
   private var screenSaverIsRunning = false
   private var screenIsLocked = false
@@ -94,6 +96,7 @@ final class AppStore {
     if data.activeTimer?.status == .running { syncServices(for: timer) }
     workspaceSessionIsActive = true
     refreshSessionState()
+    updateQuickPanels()
     ticker = Task { [weak self] in
       while !Task.isCancelled {
         try? await Task.sleep(for: .milliseconds(250))
@@ -515,6 +518,7 @@ final class AppStore {
       data.activeTimer = timer(for: data.activeTimer?.kind ?? .focus)
     }
     save()
+    updateQuickPanels()
     if data.activeTimer?.status == .running,
       old.focusSound != settings.focusSound || old.breakSound != settings.breakSound
         || old.soundVolume != settings.soundVolume
@@ -561,6 +565,8 @@ final class AppStore {
 
   func checkpointForTermination() {
     guard runtimeEnabled else { return }
+    notchController.close()
+    completionController.close()
     checkpointForInactivity(at: Date())
   }
 
@@ -588,6 +594,8 @@ final class AppStore {
     sessionIsOnConsole = dictionary[kCGSessionOnConsoleKey as String] as? Bool ?? false
   }
   private func sessionBecameUnavailable() {
+    notchController.close()
+    completionController.close()
     checkpointForInactivity(at: Date())
     reminderEngine.cancel()
     reminderOverlay = nil
@@ -607,6 +615,7 @@ final class AppStore {
 
   private func tickReminders(at date: Date) {
     guard runtimeEnabled else { return }
+    defer { updateQuickPanels() }
     if let previewReminderID, let expiry = previewExpiresAt, date < expiry {
       guard let reminder = data.reminders.first(where: { $0.id == previewReminderID }) else {
         cancelOverlay(for: previewReminderID)
@@ -633,6 +642,17 @@ final class AppStore {
       data.reminders.first { $0.id == visible.reminderID }
     }
     overlayController.update(reminderOverlay, reminder: reminder, store: self)
+  }
+
+  private func updateQuickPanels() {
+    guard runtimeEnabled else { return }
+    guard sessionIsActive, reminderOverlay == nil else {
+      notchController.close()
+      completionController.close()
+      return
+    }
+    notchController.update(store: self)
+    completionController.update(store: self)
   }
 
   private func reconcileReminderBacklog(at date: Date) {

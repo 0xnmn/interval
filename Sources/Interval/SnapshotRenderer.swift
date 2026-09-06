@@ -202,6 +202,19 @@ struct SnapshotRequest {
       _ = store.calendarService.hasEvent(at: fixtureNow)
     }
     switch request.scene {
+    case "completion-toast":
+      size = SessionCompletionController.toastSize
+      view = AnyView(SessionCompletionToast(later: {}, reflect: {}))
+    case "notch-compact", "notch-expanded", "notch-fallback":
+      let geometry =
+        request.scene == "notch-fallback"
+        ? NotchGeometry.fallback
+        : NotchGeometry(hasHardwareNotch: true, cutoutWidth: 180, topInset: 32)
+      let expanded = request.scene == "notch-expanded"
+      size =
+        geometry.frame(expanded: expanded, in: NSRect(x: 0, y: 0, width: 1440, height: 900)).size
+      view = AnyView(
+        NotchRootView(store: store, expanded: expanded, geometry: geometry, collapse: {}))
     case "history", "history-disabled", "history-no-selection", "history-running", "history-break",
       "history-compact", "history-review":
       store.selection = .history

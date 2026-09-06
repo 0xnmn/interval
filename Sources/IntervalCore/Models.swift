@@ -88,6 +88,8 @@ public enum AppAppearance: String, Codable, CaseIterable, Sendable {
 
 public struct IntervalSettings: Codable, Equatable, Sendable {
   public var appearance: AppAppearance
+  public var notchEnabled: Bool
+  public var completionPopupEnabled: Bool
   public var focusMinutes: Int
   public var shortBreakMinutes: Int
   public var longBreakMinutes: Int
@@ -103,6 +105,7 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
 
   public init(
     appearance: AppAppearance = .system,
+    notchEnabled: Bool = false, completionPopupEnabled: Bool = true,
     focusMinutes: Int = 25, shortBreakMinutes: Int = 5, longBreakMinutes: Int = 10,
     longBreakEvery: Int = 4,
     focusColor: PhaseColor = .green, breakColor: PhaseColor = .blue,
@@ -112,6 +115,8 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
     didChooseInitialCalendars: Bool = false
   ) {
     self.appearance = appearance
+    self.notchEnabled = notchEnabled
+    self.completionPopupEnabled = completionPopupEnabled
     self.focusMinutes = focusMinutes
     self.shortBreakMinutes = shortBreakMinutes
     self.longBreakMinutes = longBreakMinutes
@@ -135,6 +140,7 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
   public func clamped() -> Self {
     .init(
       appearance: appearance,
+      notchEnabled: notchEnabled, completionPopupEnabled: completionPopupEnabled,
       focusMinutes: focusMinutes.clamped(to: 1...60),
       shortBreakMinutes: shortBreakMinutes.clamped(to: 1...60),
       longBreakMinutes: longBreakMinutes.clamped(to: 1...60),
@@ -148,7 +154,8 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case appearance, focusMinutes, shortBreakMinutes, longBreakMinutes, longBreakEvery, focusColor,
+    case appearance, notchEnabled, completionPopupEnabled, focusMinutes, shortBreakMinutes,
+      longBreakMinutes, longBreakEvery, focusColor,
       breakColor,
       focusSound, breakSound, soundVolume, calendarIntegrationEnabled, selectedCalendarIDs,
       didChooseInitialCalendars
@@ -156,6 +163,9 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
   public init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
     appearance = try c.decodeIfPresent(AppAppearance.self, forKey: .appearance) ?? .system
+    notchEnabled = try c.decodeIfPresent(Bool.self, forKey: .notchEnabled) ?? false
+    completionPopupEnabled =
+      try c.decodeIfPresent(Bool.self, forKey: .completionPopupEnabled) ?? true
     focusMinutes = try c.decode(Int.self, forKey: .focusMinutes)
     shortBreakMinutes = try c.decode(Int.self, forKey: .shortBreakMinutes)
     longBreakMinutes = try c.decode(Int.self, forKey: .longBreakMinutes)

@@ -321,6 +321,16 @@ private struct GeneralSettingsView: View {
         }
         .pickerStyle(.segmented).labelsHidden()
       }
+      SettingsSection("Quick access") {
+        Toggle(isOn: panelSetting(\.notchEnabled)) {
+          Text("Notch panel").frame(maxWidth: .infinity, alignment: .leading)
+        }
+        Text("Hover the top of your display for your timer and to-dos.")
+          .foregroundStyle(.secondary)
+        Toggle(isOn: panelSetting(\.completionPopupEnabled)) {
+          Text("Session-end popup").frame(maxWidth: .infinity, alignment: .leading)
+        }
+      }.toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
       SettingsSection("Startup") {
         Toggle(isOn: Binding(get: { loginEnabled }, set: setLogin)) {
           Text("Launch at login").frame(maxWidth: .infinity, alignment: .leading)
@@ -352,6 +362,16 @@ private struct GeneralSettingsView: View {
       }
     }
   }
+  private func panelSetting(_ keyPath: WritableKeyPath<IntervalSettings, Bool>) -> Binding<Bool> {
+    Binding(
+      get: { store.data.settings[keyPath: keyPath] },
+      set: {
+        var settings = store.data.settings
+        settings[keyPath: keyPath] = $0
+        store.updateSettings(settings)
+      })
+  }
+
   private func setLogin(_ enabled: Bool) {
     do {
       if enabled {

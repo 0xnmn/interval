@@ -638,6 +638,7 @@ extension String {
 
 struct MenuBarView: View {
   @Bindable var store: AppStore
+  var showsAppActions = true
   @Environment(\.openWindow) private var openWindow
   var body: some View {
     ZStack {
@@ -662,24 +663,26 @@ struct MenuBarView: View {
             }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
           }.frame(width: 299).frame(maxHeight: .infinity)
         }
-        Rectangle().fill(IntervalTheme.border).frame(height: 1)
-        HStack(spacing: 8) {
-          Button {
-            openMainWindow()
-          } label: {
-            Image(systemName: "macwindow")
-          }.help("Open Interval").accessibilityLabel("Open Interval")
-          SettingsLink {
-            Image(systemName: "gearshape")
-          }.help("Settings").accessibilityLabel("Settings")
-          Spacer()
-          Button {
-            NSApp.terminate(nil)
-          } label: {
-            Image(systemName: "power")
-          }.help("Quit Interval").accessibilityLabel("Quit Interval")
-        }.buttonStyle(IntervalIconButton()).foregroundStyle(.secondary)
-          .padding(.horizontal, 12).frame(height: 44)
+        if showsAppActions {
+          Rectangle().fill(IntervalTheme.border).frame(height: 1)
+          HStack(spacing: 8) {
+            Button {
+              openMainWindow()
+            } label: {
+              Image(systemName: "macwindow")
+            }.help("Open Interval").accessibilityLabel("Open Interval")
+            SettingsLink {
+              Image(systemName: "gearshape")
+            }.help("Settings").accessibilityLabel("Settings")
+            Spacer()
+            Button {
+              NSApp.terminate(nil)
+            } label: {
+              Image(systemName: "power")
+            }.help("Quit Interval").accessibilityLabel("Quit Interval")
+          }.buttonStyle(IntervalIconButton()).foregroundStyle(.secondary)
+            .padding(.horizontal, 12).frame(height: 44)
+        }
       }
     }.font(IntervalTheme.body).frame(width: 600, height: 480).tint(IntervalTheme.accent)
       .accessibilityElement(children: .contain)
