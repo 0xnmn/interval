@@ -71,7 +71,6 @@ struct SettingsView: View {
     }
     .frame(width: 560, height: 450)
     .tint(.accentColor)
-    .preferredColorScheme(.dark)
     .task {
       notificationStatus = await store.notifications.status()
     }
@@ -304,6 +303,24 @@ private struct GeneralSettingsView: View {
   @Binding var exportMessage: String?
   var body: some View {
     SettingsPage {
+      SettingsSection("Appearance") {
+        Picker(
+          "Appearance",
+          selection: Binding(
+            get: { store.data.settings.appearance },
+            set: {
+              var settings = store.data.settings
+              settings.appearance = $0
+              store.updateSettings(settings)
+            }
+          )
+        ) {
+          ForEach(AppAppearance.allCases, id: \.self) { appearance in
+            Text(appearance.title).tag(appearance)
+          }
+        }
+        .pickerStyle(.segmented).labelsHidden()
+      }
       SettingsSection("Startup") {
         Toggle(isOn: Binding(get: { loginEnabled }, set: setLogin)) {
           Text("Launch at login").frame(maxWidth: .infinity, alignment: .leading)

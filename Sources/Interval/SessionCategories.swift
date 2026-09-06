@@ -31,14 +31,14 @@ struct SessionIdentity: View {
             Text(store.timer.categoryName ?? "Category").lineLimit(1)
           }
         }.menuStyle(.borderlessButton).fixedSize().padding(.horizontal, 12).padding(.vertical, 5)
-          .background(.white.opacity(0.06), in: Capsule())
+          .background(Color.primary.opacity(0.06), in: Capsule())
           .accessibilityLabel("Session category")
       }.font(IntervalTheme.body)
       TextField(
         "Intention",
         text: Binding(get: { store.data.sessionTitle }, set: store.setSessionTitle), axis: .vertical
       ).textFieldStyle(.plain).font(IntervalTheme.body).padding(10)
-        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
         .lineLimit(1...2).accessibilityLabel("Session title")
     }.sheet(isPresented: $managingCategories) {
       CategoryManager(store: store)
@@ -72,7 +72,7 @@ struct CategoryManager: View {
         }
       }
     }.padding(24).frame(width: 400, height: 350)
-      .background(GlassBackground()).preferredColorScheme(.dark)
+      .background(GlassBackground())
       .alert(
         "Delete category?",
         isPresented: Binding(

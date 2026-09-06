@@ -40,7 +40,6 @@ struct RemindersView: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity).background(GlassBackground())
     .navigationTitle("Reminders")
-    .preferredColorScheme(.dark)
     .alert(
       "Delete \(deleting?.title ?? "reminder")?",
       isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })
@@ -143,7 +142,7 @@ struct RemindersView: View {
       } label: {
         HStack(spacing: 11) {
           Text(reminder.emoji).font(.title2).frame(width: 34, height: 34)
-            .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 9))
+            .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 9))
           VStack(alignment: .leading, spacing: 3) {
             Text(reminder.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
             Text(status(reminder)).font(.system(size: 14)).foregroundStyle(.secondary).lineLimit(1)
@@ -174,7 +173,7 @@ struct RemindersView: View {
     }
     .padding(.vertical, 9).padding(.horizontal, 10)
     .background(
-      selection == reminder.id ? IntervalTheme.accent.opacity(0.11) : Color.white.opacity(0.025),
+      selection == reminder.id ? IntervalTheme.accent.opacity(0.11) : Color.primary.opacity(0.025),
       in: RoundedRectangle(cornerRadius: 11)
     )
   }
@@ -252,12 +251,12 @@ private struct ReminderEditor: View {
           TextField("Title", text: binding(\.title))
             .textFieldStyle(.plain)
             .padding(8)
-            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+            .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
             .accessibilityLabel("Reminder title")
           TextField("Message", text: binding(\.message), axis: .vertical)
             .textFieldStyle(.plain)
             .padding(8)
-            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+            .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
             .lineLimit(2...5)
             .accessibilityLabel("Reminder message")
           HStack {
@@ -266,7 +265,7 @@ private struct ReminderEditor: View {
             TextField("Emoji", text: binding(\.emoji))
               .textFieldStyle(.plain)
               .padding(8)
-              .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+              .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
               .frame(width: 90)
               .multilineTextAlignment(.trailing)
               .accessibilityLabel("Reminder emoji")
@@ -350,7 +349,7 @@ private struct ReminderEditor: View {
       .padding(18).frame(maxWidth: .infinity, alignment: .leading)
     }
     .font(.system(size: 14))
-    .background(GlassBackground()).preferredColorScheme(.dark)
+    .background(GlassBackground())
   }
 
   private func toggleRow(_ title: String, value: Binding<Bool>) -> some View {
@@ -387,17 +386,16 @@ struct ReminderWarningView: View {
         VStack(alignment: .leading, spacing: 3) {
           Text(reminder.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
           Text(warningStatus)
-            .font(.system(size: 14)).foregroundStyle(.white.opacity(0.9)).monospacedDigit()
+            .font(.system(size: 14)).foregroundStyle(.secondary).monospacedDigit()
             .lineLimit(1)
         }
         Spacer(minLength: 0)
       }
-      .foregroundStyle(.white)
+      .foregroundStyle(.primary)
       .padding(.horizontal, 10).padding(.vertical, 7)
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
-    .preferredColorScheme(.dark)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(reminder.title). \(warningStatus)")
   }
@@ -429,7 +427,7 @@ struct ReminderTakeoverView: View {
     TimelineView(.periodic(from: .now, by: 0.25)) { context in
       ZStack {
         if reminder.presentation == .fullscreen {
-          Color(white: 0.18).opacity(0.97).ignoresSafeArea()
+          IntervalTheme.surface.opacity(0.97).ignoresSafeArea()
           fullscreenContent(now: context.date)
         } else {
           floatingContent(now: context.date)
@@ -437,14 +435,13 @@ struct ReminderTakeoverView: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .preferredColorScheme(.dark)
   }
 
   private func fullscreenContent(now: Date) -> some View {
     VStack(spacing: 0) {
       Text(now.formatted(date: .omitted, time: .shortened))
         .font(.system(size: 15, weight: .medium, design: .rounded))
-        .foregroundStyle(.white.opacity(0.72))
+        .foregroundStyle(.secondary)
         .monospacedDigit()
 
       Spacer(minLength: 24)
@@ -482,7 +479,7 @@ struct ReminderTakeoverView: View {
     ScrollView {
       VStack(spacing: 10) {
         Text(reminder.title).font(.system(size: 34, weight: .semibold))
-        Text(reminder.message).font(.system(size: 18)).foregroundStyle(.white.opacity(0.82))
+        Text(reminder.message).font(.system(size: 18)).foregroundStyle(.secondary)
       }.multilineTextAlignment(.center).frame(maxWidth: .infinity)
     }
     .frame(maxWidth: 640)

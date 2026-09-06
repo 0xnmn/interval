@@ -4,10 +4,29 @@ import SwiftUI
 
 enum IntervalTheme {
   static let accent = Color.accentColor
-  static let surface = Color(white: 0.12)
-  static let border = Color.white.opacity(0.07)
+  static let surface = Color(
+    nsColor: NSColor(name: nil) { appearance in
+      let dark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+      return NSColor(white: dark ? 0.12 : 0.97, alpha: 1)
+    })
+  static let border = Color.primary.opacity(0.07)
   static let body = Font.system(size: 14)
   static let heading = Font.system(size: 14, weight: .semibold)
+}
+
+extension AppAppearance {
+  var nativeAppearance: NSAppearance? {
+    switch self {
+    case .system: nil
+    case .light: NSAppearance(named: .aqua)
+    case .dark: NSAppearance(named: .darkAqua)
+    }
+  }
+
+  @MainActor func apply() {
+    // Nil removes the override so AppKit tracks macOS changes automatically.
+    NSApplication.shared.appearance = nativeAppearance
+  }
 }
 
 extension PhaseColor {
@@ -33,7 +52,7 @@ struct IntervalIconButton: ButtonStyle {
       .font(.system(size: 17, weight: .medium))
       .frame(width: 36, height: 36)
       .background(
-        .white.opacity(configuration.isPressed ? 0.18 : hovering ? 0.12 : 0.06),
+        Color.primary.opacity(configuration.isPressed ? 0.18 : hovering ? 0.12 : 0.06),
         in: RoundedRectangle(cornerRadius: 9)
       )
       .contentShape(RoundedRectangle(cornerRadius: 9))
@@ -59,7 +78,6 @@ private struct NativeGlass: NSViewRepresentable {
     view.material = .hudWindow
     view.blendingMode = .behindWindow
     view.state = .active
-    view.appearance = NSAppearance(named: .darkAqua)
     return view
   }
   func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
@@ -67,7 +85,6 @@ private struct NativeGlass: NSViewRepresentable {
       guard let window = nsView.window else { return }
       window.isOpaque = reduceTransparency
       window.backgroundColor = reduceTransparency ? NSColor(IntervalTheme.surface) : .clear
-      window.appearance = NSAppearance(named: .darkAqua)
       window.titlebarAppearsTransparent = true
     }
   }
@@ -78,13 +95,13 @@ struct IntervalPrimaryButton: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .font(.callout.weight(.semibold))
-      .foregroundStyle(Color.white.opacity(isEnabled ? 0.9 : 0.45))
+      .foregroundStyle(Color.primary.opacity(isEnabled ? 0.9 : 0.45))
       .padding(.horizontal, 14).padding(.vertical, 7)
       .background(
         Color.accentColor.opacity(configuration.isPressed ? 0.4 : 0.25),
         in: RoundedRectangle(cornerRadius: 8)
       )
-      .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(.white.opacity(0.12)) }
+      .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(IntervalTheme.border) }
       .opacity(isEnabled ? 1 : 0.5)
       .contentShape(RoundedRectangle(cornerRadius: 8))
   }

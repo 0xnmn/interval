@@ -81,7 +81,13 @@ public struct TimerState: Codable, Equatable, Sendable {
   }
 }
 
+public enum AppAppearance: String, Codable, CaseIterable, Sendable {
+  case system, light, dark
+  public var title: String { self == .system ? "System" : rawValue.capitalized }
+}
+
 public struct IntervalSettings: Codable, Equatable, Sendable {
+  public var appearance: AppAppearance
   public var focusMinutes: Int
   public var shortBreakMinutes: Int
   public var longBreakMinutes: Int
@@ -96,6 +102,7 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
   public var didChooseInitialCalendars: Bool
 
   public init(
+    appearance: AppAppearance = .system,
     focusMinutes: Int = 25, shortBreakMinutes: Int = 5, longBreakMinutes: Int = 10,
     longBreakEvery: Int = 4,
     focusColor: PhaseColor = .green, breakColor: PhaseColor = .blue,
@@ -104,6 +111,7 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
     calendarIntegrationEnabled: Bool = false, selectedCalendarIDs: Set<String> = [],
     didChooseInitialCalendars: Bool = false
   ) {
+    self.appearance = appearance
     self.focusMinutes = focusMinutes
     self.shortBreakMinutes = shortBreakMinutes
     self.longBreakMinutes = longBreakMinutes
@@ -126,6 +134,7 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
 
   public func clamped() -> Self {
     .init(
+      appearance: appearance,
       focusMinutes: focusMinutes.clamped(to: 1...60),
       shortBreakMinutes: shortBreakMinutes.clamped(to: 1...60),
       longBreakMinutes: longBreakMinutes.clamped(to: 1...60),
@@ -139,12 +148,14 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case focusMinutes, shortBreakMinutes, longBreakMinutes, longBreakEvery, focusColor, breakColor,
+    case appearance, focusMinutes, shortBreakMinutes, longBreakMinutes, longBreakEvery, focusColor,
+      breakColor,
       focusSound, breakSound, soundVolume, calendarIntegrationEnabled, selectedCalendarIDs,
       didChooseInitialCalendars
   }
   public init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
+    appearance = try c.decodeIfPresent(AppAppearance.self, forKey: .appearance) ?? .system
     focusMinutes = try c.decode(Int.self, forKey: .focusMinutes)
     shortBreakMinutes = try c.decode(Int.self, forKey: .shortBreakMinutes)
     longBreakMinutes = try c.decode(Int.self, forKey: .longBreakMinutes)

@@ -6,12 +6,20 @@ struct SnapshotRequest {
   let path: String
   let scene: String
   let composited: Bool
+  let appearance: AppAppearance
 
   init?(arguments: [String]) {
     guard let index = arguments.firstIndex(of: "--snapshot"), arguments.indices.contains(index + 1)
     else { return nil }
     path = arguments[index + 1]
     composited = arguments.contains("--snapshot-composited")
+    if let appearanceIndex = arguments.firstIndex(of: "--snapshot-appearance"),
+      arguments.indices.contains(appearanceIndex + 1)
+    {
+      appearance = AppAppearance(rawValue: arguments[appearanceIndex + 1]) ?? .system
+    } else {
+      appearance = .dark
+    }
     if let sceneIndex = arguments.firstIndex(of: "--snapshot-scene"),
       arguments.indices.contains(sceneIndex + 1)
     {
@@ -156,6 +164,8 @@ struct SnapshotRequest {
   }
 
   static func render(request: SnapshotRequest, store: AppStore) async throws {
+    store.data.settings.appearance = request.appearance
+    request.appearance.apply()
     if request.scene == "reminder-overlay" {
       // Exercise the real controller, not a reminder view inside a snapshot window.
       let controller = ReminderOverlayController()
@@ -337,7 +347,6 @@ struct SnapshotRequest {
         .transaction { transaction in
           if accessibilityFixture { transaction.disablesAnimations = true }
         }
-        .preferredColorScheme(.dark)
         .background(
           request.composited
             ? Color.clear
@@ -345,7 +354,6 @@ struct SnapshotRequest {
     hostingView.frame = NSRect(origin: .zero, size: size)
     let window = SnapshotWindow(
       contentRect: hostingView.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-    window.appearance = NSAppearance(named: .darkAqua)
     window.backgroundColor = request.composited ? .clear : NSColor(IntervalTheme.surface)
     window.isOpaque = !request.composited
     window.hasShadow = false

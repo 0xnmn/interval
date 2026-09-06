@@ -90,7 +90,7 @@ struct DayTimeline: View {
         .frame(width: labelWidth - 8, alignment: .trailing)
         .offset(y: y + 3)
       Rectangle()
-        .fill(Color.white.opacity(0.075))
+        .fill(Color.primary.opacity(0.075))
         .frame(width: width, height: 1)
         .offset(x: labelWidth, y: y)
     }

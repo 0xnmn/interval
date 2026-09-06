@@ -1,10 +1,81 @@
+import AppKit
 import Foundation
 import IntervalCore
+import SwiftUI
 import Testing
 
 @testable import Interval
 
 @MainActor struct PresentationTests {
+  @Test func appearanceMigratesAndPersistsWithoutResettingTimer() throws {
+    let legacy = Data(
+      """
+      {"focusMinutes":25,"shortBreakMinutes":5,"longBreakMinutes":10,"longBreakEvery":4}
+      """.utf8)
+    #expect(try JSONDecoder().decode(IntervalSettings.self, from: legacy).appearance == .system)
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let persistence = JSONStore(fileURL: directory.appendingPathComponent("state.json"))
+    let store = AppStore(persistence: persistence, runtimeEnabled: false)
+    let timer = store.timer
+    for appearance in AppAppearance.allCases {
+      var settings = store.data.settings
+      settings.appearance = appearance
+      store.updateSettings(settings)
+      #expect(store.timer == timer)
+      #expect(try persistence.load().settings.appearance == appearance)
+      #expect(settings.clamped().appearance == appearance)
+    }
+    store.startSession()
+    let running = store.timer
+    var settings = store.data.settings
+    settings.appearance = .light
+    store.updateSettings(settings)
+    #expect(store.timer == running)
+  }
+
+  @Test func existingNativeWindowsInheritAppearanceChanges() {
+    let original = NSApplication.shared.appearance
+    defer { NSApplication.shared.appearance = original }
+    let window = NSWindow(contentRect: .zero, styleMask: [], backing: .buffered, defer: false)
+    let panel = NSPanel(
+      contentRect: .zero, styleMask: [.nonactivatingPanel], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    panel.isReleasedWhenClosed = false
+    defer {
+      window.close()
+      panel.close()
+    }
+    window.contentView = NSHostingView(rootView: GlassBackground())
+    panel.contentView = NSHostingView(rootView: Text("Reminder"))
+    for appearance in [AppAppearance.light, .dark, .system] {
+      appearance.apply()
+      let expected = NSApplication.shared.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua])
+      for surface in [window, panel] {
+        #expect(surface.appearance == nil)
+        #expect(
+          surface.contentView?.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == expected)
+      }
+    }
+    #expect(NSApplication.shared.appearance == nil)
+  }
+
+  @Test func nativeAppearanceAndSurfaceAdapt() {
+    #expect(AppAppearance.system.nativeAppearance == nil)
+    #expect(AppAppearance.light.nativeAppearance?.name == .aqua)
+    #expect(AppAppearance.dark.nativeAppearance?.name == .darkAqua)
+    var light: CGFloat = 0
+    var dark: CGFloat = 1
+    AppAppearance.light.nativeAppearance!.performAsCurrentDrawingAppearance {
+      light = NSColor(IntervalTheme.surface).usingColorSpace(.deviceRGB)!.redComponent
+    }
+    AppAppearance.dark.nativeAppearance!.performAsCurrentDrawingAppearance {
+      dark = NSColor(IntervalTheme.surface).usingColorSpace(.deviceRGB)!.redComponent
+    }
+    #expect(light > 0.9)
+    #expect(dark < 0.2)
+  }
+
   @Test func dialUsesSixtyMinuteScale() {
     #expect(FocusDial.fraction(for: 1_500) == 25.0 / 60)
     #expect(FocusDial.fraction(for: 300) == 5.0 / 60)

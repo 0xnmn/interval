@@ -171,9 +171,11 @@ struct FocusDial: View {
   var body: some View {
     ZStack {
       ForEach(0..<60) { tick in
-        Capsule().fill(tick % 5 == 0 ? .white.opacity(0.5) : .white.opacity(0.15))
-          .frame(width: tick % 5 == 0 ? 2 : 1, height: tick % 5 == 0 ? 12 : 6)
-          .offset(y: -116).rotationEffect(.degrees(Double(tick) * 6))
+        Capsule().fill(
+          tick % 5 == 0 ? Color.primary.opacity(0.5) : Color.primary.opacity(0.15)
+        )
+        .frame(width: tick % 5 == 0 ? 2 : 1, height: tick % 5 == 0 ? 12 : 6)
+        .offset(y: -116).rotationEffect(.degrees(Double(tick) * 6))
       }
       Circle().fill(accent.opacity(0.10)).padding(40)
       ClockSector(fraction: fraction).fill(accent.gradient.opacity(0.7)).padding(40)
@@ -315,7 +317,7 @@ struct FocusDayPanel: View {
             }.font(IntervalTheme.body).frame(maxWidth: .infinity).padding(.vertical, 6)
               .background(
                 calendar.isDate(day, inSameDayAs: selectedDay)
-                  ? Color.accentColor.opacity(0.2) : .white.opacity(0.035),
+                  ? Color.accentColor.opacity(0.2) : Color.primary.opacity(0.035),
                 in: RoundedRectangle(cornerRadius: 7))
           }.buttonStyle(.plain).accessibilityLabel(day.formatted(date: .complete, time: .omitted))
             .accessibilityAddTraits(

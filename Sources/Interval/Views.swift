@@ -30,7 +30,7 @@ struct MainView: View {
               Image(systemName: item.icon)
                 .font(.system(size: 18, weight: .medium)).frame(width: 38, height: 38)
                 .background(
-                  (store.selection ?? .focus) == item ? .white.opacity(0.10) : .clear,
+                  (store.selection ?? .focus) == item ? Color.primary.opacity(0.10) : .clear,
                   in: RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
@@ -70,7 +70,7 @@ struct MainView: View {
       minWidth: 780, maxWidth: .infinity,
       minHeight: 620, maxHeight: .infinity
     )
-    .tint(IntervalTheme.accent).preferredColorScheme(.dark)
+    .tint(IntervalTheme.accent)
     .safeAreaInset(edge: .bottom) {
       if let error = store.persistenceError {
         Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -528,7 +528,7 @@ struct ReflectionView: View {
               Text(value.title).font(IntervalTheme.body)
             }.frame(maxWidth: .infinity).padding(.vertical, 14)
               .background(
-                selected ? Color.accentColor.opacity(0.22) : .white.opacity(0.05),
+                selected ? Color.accentColor.opacity(0.22) : Color.primary.opacity(0.05),
                 in: RoundedRectangle(cornerRadius: 12))
           }
           .buttonStyle(.plain).accessibilityLabel(value.title)
@@ -565,11 +565,11 @@ struct WritingArea: View {
         }
       }
       .padding(8)
-      .background(.black.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+      .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
       .overlay {
         RoundedRectangle(cornerRadius: 10)
           .strokeBorder(
-            isFocused ? Color.accentColor.opacity(0.5) : .white.opacity(0.07), lineWidth: 1
+            isFocused ? Color.accentColor.opacity(0.5) : Color.primary.opacity(0.07), lineWidth: 1
           )
           .allowsHitTesting(false)
       }
@@ -742,7 +742,6 @@ struct MenuBarView: View {
       }
     }.font(IntervalTheme.body)
       .padding(14).frame(width: 320).background(GlassBackground()).tint(IntervalTheme.accent)
-      .preferredColorScheme(.dark)
       .accessibilityElement(children: .contain)
       .accessibilityLabel(
         "\(store.timer.kind.title), \(store.timer.status.rawValue), \(spokenDuration(store.remaining)) remaining"

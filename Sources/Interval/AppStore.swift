@@ -80,6 +80,7 @@ final class AppStore {
     }
     reconcile(at: now, autoStart: false)
     guard runtimeEnabled else { return }
+    data.settings.appearance.apply()
     updates.shouldDeferInstall = { [weak self] in
       guard let self else { return false }
       return self.timer.status == .running || self.reminderOverlay != nil
@@ -507,7 +508,10 @@ final class AppStore {
   func updateSettings(_ settings: IntervalSettings) {
     let old = data.settings
     data.settings = settings.clamped()
-    if data.activeTimer?.status == .ready {
+    if runtimeEnabled { data.settings.appearance.apply() }
+    if data.activeTimer?.status == .ready,
+      old.duration(for: timer.kind) != data.settings.duration(for: timer.kind)
+    {
       data.activeTimer = timer(for: data.activeTimer?.kind ?? .focus)
     }
     save()
