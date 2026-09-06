@@ -4,6 +4,7 @@ import SwiftUI
 struct FocusControls: View {
   @Bindable var store: AppStore
   var compact = false
+  var showsDial = true
   @State private var confirmingAbandon = false
   @State private var confirmingBreak = false
   private var active: Bool { store.timer.status == .running }
@@ -18,11 +19,11 @@ struct FocusControls: View {
         VStack(spacing: 12) {
           if !compact { SessionIdentity(store: store) }
           Spacer(minLength: 8)
-          if store.timer.kind == .focus {
+          if store.timer.kind == .focus && showsDial {
             FocusDial(
               remaining: store.remaining, accent: accent,
               diameter: compact ? 150 : min(250, max(180, geometry.size.height - 400)))
-          } else {
+          } else if store.timer.kind != .focus {
             Text(store.breakEnded ? "Break ended" : "Taking a break")
               .font(.title3).foregroundStyle(store.breakEnded ? .primary : .secondary)
           }

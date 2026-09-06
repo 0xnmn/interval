@@ -219,16 +219,25 @@ struct SnapshotRequest {
     case "completion-toast":
       size = SessionCompletionController.toastSize
       view = AnyView(SessionCompletionToast(later: {}, reflect: {}))
-    case "notch-compact", "notch-expanded", "notch-fallback":
+    case "notch-compact", "notch-expanded", "notch-fallback", "notch-todos", "notch-reminders",
+      "notch-reflection":
       let geometry =
         request.scene == "notch-fallback"
         ? NotchGeometry.fallback
         : NotchGeometry(hasHardwareNotch: true, cutoutWidth: 180, topInset: 32)
-      let expanded = request.scene == "notch-expanded"
+      let expanded = request.scene != "notch-compact" && request.scene != "notch-fallback"
+      if request.scene == "notch-reflection" {
+        store.completionSessionID = store.data.sessions.first?.id
+      }
       size =
-        geometry.frame(expanded: expanded, in: NSRect(x: 0, y: 0, width: 1440, height: 900)).size
+        geometry.frame(
+          expanded: expanded, in: NSRect(x: 0, y: 0, width: 1440, height: 900),
+          reflection: store.completionSessionID != nil
+        ).size
       view = AnyView(
-        NotchRootView(store: store, expanded: expanded, geometry: geometry, collapse: {}))
+        NotchRootView(
+          store: store, expanded: expanded, geometry: geometry, collapse: {},
+          page: request.scene == "notch-todos" ? 1 : request.scene == "notch-reminders" ? 2 : 0))
     case "history", "history-disabled", "history-no-selection", "history-running", "history-break",
       "history-compact", "history-review":
       store.selection = .history

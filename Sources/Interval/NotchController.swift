@@ -33,6 +33,8 @@ final class NotchController: NSObject {
       makePanel(store: store)
       reposition(animated: false)
       panel?.orderFrontRegardless()
+    } else if expanded {
+      reposition(animated: false)
     }
   }
 
@@ -55,7 +57,7 @@ final class NotchController: NSObject {
     panel.isReleasedWhenClosed = false
     panel.isOpaque = false
     panel.backgroundColor = .clear
-    panel.sharingType = .none
+    panel.sharingType = .readOnly
     panel.hasShadow = true
     panel.hidesOnDeactivate = false
     panel.isFloatingPanel = true
@@ -71,6 +73,12 @@ final class NotchController: NSObject {
     trackingView.onExit = { [weak self] in self?.scheduleCollapse() }
     let host = NSHostingView(
       rootView: NotchRootView(store: store, expanded: false, geometry: geometry(), collapse: {}))
+    // The panel owns its animated size; SwiftUI's expanded intrinsic size must not
+    // impose a minimum window size while the panel is collapsing.
+    host.sizingOptions = []
+    // This surface deliberately occupies the camera band. Its root reserves the
+    // cutout itself; AppKit's automatic safe area would push the compact content out.
+    host.safeAreaRegions = []
     host.translatesAutoresizingMaskIntoConstraints = false
     trackingView.addSubview(host)
     NSLayoutConstraint.activate([
@@ -131,7 +139,9 @@ final class NotchController: NSObject {
   private func reposition(animated: Bool) {
     guard let panel, let screen = targetScreen() else { return }
     let geometry = Self.geometry(for: screen)
-    let frame = geometry.frame(expanded: expanded, in: screen.frame)
+    let frame = geometry.frame(
+      expanded: expanded, in: screen.frame,
+      reflection: store?.completionSessionID != nil)
     if panel.frame == frame { return }
     if animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
       NSAnimationContext.runAnimationGroup { context in
@@ -172,7 +182,8 @@ final class NotchController: NSObject {
 
 struct NotchGeometry: Equatable {
   static let fallback = NotchGeometry(hasHardwareNotch: false, cutoutWidth: 0, topInset: 0)
-  static let expandedSize = NSSize(width: 600, height: 480)
+  static let expandedSize = NSSize(width: 420, height: 360)
+  static let reflectionHeight: CGFloat = 480
 
   let hasHardwareNotch: Bool
   let cutoutWidth: CGFloat
@@ -184,10 +195,12 @@ struct NotchGeometry: Equatable {
       : NSSize(width: 150, height: 32)
   }
 
-  func frame(expanded: Bool, in screenFrame: NSRect) -> NSRect {
+  func frame(expanded: Bool, in screenFrame: NSRect, reflection: Bool = false) -> NSRect {
     let size =
       expanded
-      ? NSSize(width: Self.expandedSize.width, height: Self.expandedSize.height + topInset)
+      ? NSSize(
+        width: Self.expandedSize.width,
+        height: (reflection ? Self.reflectionHeight : Self.expandedSize.height) + topInset)
       : compactSize
     return NSRect(
       x: screenFrame.midX - size.width / 2, y: screenFrame.maxY - size.height,
@@ -232,21 +245,64 @@ struct NotchRootView: View {
   let expanded: Bool
   let geometry: NotchGeometry
   let collapse: () -> Void
+  @State var page = 0
+
+  private var accent: Color {
+    (store.timer.kind == .focus ? store.data.settings.focusColor : store.data.settings.breakColor)
+      .color
+  }
 
   var body: some View {
     if expanded {
       VStack(spacing: 0) {
         Color.black.frame(height: geometry.topInset)
-        ZStack(alignment: .topTrailing) {
-          MenuBarView(store: store, showsAppActions: false)
-          Button(action: collapse) {
-            Image(systemName: "chevron.up")
-              .font(.caption.weight(.semibold)).frame(width: 28, height: 28)
+        VStack(spacing: 18) {
+          HStack {
+            Image(systemName: store.timer.kind == .focus ? "timer" : "cup.and.saucer")
+              .foregroundStyle(accent)
+            Text(
+              store.completionSessionID != nil
+                ? "Reflect"
+                : store.breakEnded
+                  ? "Break ended" : store.timer.kind == .focus ? "Focus" : "Taking a break"
+            )
+            .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+            Spacer()
+            ForEach(store.completionSessionID == nil ? 0..<3 : 0..<0) { index in
+              Button {
+                page = index
+              } label: {
+                Image(systemName: ["timer", "checklist", "bell"][index])
+                  .frame(width: 26, height: 26)
+                  .foregroundStyle(page == index ? .white : .gray)
+                  .background(
+                    page == index ? Color.white.opacity(0.12) : .clear,
+                    in: RoundedRectangle(cornerRadius: 7))
+              }.buttonStyle(.plain).help(["Timer", "To-dos", "Reminders"][index])
+                .accessibilityLabel(["Timer", "To-dos", "Reminders"][index])
+            }
+            Button(action: collapse) {
+              Image(systemName: "chevron.up").frame(width: 26, height: 26)
+            }.buttonStyle(.plain).foregroundStyle(.secondary).help("Collapse")
           }
-          .buttonStyle(.plain).background(.thinMaterial, in: Circle()).padding(8)
-          .help("Collapse")
-        }
-      }.clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 22, bottomTrailingRadius: 22))
+          if let id = store.completionSessionID {
+            ScrollView { ReflectionView(store: store, sessionID: id) }
+          } else if page == 1 {
+            ScrollView { TodoList(store: store) }
+          } else if page == 2 {
+            ScrollView { UpcomingReminders(store: store) }
+          } else {
+            FocusControls(store: store, compact: true, showsDial: false)
+          }
+        }.padding(22)
+          .frame(
+            width: NotchGeometry.expandedSize.width,
+            height: store.completionSessionID != nil
+              ? NotchGeometry.reflectionHeight : NotchGeometry.expandedSize.height)
+      }
+      .background(.black)
+      .environment(\.colorScheme, .dark)
+      .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 24, bottomTrailingRadius: 24))
     } else {
       compact
     }
@@ -256,21 +312,22 @@ struct NotchRootView: View {
     HStack(spacing: 0) {
       if geometry.hasHardwareNotch {
         Image(systemName: store.timer.kind == .focus ? "timer" : "cup.and.saucer")
-          .foregroundStyle(.white.opacity(0.9)).frame(width: 88)
+          .font(.system(size: 15, weight: .medium))
+          .foregroundStyle(accent).frame(width: 88)
         Color.clear.frame(width: geometry.cutoutWidth)
         Text(store.completionSessionID == nil ? store.timerText : "Reflect")
-          .font(.system(size: 11, weight: .medium, design: .rounded)).monospacedDigit()
+          .font(.system(size: 13, weight: .medium, design: .rounded)).monospacedDigit()
           .foregroundStyle(.white.opacity(0.9)).frame(width: 88)
       } else {
         Text(store.completionSessionID == nil ? store.timerText : "Reflect")
           .font(.system(size: 12, weight: .semibold, design: .rounded)).monospacedDigit()
           .padding(.horizontal, 18).frame(maxWidth: .infinity, maxHeight: .infinity)
-          .background(GlassBackground())
+          .foregroundStyle(.white)
       }
     }
     .frame(width: geometry.compactSize.width, height: geometry.compactSize.height)
     .background(
-      geometry.hasHardwareNotch ? Color.black : Color.clear,
+      Color.black,
       in: UnevenRoundedRectangle(bottomLeadingRadius: 10, bottomTrailingRadius: 10)
     )
     .contentShape(Rectangle())

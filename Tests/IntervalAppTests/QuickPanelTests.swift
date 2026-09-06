@@ -1,5 +1,6 @@
 import AppKit
 import IntervalCore
+import SwiftUI
 import Testing
 
 @testable import Interval
@@ -15,7 +16,7 @@ struct QuickPanelTests {
       #expect(frame.maxY == screen.maxY)
       #expect(screen.contains(frame))
     }
-    #expect(geometry.frame(expanded: true, in: screen).height == 512)
+    #expect(geometry.frame(expanded: true, in: screen).height == 392)
     #expect(NotchGeometry.fallback.compactSize.height == 32)
   }
 
@@ -65,6 +66,9 @@ struct QuickPanelTests {
     let panel = try #require(
       NSApp.windows.first { !original.contains($0.windowNumber) && $0.isVisible })
     let initialFrame = panel.frame
+    let host = try #require(panel.contentView?.subviews.first as? NSHostingView<NotchRootView>)
+    #expect(host.safeAreaRegions.isEmpty)
+    #expect(host.sizingOptions.isEmpty)
     #expect(!panel.isKeyWindow)
     let event = try #require(
       NSEvent.enterExitEvent(
@@ -73,10 +77,10 @@ struct QuickPanelTests {
         userData: nil))
     panel.contentView?.mouseEntered(with: event)
     for _ in 0..<40 {
-      if panel.frame.width == 600 { break }
+      if panel.frame.width == NotchGeometry.expandedSize.width { break }
       try await Task.sleep(for: .milliseconds(50))
     }
-    #expect(panel.frame.width == 600)
+    #expect(panel.frame.width == NotchGeometry.expandedSize.width)
     #expect(panel.frame.maxY == initialFrame.maxY)
     #expect(!panel.isKeyWindow)
     let exit = try #require(
