@@ -18,9 +18,14 @@ struct FocusControls: View {
         VStack(spacing: 12) {
           if !compact { SessionIdentity(store: store) }
           Spacer(minLength: 8)
-          FocusDial(
-            remaining: store.remaining, accent: accent,
-            diameter: compact ? 150 : min(250, max(180, geometry.size.height - 400)))
+          if store.timer.kind == .focus {
+            FocusDial(
+              remaining: store.remaining, accent: accent,
+              diameter: compact ? 150 : min(250, max(180, geometry.size.height - 400)))
+          } else {
+            Text("Taking a break")
+              .font(.title3).foregroundStyle(.secondary)
+          }
           Text(durationString(store.remaining))
             .font(.system(size: 32, weight: .light, design: .rounded)).monospacedDigit()
           timeControls
