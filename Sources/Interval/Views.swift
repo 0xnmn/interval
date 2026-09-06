@@ -84,10 +84,11 @@ struct MainView: View {
 struct FocusView: View {
   @Bindable var store: AppStore
   var body: some View {
-    HStack(spacing: 0) {
-      FocusControls(store: store).frame(width: 360)
-      Rectangle().fill(IntervalTheme.border).frame(width: 1)
-      FocusDayPanel(store: store).frame(maxWidth: .infinity, maxHeight: .infinity)
+    HSplitView {
+      FocusControls(store: store)
+        .frame(minWidth: 340, idealWidth: 400, maxWidth: 460, maxHeight: .infinity)
+      FocusDayPanel(store: store)
+        .frame(minWidth: 340, maxWidth: .infinity, maxHeight: .infinity)
     }
   }
 }

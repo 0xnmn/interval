@@ -1,10 +1,11 @@
 import IntervalCore
 import SwiftUI
 
-/// A read-only view of today's saved sessions and Apple Calendar events.
+/// A read-only calendar day of saved sessions and Apple Calendar events.
 struct DayTimeline: View {
   @Bindable var store: AppStore
   @Binding var selectedSessionID: UUID?
+  let date: Date
 
   private let calendar = Calendar.autoupdatingCurrent
   private let hourHeight: CGFloat = 100
@@ -32,11 +33,14 @@ struct DayTimeline: View {
           .frame(height: timelineHeight)
         }
         .frame(minHeight: 200)
-        .onAppear { scrollToNow(proxy) }
+        .task(id: dayInterval.start) {
+          await Task.yield()
+          scrollToNow(proxy)
+        }
       }
     }
     .accessibilityElement(children: .contain)
-    .accessibilityLabel("Today's timeline")
+    .accessibilityLabel("Timeline for \(date.formatted(date: .complete, time: .omitted))")
   }
 
   private var allDayRow: some View {
@@ -163,8 +167,8 @@ struct DayTimeline: View {
   }
 
   private var dayInterval: DateInterval {
-    if let interval = calendar.dateInterval(of: .day, for: store.now) { return interval }
-    let start = calendar.startOfDay(for: store.now)
+    if let interval = calendar.dateInterval(of: .day, for: date) { return interval }
+    let start = calendar.startOfDay(for: date)
     let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
     return DateInterval(start: start, end: end)
   }
@@ -190,10 +194,13 @@ struct DayTimeline: View {
     calendarEvents.filter(\.allDay)
   }
 
-  private var calendarEvents: [CalendarEventSnapshot] {
+  var calendarEvents: [CalendarEventSnapshot] {
     guard store.calendarService.isEnabled, store.calendarService.authorizationState == .fullAccess
     else { return [] }
-    return store.calendarService.todayEvents.filter { $0.overlaps(dayInterval) }
+    if calendar.isDate(date, inSameDayAs: store.now) {
+      return store.calendarService.todayEvents.filter { $0.overlaps(dayInterval) }
+    }
+    return store.calendarService.events(on: date, calendar: calendar)
   }
 
   private var positionedItems: [PositionedTimelineItem] {
@@ -253,7 +260,12 @@ struct DayTimeline: View {
   }
 
   private func scrollToNow(_ proxy: ScrollViewProxy) {
-    let currentIndex = hourMarks.lastIndex(where: { $0 <= store.now }) ?? 0
+    let targetTime =
+      calendar.isDate(date, inSameDayAs: store.now)
+      ? store.now
+      : positionedItems.first?.start ?? calendar.date(
+        bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
+    let currentIndex = hourMarks.lastIndex(where: { $0 <= targetTime }) ?? 0
     let target = "timeline-hour-\(currentIndex)"
     proxy.scrollTo(target, anchor: .top)
   }

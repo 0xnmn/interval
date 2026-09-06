@@ -1,5 +1,6 @@
 import Foundation
 import IntervalCore
+import SwiftUI
 import Testing
 
 @testable import Interval
@@ -15,6 +16,38 @@ struct DailyStatsTests {
       store.data.sessions[index].startedAt.addTimeInterval(shift)
       store.data.sessions[index].endedAt.addTimeInterval(shift)
     }
+  }
+
+  @Test func dashboardSelectedDateScopesStatsAndCalendar() {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let now = SnapshotRenderer.fixtureNow
+    let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
+    let events = [
+      CalendarEventSnapshot(
+        id: "previous", title: "Yesterday meeting",
+        start: yesterday, end: yesterday.addingTimeInterval(1_800), allDay: false,
+        calendarName: "Work")
+    ]
+    let service = CalendarService(fixtureEvents: events)
+    let store = AppStore(
+      persistence: JSONStore(fileURL: directory.appendingPathComponent("state.json")),
+      calendarService: service, runtimeEnabled: false)
+    store.data = SnapshotRenderer.fixture(scene: "history")
+    store.now = now
+    service.configure(enabled: true, selectedCalendarIDs: ["Work"])
+    service.show(month: yesterday)
+    _ = service.hasEvent(at: now)
+    let timer = store.timer
+    let previous = FocusDayPanel(store: store, selectedDate: yesterday)
+    #expect(previous.sessions.reduce(0) { $0 + $1.activeDuration } == 1_200)
+    #expect(FocusDayPanel(store: store).sessions.reduce(0) { $0 + $1.activeDuration } == 4_500)
+    let timeline = DayTimeline(store: store, selectedSessionID: .constant(nil), date: yesterday)
+    #expect(timeline.calendarEvents.map(\.id) == ["previous"])
+    #expect(
+      DayTimeline(store: store, selectedSessionID: .constant(nil), date: now).calendarEvents.isEmpty
+    )
+    #expect(store.timer == timer)
   }
 
   @Test func selectedDayAndCategoryDetermineDistributionsNotLiveTimer() {

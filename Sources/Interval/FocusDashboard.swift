@@ -180,6 +180,8 @@ struct FocusDial: View {
       Capsule().fill(accent).frame(width: 5, height: 110)
         .offset(y: -49).rotationEffect(.degrees(fraction * 360))
       Circle().fill(.regularMaterial).frame(width: 30, height: 30)
+        .overlay { Circle().fill(.white.opacity(0.65)).padding(5) }
+        .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
         .overlay { Circle().strokeBorder(accent.opacity(0.5), lineWidth: 3) }
     }.frame(width: 250, height: 250).scaleEffect(diameter / 250)
       .frame(width: diameter, height: diameter)
@@ -205,9 +207,18 @@ private struct ClockSector: Shape {
 struct FocusDayPanel: View {
   @Bindable var store: AppStore
   @State private var selectedSessionID: UUID?
-  private var sessions: [SessionRecord] {
+  @State private var selectedDay: Date
+  @State private var showsDatePicker = false
+  private let calendar = Calendar.autoupdatingCurrent
+
+  init(store: AppStore, selectedDate: Date? = nil) {
+    self.store = store
+    _selectedDay = State(initialValue: selectedDate ?? store.now)
+  }
+
+  var sessions: [SessionRecord] {
     store.data.sessions.filter {
-      $0.kind == .focus && Calendar.autoupdatingCurrent.isDate($0.endedAt, inSameDayAs: store.now)
+      $0.kind == .focus && calendar.isDate($0.endedAt, inSameDayAs: selectedDay)
     }
   }
   var body: some View {
@@ -220,30 +231,24 @@ struct FocusDayPanel: View {
         }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
       }.frame(minHeight: 110, idealHeight: 190, maxHeight: .infinity)
       VStack(spacing: 0) {
-        VStack(alignment: .leading, spacing: 20) {
-          HStack(spacing: 28) {
-            VStack(alignment: .leading, spacing: 4) {
-              Text("\(Int(sessions.reduce(0) { $0 + $1.activeDuration } / 60))m")
-                .font(.title2.weight(.medium)).monospacedDigit()
-              Text("Focus time").font(IntervalTheme.body).foregroundStyle(.secondary)
-            }
-            VStack(alignment: .leading, spacing: 4) {
-              Text("\(sessions.filter { $0.outcome == .completed }.count)")
-                .font(.title2.weight(.medium)).monospacedDigit()
-              Text("Completed").font(IntervalTheme.body).foregroundStyle(.secondary)
-            }
-          }
+        VStack(spacing: 12) {
+          dateNavigation
           HStack {
-            Text("Today's timeline").font(IntervalTheme.heading)
+            Text("\(Int(sessions.reduce(0) { $0 + $1.activeDuration } / 60))m focus")
             Spacer()
-            Text(store.now.formatted(.dateTime.month(.abbreviated).day()))
-              .font(IntervalTheme.body).foregroundStyle(.secondary)
-          }
-        }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
-        DayTimeline(store: store, selectedSessionID: $selectedSessionID)
+            Text("\(sessions.filter { $0.outcome == .completed }.count) completed")
+          }.font(IntervalTheme.body).monospacedDigit().foregroundStyle(.secondary)
+        }.padding(16).frame(maxWidth: .infinity)
+        DayTimeline(store: store, selectedSessionID: $selectedSessionID, date: selectedDay)
+          .id(calendar.startOfDay(for: selectedDay))
           .padding(.horizontal, 16)
       }.frame(minHeight: 400, idealHeight: 440, maxHeight: .infinity)
-    }.sheet(
+    }
+    .onAppear { store.calendarService.show(month: selectedDay) }
+    .onChange(of: calendar.startOfDay(for: store.now)) { old, new in
+      if calendar.isDate(selectedDay, inSameDayAs: old) { selectDay(new) }
+    }
+    .sheet(
       isPresented: Binding(
         get: { selectedSessionID != nil }, set: { if !$0 { selectedSessionID = nil } }
       )
@@ -259,6 +264,78 @@ struct FocusDayPanel: View {
         }.frame(width: 460, height: 500).background(GlassBackground())
       }
     }
+  }
+
+  private var dateNavigation: some View {
+    VStack(spacing: 8) {
+      HStack {
+        Button {
+          moveDay(-1)
+        } label: {
+          Image(systemName: "chevron.left")
+        }
+        .buttonStyle(IntervalIconButton()).help("Previous day").accessibilityLabel("Previous day")
+        Button {
+          showsDatePicker.toggle()
+        } label: {
+          Text(
+            calendar.isDate(selectedDay, inSameDayAs: store.now)
+              ? "Today" : selectedDay.formatted(.dateTime.month(.abbreviated).day())
+          )
+          .font(IntervalTheme.heading).frame(maxWidth: .infinity)
+        }.buttonStyle(.plain)
+          .popover(isPresented: $showsDatePicker) {
+            VStack {
+              DatePicker(
+                "Date", selection: Binding(get: { selectedDay }, set: selectDay),
+                displayedComponents: .date
+              )
+              .datePickerStyle(.graphical).labelsHidden()
+              Button("Today") {
+                selectDay(store.now)
+                showsDatePicker = false
+              }
+            }.padding()
+          }
+        Button {
+          moveDay(1)
+        } label: {
+          Image(systemName: "chevron.right")
+        }
+        .buttonStyle(IntervalIconButton()).help("Next day").accessibilityLabel("Next day")
+      }
+      HStack(spacing: 3) {
+        ForEach(weekDates, id: \.self) { day in
+          Button {
+            selectDay(day)
+          } label: {
+            VStack(spacing: 3) {
+              Text(day.formatted(.dateTime.weekday(.narrow))).foregroundStyle(.secondary)
+              Text(day.formatted(.dateTime.day())).font(IntervalTheme.heading)
+            }.font(IntervalTheme.body).frame(maxWidth: .infinity).padding(.vertical, 6)
+              .background(
+                calendar.isDate(day, inSameDayAs: selectedDay)
+                  ? Color.accentColor.opacity(0.2) : .white.opacity(0.035),
+                in: RoundedRectangle(cornerRadius: 7))
+          }.buttonStyle(.plain).accessibilityLabel(day.formatted(date: .complete, time: .omitted))
+            .accessibilityAddTraits(
+              calendar.isDate(day, inSameDayAs: selectedDay) ? .isSelected : [])
+        }
+      }
+    }
+  }
+
+  private var weekDates: [Date] {
+    let start = calendar.dateInterval(of: .weekOfYear, for: selectedDay)?.start ?? selectedDay
+    return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
+  }
+  private func selectDay(_ date: Date) {
+    selectedDay = date
+    selectedSessionID = nil
+    store.calendarService.show(month: date)
+  }
+  private func moveDay(_ delta: Int) {
+    if let date = calendar.date(byAdding: .day, value: delta, to: selectedDay) { selectDay(date) }
   }
 
 }

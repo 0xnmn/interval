@@ -318,6 +318,12 @@ struct SnapshotRequest {
       store.selection = .focus
       size = NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))
+    case "dashboard-previous":
+      size = NSSize(width: 420, height: 680)
+      view = AnyView(
+        FocusDayPanel(
+          store: store,
+          selectedDate: Calendar.current.date(byAdding: .day, value: -1, to: store.now)!))
     default:
       store.selection = .focus
       size = NSSize(width: 880, height: 680)
@@ -348,6 +354,14 @@ struct SnapshotRequest {
     window.makeKeyAndOrderFront(nil)
     try await Task.sleep(for: .milliseconds(350))
     hostingView.layoutSubtreeIfNeeded()
+    if request.scene == "dashboard-todo-focused",
+      let field = descendants(of: hostingView).compactMap({ $0 as? NSTextField }).first(where: {
+        $0.accessibilityLabel() == "To-do title"
+      })
+    {
+      window.makeFirstResponder(field)
+      try await Task.sleep(for: .milliseconds(100))
+    }
     if request.scene == "reminder-editor-bottom" {
       scrollEditorToBottom(in: hostingView)
       hostingView.layoutSubtreeIfNeeded()
