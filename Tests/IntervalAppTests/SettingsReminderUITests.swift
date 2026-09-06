@@ -7,6 +7,43 @@ import Testing
 
 @MainActor @Suite("Settings and reminder native UI", .serialized)
 struct SettingsReminderUITests {
+  @Test func menuChecklistEditsPersistAndReturnAddsRow() async throws {
+    let store = try makeStore()
+    defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }
+    store.data.todos = [TodoItem(title: "Original task")]
+    let harness = try await NativeViewHarness(rootView: AnyView(MenuBarView(store: store)))
+    defer { harness.close() }
+    let field = try harness.titleEditor(value: "Original task")
+    try await harness.replaceText(in: field, with: "Updated from menu")
+    await harness.send(keyCode: 36, characters: "\r")
+    #expect(store.data.todos.map(\.title) == ["Updated from menu", ""])
+    #expect(
+      try JSONStore(fileURL: store.storageURL).load().todos.first?.title == "Updated from menu")
+  }
+
+  @Test func dashboardDividersRemainResizable() async throws {
+    let store = try makeStore()
+    defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }
+    let harness = try await NativeViewHarness(rootView: AnyView(MainView(store: store)))
+    defer { harness.close() }
+    harness.window.setContentSize(NSSize(width: 1_000, height: 800))
+    await harness.pump()
+    let splits = harness.descendants.compactMap { $0 as? ThemeSplitView }
+    #expect(splits.count == 2)
+    let columns = try #require(splits.first { $0.isVertical })
+    let rows = try #require(splits.first { !$0.isVertical })
+    columns.setPosition(400, ofDividerAt: 0)
+    rows.setPosition(250, ofDividerAt: 0)
+    await harness.pump()
+    #expect(abs(columns.arrangedSubviews[0].frame.width - 400) < 1)
+    #expect(abs(rows.arrangedSubviews[0].frame.height - 250) < 1)
+    #expect(columns.dividerColor.alphaComponent == 0.07)
+    store.now = store.now.addingTimeInterval(1)
+    await harness.pump()
+    #expect(abs(columns.arrangedSubviews[0].frame.width - 400) < 1)
+    #expect(abs(rows.arrangedSubviews[0].frame.height - 250) < 1)
+  }
+
   @Test func settingsSidebarArrowDownSelectsSound() async throws {
     let store = try makeStore()
     defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }

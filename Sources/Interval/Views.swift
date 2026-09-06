@@ -84,9 +84,10 @@ struct MainView: View {
 struct FocusView: View {
   @Bindable var store: AppStore
   var body: some View {
-    HSplitView {
+    ThemedSplitView(isVertical: true, minimumFirst: 340, maximumFirst: 460, minimumSecond: 340) {
       FocusControls(store: store)
         .frame(minWidth: 340, idealWidth: 400, maxWidth: 460, maxHeight: .infinity)
+    } second: {
       FocusDayPanel(store: store)
         .frame(minWidth: 340, maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -637,127 +638,88 @@ extension String {
 struct MenuBarView: View {
   @Bindable var store: AppStore
   @Environment(\.openWindow) private var openWindow
-  @State private var confirmingAbandon = false
-  @State private var confirmingBreak = false
-  @State private var quickTodo = ""
   var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      HStack(alignment: .center, spacing: 12) {
-        VStack(alignment: .leading, spacing: 2) {
-          Text(store.timer.kind.title).font(IntervalTheme.body).foregroundStyle(.secondary)
-          Text(durationString(store.remaining)).font(
-            .system(size: 34, weight: .medium, design: .rounded)
-          ).monospacedDigit()
-        }
-        Spacer()
-        HStack(spacing: 8) {
+    ZStack {
+      GlassBackground()
+      VStack(spacing: 0) {
+        HStack(spacing: 0) {
           if store.completionSessionID != nil {
-            Button {
-              store.showFocus()
-              openWindow(id: "main")
-              NSApp.activate(ignoringOtherApps: true)
-            } label: {
-              Label("Review", systemImage: "square.and.pencil")
-            }
-            .help("Review completed focus")
-          } else if store.timer.status == .ready {
-            Button(action: store.startSession) { Label("Start", systemImage: "play.fill") }
-              .help("Start interval")
-          } else if store.timer.kind != .focus {
-            Button {
-              store.endBreak()
-            } label: {
-              Label("End break", systemImage: "briefcase")
-            }
-            .foregroundStyle(store.data.settings.focusColor.color).help(
-              "End break · Return to focus")
+            reviewCompletedFocus
+              .frame(width: 300).frame(maxHeight: .infinity)
           } else {
-            Button {
-              confirmingBreak = true
-            } label: {
-              Label("Break", systemImage: "cup.and.saucer")
-            }
-            .foregroundStyle(store.data.settings.breakColor.color).help("Start a break")
+            FocusControls(store: store, compact: true)
+              .frame(width: 300).frame(maxHeight: .infinity)
           }
-          if store.timer.status == .running {
-            Button {
-              confirmingAbandon = true
-            } label: {
-              Label("Abandon", systemImage: "stop")
-            }.help("Abandon interval")
-          }
-        }.buttonStyle(IntervalIconButton())
-      }
-      if store.timer.status == .running, let start = store.timer.startedAt,
-        let end = store.timer.deadline
-      {
-        Text(
-          "\(start.formatted(date: .omitted, time: .shortened)) → \(end.formatted(date: .omitted, time: .shortened))"
-        )
-        .font(IntervalTheme.body).foregroundStyle(.secondary).monospacedDigit()
-      }
-      Divider()
-      if let reminder = activeReminder {
-        VStack(alignment: .leading, spacing: 5) {
-          Text(reminder.title).font(IntervalTheme.heading)
-          HStack {
-            extendMenu(reminder)
-            Button("Skip") { store.dismissReminder(reminder.id) }
-              .disabled(!canSkipActiveReminder)
-          }
-        }.frame(maxWidth: .infinity, alignment: .leading)
-      } else if let warningReminder {
-        VStack(alignment: .leading, spacing: 5) {
-          Text("Coming up: \(warningReminder.title)").font(IntervalTheme.heading)
-          extendMenu(warningReminder)
-        }.frame(maxWidth: .infinity, alignment: .leading)
-      } else if let reminder = store.nextReminder {
-        VStack(alignment: .leading, spacing: 5) {
-          Text("Next: \(reminder.title)").font(IntervalTheme.heading)
-          Text(
-            reminder.effectiveDueAt?.formatted(date: .omitted, time: .shortened) ?? "Not scheduled"
-          ).font(IntervalTheme.body).foregroundStyle(.secondary)
-          extendMenu(reminder)
-        }.frame(maxWidth: .infinity, alignment: .leading)
-      }
-      HStack(spacing: 7) {
-        TextField("Add a to-do…", text: $quickTodo).onSubmit {
-          store.addTodo(quickTodo)
-          quickTodo = ""
+          Rectangle().fill(IntervalTheme.border).frame(width: 1).padding(.vertical, 18)
+          ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+              reminderActions
+              Text("To-dos").font(IntervalTheme.heading)
+              TodoList(store: store)
+              UpcomingReminders(store: store)
+            }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
+          }.frame(width: 299).frame(maxHeight: .infinity)
         }
-        Button("Add") {
-          store.addTodo(quickTodo)
-          quickTodo = ""
-        }.disabled(quickTodo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        Rectangle().fill(IntervalTheme.border).frame(height: 1)
+        HStack(spacing: 8) {
+          Button {
+            openMainWindow()
+          } label: {
+            Image(systemName: "macwindow")
+          }.help("Open Interval").accessibilityLabel("Open Interval")
+          SettingsLink {
+            Image(systemName: "gearshape")
+          }.help("Settings").accessibilityLabel("Settings")
+          Spacer()
+          Button {
+            NSApp.terminate(nil)
+          } label: {
+            Image(systemName: "power")
+          }.help("Quit Interval").accessibilityLabel("Quit Interval")
+        }.buttonStyle(IntervalIconButton()).foregroundStyle(.secondary)
+          .padding(.horizontal, 12).frame(height: 44)
       }
-      Divider()
-      HStack(spacing: 12) {
-        Button("Open Interval") {
-          openWindow(id: "main")
-          NSApp.activate(ignoringOtherApps: true)
-        }
-        SettingsLink { Text("Settings") }
-        Spacer()
-        Button("Quit") { NSApp.terminate(nil) }
-      }
-    }.font(IntervalTheme.body)
-      .padding(14).frame(width: 320).background(GlassBackground()).tint(IntervalTheme.accent)
+    }.font(IntervalTheme.body).frame(width: 600, height: 480).tint(IntervalTheme.accent)
       .accessibilityElement(children: .contain)
       .accessibilityLabel(
         "\(store.timer.kind.title), \(store.timer.status.rawValue), \(spokenDuration(store.remaining)) remaining"
       )
-      .alert("Abandon this interval?", isPresented: $confirmingAbandon) {
-        Button("Keep Going", role: .cancel) {}
-        Button("Abandon", role: .destructive, action: store.abandon)
-      } message: {
-        Text("Elapsed active time will be kept in Stats.")
+  }
+  private var reviewCompletedFocus: some View {
+    VStack(spacing: 14) {
+      Image(systemName: "checkmark.circle.fill")
+        .font(.system(size: 36)).foregroundStyle(store.data.settings.focusColor.color)
+      Text("Focus complete").font(IntervalTheme.heading)
+      Text("Review how this session felt before starting your break.")
+        .foregroundStyle(.secondary).multilineTextAlignment(.center)
+      Button {
+        openMainWindow(showFocus: true)
+      } label: {
+        Label("Review completed focus", systemImage: "square.and.pencil")
+      }.buttonStyle(.borderedProminent).tint(store.data.settings.focusColor.color)
+    }.padding(24)
+  }
+  @ViewBuilder private var reminderActions: some View {
+    if let reminder = activeReminder {
+      VStack(alignment: .leading, spacing: 7) {
+        Text(reminder.title).font(IntervalTheme.heading)
+        HStack {
+          extendMenu(reminder)
+          Button("Skip") { store.dismissReminder(reminder.id) }
+            .disabled(!canSkipActiveReminder)
+        }
       }
-      .alert("Start a break now?", isPresented: $confirmingBreak) {
-        Button("Keep Focusing", role: .cancel) {}
-        Button("Start Break") { store.startBreakNow() }
-      } message: {
-        Text("This unfinished focus session will be saved as abandoned. Your focus time is kept.")
+    } else if let reminder = warningReminder {
+      VStack(alignment: .leading, spacing: 7) {
+        Text("Coming up: \(reminder.title)").font(IntervalTheme.heading)
+        extendMenu(reminder)
       }
+    }
+  }
+  private func openMainWindow(showFocus: Bool = false) {
+    if showFocus { store.showFocus() }
+    openWindow(id: "main")
+    NSApp.activate(ignoringOtherApps: true)
   }
   private var warningReminder: Reminder? {
     guard case .warning(let id, _, _) = store.reminderOverlay else { return nil }

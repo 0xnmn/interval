@@ -70,7 +70,7 @@ struct SnapshotRequest {
       timer.startedAt = fixtureNow.addingTimeInterval(-420)
       timer.deadline = fixtureNow.addingTimeInterval(1_080)
     }
-    if scene == "dashboard-break" || scene == "history-break" {
+    if scene == "dashboard-break" || scene == "history-break" || scene == "menu-break" {
       timer = TimerState(
         id: timerID, kind: .shortBreak, duration: 300, status: .running,
         startedAt: fixtureNow.addingTimeInterval(-60),
@@ -293,8 +293,11 @@ struct SnapshotRequest {
       size = NSSize(width: 360, height: 680)
       view = AnyView(
         FocusControls(store: store))
-    case "menu":
-      size = NSSize(width: 348, height: 290)
+    case "menu", "menu-ready", "menu-break", "menu-review":
+      if request.scene == "menu-review" {
+        store.completionSessionID = store.data.sessions.first?.id
+      }
+      size = NSSize(width: 600, height: 480)
       view = AnyView(MenuBarView(store: store))
     case "todos", "todos-empty", "todos-long":
       store.selection = .focus

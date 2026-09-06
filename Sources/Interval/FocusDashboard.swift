@@ -3,6 +3,7 @@ import SwiftUI
 
 struct FocusControls: View {
   @Bindable var store: AppStore
+  var compact = false
   @State private var confirmingAbandon = false
   @State private var confirmingBreak = false
   private var active: Bool { store.timer.status == .running }
@@ -15,36 +16,15 @@ struct FocusControls: View {
     GeometryReader { geometry in
       ScrollView {
         VStack(spacing: 12) {
-          HStack(spacing: 24) {
-            Spacer()
-            if store.timer.kind == .focus {
-              Button {
-                if active { confirmingBreak = true } else { store.startBreakNow() }
-              } label: {
-                Label("Break", systemImage: "cup.and.saucer")
-              }.help("Start a break now").foregroundStyle(store.data.settings.breakColor.color)
-            } else if active {
-              Button {
-                store.endBreak()
-              } label: {
-                Label("End break", systemImage: "briefcase")
-              }.help("End break · Return to focus").foregroundStyle(
-                store.data.settings.focusColor.color)
-            }
-            Button {
-              confirmingAbandon = true
-            } label: {
-              Label("Abandon", systemImage: "stop")
-            }.disabled(!active).help("Abandon interval")
-          }.buttonStyle(IntervalIconButton()).foregroundStyle(.primary)
-          SessionIdentity(store: store)
+          if !compact { SessionIdentity(store: store) }
           Spacer(minLength: 8)
           FocusDial(
             remaining: store.remaining, accent: accent,
-            diameter: min(250, max(180, geometry.size.height - 400)))
+            diameter: compact ? 150 : min(250, max(180, geometry.size.height - 400)))
           Text(durationString(store.remaining))
             .font(.system(size: 32, weight: .light, design: .rounded)).monospacedDigit()
           timeControls
+          intervalActions
           Spacer(minLength: 8)
           if let message = store.inAppNotification ?? store.recoveryMessage {
             Text(message).font(IntervalTheme.body).foregroundStyle(.secondary)
@@ -77,6 +57,29 @@ struct FocusControls: View {
     } message: {
       Text("Elapsed active time will be kept in Stats.")
     }
+  }
+
+  private var intervalActions: some View {
+    HStack(spacing: 16) {
+      if store.timer.kind == .focus {
+        Button {
+          if active { confirmingBreak = true } else { store.startBreakNow() }
+        } label: {
+          Label("Break", systemImage: "cup.and.saucer")
+        }.help("Start a break now").foregroundStyle(store.data.settings.breakColor.color)
+      } else if active {
+        Button {
+          store.endBreak()
+        } label: {
+          Label("End break", systemImage: "briefcase")
+        }.help("End break · Return to focus").foregroundStyle(store.data.settings.focusColor.color)
+      }
+      Button {
+        confirmingAbandon = true
+      } label: {
+        Label("Abandon", systemImage: "stop")
+      }.disabled(!active).help("Abandon interval")
+    }.buttonStyle(IntervalIconButton()).foregroundStyle(.primary)
   }
 
   private var timeControls: some View {
@@ -122,7 +125,7 @@ struct FocusControls: View {
 
 }
 
-private struct UpcomingReminders: View {
+struct UpcomingReminders: View {
   @Bindable var store: AppStore
   var body: some View {
     let reminders = store.data.reminders.filter { $0.isEnabled && $0.effectiveDueAt != nil }
@@ -224,7 +227,7 @@ struct FocusDayPanel: View {
     }
   }
   var body: some View {
-    VSplitView {
+    ThemedSplitView(isVertical: false, minimumFirst: 110, minimumSecond: 400) {
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
           Text("To-dos").font(IntervalTheme.heading)
@@ -232,6 +235,7 @@ struct FocusDayPanel: View {
           UpcomingReminders(store: store).padding(.top, 12)
         }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
       }.frame(minHeight: 110, idealHeight: 190, maxHeight: .infinity)
+    } second: {
       VStack(spacing: 0) {
         VStack(spacing: 12) {
           dateNavigation
