@@ -34,7 +34,9 @@ struct LiveTimerBar: View {
             Text(
               store.completionSessionID != nil
                 ? "Review"
-                : store.timer.status == .running ? store.timer.kind.title : "Ready"
+                : store.breakEnded
+                  ? "Break ended"
+                  : store.timer.status == .running ? store.timer.kind.title : "Ready"
             )
             .font(IntervalTheme.body).foregroundStyle(.secondary).lineLimit(1)
             .fixedSize()
@@ -50,14 +52,14 @@ struct LiveTimerBar: View {
         }
         .help("Review completed focus")
       } else {
-        Text(durationString(store.remaining)).font(.title2.weight(.medium)).monospacedDigit()
+        Text(store.timerText).font(.title2.weight(.medium)).monospacedDigit()
           .foregroundStyle(accent).fixedSize()
           .accessibilityLabel("Live \(store.timer.kind.title) timer")
-          .accessibilityValue(spokenDuration(store.remaining))
+          .accessibilityValue(spokenDuration(store.displayedTime))
         if store.timer.status == .ready {
           Button(action: store.startSession) { Label("Start", systemImage: "play.fill") }
             .foregroundStyle(accent).help("Start interval")
-        } else if store.timer.status == .running {
+        } else if store.timer.status == .running || store.breakEnded {
           if store.timer.kind == .focus {
             Button {
               confirmingBreak = true
@@ -69,7 +71,7 @@ struct LiveTimerBar: View {
             Button {
               store.endBreak()
             } label: {
-              Label("End break", systemImage: "briefcase")
+              Label("Return to focus", systemImage: "arrow.uturn.backward")
             }
             .foregroundStyle(store.data.settings.focusColor.color).help(
               "End break · Return to focus")

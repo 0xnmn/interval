@@ -23,12 +23,12 @@ struct FocusControls: View {
               remaining: store.remaining, accent: accent,
               diameter: compact ? 150 : min(250, max(180, geometry.size.height - 400)))
           } else {
-            Text("Taking a break")
-              .font(.title3).foregroundStyle(.secondary)
+            Text(store.breakEnded ? "Break ended" : "Taking a break")
+              .font(.title3).foregroundStyle(store.breakEnded ? .primary : .secondary)
           }
-          Text(durationString(store.remaining))
+          Text(store.timerText)
             .font(.system(size: 32, weight: .light, design: .rounded)).monospacedDigit()
-          timeControls
+          if !store.breakEnded { timeControls }
           intervalActions
           Spacer(minLength: 8)
           if let message = store.inAppNotification ?? store.recoveryMessage {
@@ -42,7 +42,7 @@ struct FocusControls: View {
       }
     }
     .safeAreaInset(edge: .bottom, spacing: 0) {
-      if !active {
+      if store.timer.status == .ready {
         Button(action: store.startSession) {
           Text(store.timer.kind == .focus ? "Start session" : "Start break")
             .font(IntervalTheme.heading).frame(maxWidth: .infinity).padding(.vertical, 9)
@@ -72,18 +72,18 @@ struct FocusControls: View {
         } label: {
           Label("Break", systemImage: "cup.and.saucer")
         }.help("Start a break now").foregroundStyle(store.data.settings.breakColor.color)
-      } else if active {
+      } else if active || store.breakEnded {
         Button {
           store.endBreak()
         } label: {
-          Label("End break", systemImage: "briefcase")
-        }.help("End break · Return to focus").foregroundStyle(store.data.settings.focusColor.color)
+          Label("Return to focus", systemImage: "arrow.uturn.backward")
+        }.help("Return to focus").foregroundStyle(store.data.settings.focusColor.color)
       }
       Button {
         confirmingAbandon = true
       } label: {
         Label("Abandon", systemImage: "stop")
-      }.disabled(!active).help("Abandon interval")
+      }.disabled(!active && !store.breakEnded).help("Abandon interval")
     }.buttonStyle(IntervalIconButton()).foregroundStyle(.primary)
   }
 

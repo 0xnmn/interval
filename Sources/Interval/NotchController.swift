@@ -258,11 +258,11 @@ struct NotchRootView: View {
         Image(systemName: store.timer.kind == .focus ? "timer" : "cup.and.saucer")
           .foregroundStyle(.white.opacity(0.9)).frame(width: 88)
         Color.clear.frame(width: geometry.cutoutWidth)
-        Text(store.completionSessionID == nil ? durationString(store.remaining) : "Reflect")
+        Text(store.completionSessionID == nil ? store.timerText : "Reflect")
           .font(.system(size: 11, weight: .medium, design: .rounded)).monospacedDigit()
           .foregroundStyle(.white.opacity(0.9)).frame(width: 88)
       } else {
-        Text(store.completionSessionID == nil ? durationString(store.remaining) : "Reflect")
+        Text(store.completionSessionID == nil ? store.timerText : "Reflect")
           .font(.system(size: 12, weight: .semibold, design: .rounded)).monospacedDigit()
           .padding(.horizontal, 18).frame(maxWidth: .infinity, maxHeight: .infinity)
           .background(GlassBackground())
@@ -275,7 +275,7 @@ struct NotchRootView: View {
     )
     .contentShape(Rectangle())
     .accessibilityLabel(
-      "\(store.timer.kind.title), \(spokenDuration(store.remaining)) remaining. Hover to expand."
+      "\(store.breakEnded ? "Break ended" : store.timer.kind.title), \(spokenDuration(store.displayedTime)) \(store.breakEnded ? "overtime" : "remaining"). Hover to expand."
     )
   }
 }

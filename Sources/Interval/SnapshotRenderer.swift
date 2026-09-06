@@ -77,6 +77,13 @@ struct SnapshotRequest {
         deadline: fixtureNow.addingTimeInterval(240), title: "Polish launch narrative",
         categoryID: deepWork.id, categoryName: deepWork.name)
     }
+    if scene == "dashboard-overtime" || scene == "menu-overtime" {
+      timer = TimerState(
+        id: timerID, kind: .shortBreak, duration: 300, status: .completed,
+        startedAt: fixtureNow.addingTimeInterval(-385),
+        deadline: fixtureNow.addingTimeInterval(-85),
+        title: "Polish launch narrative", categoryID: deepWork.id, categoryName: deepWork.name)
+    }
     var session = SessionRecord(
       id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
       timerID: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!, kind: .focus,
@@ -306,7 +313,7 @@ struct SnapshotRequest {
       size = NSSize(width: 360, height: 680)
       view = AnyView(
         FocusControls(store: store))
-    case "menu", "menu-ready", "menu-break", "menu-review":
+    case "menu", "menu-ready", "menu-break", "menu-review", "menu-overtime":
       if request.scene == "menu-review" {
         store.completionSessionID = store.data.sessions.first?.id
       }
@@ -340,7 +347,7 @@ struct SnapshotRequest {
       store.selection = .focus
       size = NSSize(width: 780, height: 900)
       view = AnyView(MainView(store: store))
-    case "dashboard-running", "dashboard-break", "dashboard-calendar":
+    case "dashboard-running", "dashboard-break", "dashboard-calendar", "dashboard-overtime":
       store.selection = .focus
       size = NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))

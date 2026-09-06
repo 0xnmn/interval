@@ -687,7 +687,7 @@ struct MenuBarView: View {
     }.font(IntervalTheme.body).frame(width: 600, height: 480).tint(IntervalTheme.accent)
       .accessibilityElement(children: .contain)
       .accessibilityLabel(
-        "\(store.timer.kind.title), \(store.timer.status.rawValue), \(spokenDuration(store.remaining)) remaining"
+        "\(store.breakEnded ? "Break ended" : store.timer.kind.title), \(spokenDuration(store.displayedTime)) \(store.breakEnded ? "overtime" : "remaining")"
       )
   }
   @ViewBuilder private var reminderActions: some View {

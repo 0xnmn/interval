@@ -189,6 +189,13 @@ final class AppStore {
 
   var timer: TimerState { data.activeTimer ?? timer(for: .focus) }
   var remaining: TimeInterval { TimerEngine.remaining(timer, now: now) }
+  var breakEnded: Bool { timer.kind != .focus && timer.status == .completed }
+  var displayedTime: TimeInterval {
+    breakEnded ? max(0, now.timeIntervalSince(timer.deadline ?? now)) : remaining
+  }
+  var timerText: String {
+    breakEnded ? "+" + durationString(floor(displayedTime)) : durationString(remaining)
+  }
   var suggestedBreak: TimerKind {
     let cadence = max(1, data.settings.longBreakEvery)
     return data.completedFocusCount > 0 && data.completedFocusCount % cadence == 0
@@ -284,6 +291,13 @@ final class AppStore {
   func abandon() {
     let actionDate = Date()
     now = actionDate
+    if breakEnded {
+      data.activeTimer = timer(for: .focus)
+      inAppNotification = nil
+      recoveryMessage = nil
+      save()
+      return
+    }
     if reconcile(at: actionDate, autoStart: false) {
       completionSessionID = nil
       data.activeTimer = timer(for: .focus)
@@ -342,21 +356,26 @@ final class AppStore {
 
   func endBreak(at date: Date = Date()) {
     now = date
-    guard let current = data.activeTimer, current.kind != .focus, current.status == .running else {
+    guard let current = data.activeTimer, current.kind != .focus,
+      current.status == .running || current.status == .completed
+    else {
       return
     }
-    if reconcile(at: date, autoStart: false) { return }
-    guard let value = data.activeTimer, value.id == current.id, value.status == .running else {
+    reconcile(at: date, autoStart: false)
+    guard let value = data.activeTimer, value.id == current.id else {
       return
     }
     let elapsed = TimerEngine.activeDuration(value, now: date)
     notifications.cancel(value)
     audio.stop()
     record(value, outcome: .completed, endedAt: date, activeDuration: elapsed)
-    data.activeTimer = timer(for: .focus)
+    var next = timer(for: .focus)
+    TimerEngine.start(&next, now: date)
+    data.activeTimer = next
     inAppNotification = nil
     recoveryMessage = nil
     save()
+    syncServices(for: next)
   }
 
   func addTodo(_ text: String) {
@@ -698,16 +717,14 @@ final class AppStore {
       syncServices(for: timer)
       return true
     } else {
-      data.activeTimer = timer(for: .focus)
-    }
-    // Start at the observed transition, never replay phases during time away.
-    if autoStart && (!runtimeEnabled || sessionIsActive) {
-      var next = timer
-      TimerEngine.start(&next, now: date)
-      data.activeTimer = next
+      // Preserve the scheduled end across ticks and relaunches for break overtime.
+      value.deadline = priorDeadline
+      data.activeTimer = value
+      inAppNotification = nil  // The timer itself now presents “Break ended”.
     }
     save()
-    syncServices(for: timer)
+    // Audio is already stopped. Do not cancel the completed break's pending notification:
+    // the notification daemon may still be delivering it at this deadline.
     return true
   }
 

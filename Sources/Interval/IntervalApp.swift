@@ -60,7 +60,7 @@ struct IntervalApp: App {
       MenuBarView(store: store)
     } label: {
       Label(
-        durationString(store.remaining),
+        store.timerText,
         systemImage: store.timer.status == .running ? "timer" : "timer.circle")
     }.menuBarExtraStyle(.window)
     Settings { SettingsView(store: store) }
