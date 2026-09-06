@@ -317,10 +317,12 @@ struct NotchRootView: View {
         Color.clear.frame(width: geometry.cutoutWidth)
         Text(store.completionSessionID == nil ? store.timerText : "Reflect")
           .font(.system(size: 13, weight: .medium, design: .rounded)).monospacedDigit()
+          .lineLimit(1).minimumScaleFactor(0.65)
           .foregroundStyle(.white.opacity(0.9)).frame(width: 88)
       } else {
         Text(store.completionSessionID == nil ? store.timerText : "Reflect")
           .font(.system(size: 12, weight: .semibold, design: .rounded)).monospacedDigit()
+          .lineLimit(1).minimumScaleFactor(0.65)
           .padding(.horizontal, 18).frame(maxWidth: .infinity, maxHeight: .infinity)
           .foregroundStyle(.white)
       }

@@ -736,13 +736,24 @@ struct MenuBarView: View {
 
 func durationString(_ seconds: TimeInterval) -> String {
   let total = max(0, Int(ceil(seconds)))
+  if total >= 86_400 {
+    return String(
+      format: "%dd %02d:%02d:%02d", total / 86_400, total / 3_600 % 24,
+      total / 60 % 60, total % 60)
+  }
+  if total >= 3_600 {
+    return String(format: "%d:%02d:%02d", total / 3_600, total / 60 % 60, total % 60)
+  }
   return String(format: "%02d:%02d", total / 60, total % 60)
 }
 
 func spokenDuration(_ seconds: TimeInterval) -> String {
   let total = max(0, Int(ceil(seconds)))
-  let minutes = total / 60
-  let remainder = total % 60
-  return
-    "\(minutes) minute\(minutes == 1 ? "" : "s"), \(remainder) second\(remainder == 1 ? "" : "s")"
+  let units = [
+    (total / 86_400, "day"), (total / 3_600 % 24, "hour"),
+    (total / 60 % 60, "minute"), (total % 60, "second"),
+  ]
+  return units.filter { $0.0 > 0 || $0.1 == "second" }.map { value, unit in
+    "\(value) \(unit)\(value == 1 ? "" : "s")"
+  }.joined(separator: ", ")
 }

@@ -29,6 +29,7 @@ struct FocusControls: View {
           }
           Text(store.timerText)
             .font(.system(size: 32, weight: .light, design: .rounded)).monospacedDigit()
+            .lineLimit(1).minimumScaleFactor(0.65)
           if !store.breakEnded { timeControls }
           intervalActions
           Spacer(minLength: 8)

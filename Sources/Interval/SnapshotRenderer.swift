@@ -77,11 +77,13 @@ struct SnapshotRequest {
         deadline: fixtureNow.addingTimeInterval(240), title: "Polish launch narrative",
         categoryID: deepWork.id, categoryName: deepWork.name)
     }
-    if scene == "dashboard-overtime" || scene == "menu-overtime" {
+    if scene == "dashboard-overtime" || scene.hasPrefix("menu-overtime") {
+      let overtime: TimeInterval =
+        scene == "menu-overtime-hours" ? 16509 : scene == "menu-overtime-days" ? 183845 : 85
       timer = TimerState(
         id: timerID, kind: .shortBreak, duration: 300, status: .completed,
-        startedAt: fixtureNow.addingTimeInterval(-385),
-        deadline: fixtureNow.addingTimeInterval(-85),
+        startedAt: fixtureNow.addingTimeInterval(-overtime - 300),
+        deadline: fixtureNow.addingTimeInterval(-overtime),
         title: "Polish launch narrative", categoryID: deepWork.id, categoryName: deepWork.name)
     }
     var session = SessionRecord(
@@ -337,7 +339,8 @@ struct SnapshotRequest {
       size = NSSize(width: 360, height: 680)
       view = AnyView(
         FocusControls(store: store))
-    case "menu", "menu-ready", "menu-break", "menu-review", "menu-overtime":
+    case "menu", "menu-ready", "menu-break", "menu-review", "menu-overtime", "menu-overtime-hours",
+      "menu-overtime-days":
       if request.scene == "menu-review" {
         store.completionSessionID = store.data.sessions.first?.id
       }
