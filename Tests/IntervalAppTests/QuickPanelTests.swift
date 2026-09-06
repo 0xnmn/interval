@@ -24,7 +24,7 @@ struct QuickPanelTests {
       "{\"focusMinutes\":25,\"shortBreakMinutes\":5,\"longBreakMinutes\":10,\"longBreakEvery\":4}"
         .utf8)
     let old = try JSONDecoder().decode(IntervalSettings.self, from: legacy)
-    #expect(!old.notchEnabled)
+    #expect(old.notchEnabled)
     #expect(old.completionPopupEnabled)
     let settings = IntervalSettings(notchEnabled: true, completionPopupEnabled: false).clamped()
     #expect(

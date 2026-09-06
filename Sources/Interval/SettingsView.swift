@@ -328,8 +328,10 @@ private struct GeneralSettingsView: View {
         Text("Hover the top of your display for your timer and to-dos.")
           .foregroundStyle(.secondary)
         Toggle(isOn: panelSetting(\.completionPopupEnabled)) {
-          Text("Session-end popup").frame(maxWidth: .infinity, alignment: .leading)
+          Text("Session prompts").frame(maxWidth: .infinity, alignment: .leading)
         }
+        Text("A heads-up before your break and a reflection when focus ends.")
+          .foregroundStyle(.secondary)
       }.toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
       SettingsSection("Startup") {
         Toggle(isOn: Binding(get: { loginEnabled }, set: setLogin)) {

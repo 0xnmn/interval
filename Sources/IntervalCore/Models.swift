@@ -105,7 +105,7 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
 
   public init(
     appearance: AppAppearance = .system,
-    notchEnabled: Bool = false, completionPopupEnabled: Bool = true,
+    notchEnabled: Bool = true, completionPopupEnabled: Bool = true,
     focusMinutes: Int = 25, shortBreakMinutes: Int = 5, longBreakMinutes: Int = 10,
     longBreakEvery: Int = 4,
     focusColor: PhaseColor = .green, breakColor: PhaseColor = .blue,
@@ -163,7 +163,7 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
   public init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
     appearance = try c.decodeIfPresent(AppAppearance.self, forKey: .appearance) ?? .system
-    notchEnabled = try c.decodeIfPresent(Bool.self, forKey: .notchEnabled) ?? false
+    notchEnabled = try c.decodeIfPresent(Bool.self, forKey: .notchEnabled) ?? true
     completionPopupEnabled =
       try c.decodeIfPresent(Bool.self, forKey: .completionPopupEnabled) ?? true
     focusMinutes = try c.decode(Int.self, forKey: .focusMinutes)
