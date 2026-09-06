@@ -55,7 +55,7 @@ struct QuickPanelTests {
     #expect(store.completionSessionID != nil)
   }
 
-  @Test func nativeNotchHoverExpandsAndEscapeCollapses() async throws {
+  @Test func nativeNotchHoverAndClickExpandAndEscapeCollapses() async throws {
     let store = makeStore()
     defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }
     store.data.settings.notchEnabled = true
@@ -91,8 +91,14 @@ struct QuickPanelTests {
     panel.contentView?.mouseExited(with: exit)
     try await Task.sleep(for: .milliseconds(800))
     #expect(panel.frame == initialFrame)
-    panel.contentView?.mouseEntered(with: event)
+    let click = try #require(
+      NSEvent.mouseEvent(
+        with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+        windowNumber: panel.windowNumber, context: nil, eventNumber: 2, clickCount: 1,
+        pressure: 1))
+    panel.contentView?.mouseDown(with: click)
     try await Task.sleep(for: .milliseconds(300))
+    #expect(panel.frame.width == NotchGeometry.expandedSize.width)
     panel.cancelOperation(nil)
     try await Task.sleep(for: .milliseconds(300))
     #expect(panel.frame == initialFrame)

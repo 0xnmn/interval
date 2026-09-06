@@ -7,6 +7,46 @@ import Testing
 @testable import Interval
 
 @MainActor struct PresentationTests {
+  @Test func upcomingSuppressionOnlyDescribesOverlappingDueTimes() {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let now = SnapshotRenderer.fixtureNow
+    let service = CalendarService(fixtureEvents: [
+      CalendarEventSnapshot(
+        id: "meeting", title: "Meeting", start: now.addingTimeInterval(-60),
+        end: now.addingTimeInterval(300), allDay: false, calendarName: "Work"),
+      CalendarEventSnapshot(
+        id: "later", title: "Later meeting", start: now.addingTimeInterval(900),
+        end: now.addingTimeInterval(1200), allDay: false, calendarName: "Work"),
+    ])
+    let store = AppStore(
+      persistence: JSONStore(fileURL: directory.appendingPathComponent("state.json")),
+      calendarService: service, runtimeEnabled: false)
+    store.now = now
+    service.configure(enabled: true, selectedCalendarIDs: ["Work"])
+    _ = service.hasEvent(at: now)
+    var reminder = Reminder(title: "Water", dueAt: now.addingTimeInterval(600))
+    reminder.suppressDuringFocus = false
+    reminder.suppressDuringCalendar = true
+    let view = UpcomingReminders(store: store)
+    #expect(view.reminderStatus(reminder) == "In 10:00")
+    reminder.dueAt = now.addingTimeInterval(60)
+    #expect(view.reminderStatus(reminder) == "After event")
+    reminder.suppressDuringCalendar = false
+    reminder.suppressDuringFocus = true
+    store.data.activeTimer = TimerState(
+      kind: .focus, duration: 300, status: .running,
+      startedAt: now, deadline: now.addingTimeInterval(300))
+    #expect(view.reminderStatus(reminder) == "After focus")
+    reminder.dueAt = now.addingTimeInterval(600)
+    #expect(view.reminderStatus(reminder) == "In 10:00")
+    reminder.suppressDuringCalendar = true
+    reminder.dueAt = now.addingTimeInterval(1000)
+    #expect(view.reminderStatus(reminder) == "After event")
+    store.data.activeTimer?.deadline = now.addingTimeInterval(1500)
+    #expect(view.reminderStatus(reminder) == "After focus")
+  }
+
   @Test func appearanceMigratesAndPersistsWithoutResettingTimer() throws {
     let legacy = Data(
       """

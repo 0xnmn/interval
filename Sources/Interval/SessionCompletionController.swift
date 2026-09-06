@@ -178,7 +178,9 @@ import SwiftUI
     panel.hidesOnDeactivate = false
     panel.isFloatingPanel = true
     panel.level = .floating
-    panel.animationBehavior = .utilityWindow
+    panel.animationBehavior =
+      NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+      ? .none : .utilityWindow
     panel.collectionBehavior = [
       .canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle,
     ]
@@ -329,18 +331,22 @@ struct SessionCompletionToast: View {
 
 private struct CompletionPillButtonStyle: ButtonStyle {
   let prominent: Bool
+  @Environment(\.isEnabled) private var isEnabled
+  @State private var hovering = false
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .font(.callout.weight(.semibold))
+      .font(.system(size: 13, weight: .medium))
       .padding(.horizontal, 15).padding(.vertical, 7)
       .background(
         prominent
-          ? Color.accentColor.opacity(configuration.isPressed ? 0.42 : 0.27)
-          : Color.primary.opacity(configuration.isPressed ? 0.14 : 0.07),
+          ? Color.accentColor.opacity(configuration.isPressed ? 0.42 : hovering ? 0.34 : 0.27)
+          : Color.primary.opacity(configuration.isPressed ? 0.18 : hovering ? 0.12 : 0.07),
         in: Capsule()
       )
       .overlay { Capsule().strokeBorder(IntervalTheme.border) }
       .contentShape(Capsule())
+      .opacity(isEnabled ? 1 : 0.4)
+      .onHover { hovering = $0 }
   }
 }

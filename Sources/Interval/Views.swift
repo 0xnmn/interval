@@ -44,25 +44,25 @@ struct MainView: View {
           }.buttonStyle(.plain).help("Settings · ⌘,").accessibilityLabel("Settings")
         }.padding(.vertical, 20).frame(width: 60).foregroundStyle(.secondary)
         Rectangle().fill(IntervalTheme.border).frame(width: 1)
-        Group {
-          switch store.selection ?? .focus {
-          case .focus:
-            if let id = store.completionSessionID {
-              ReflectionView(store: store, sessionID: id)
-                .frame(maxWidth: 372).padding(24)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-              FocusView(store: store)
+        VStack(spacing: 0) {
+          Group {
+            switch store.selection ?? .focus {
+            case .focus:
+              if let id = store.completionSessionID {
+                ReflectionView(store: store, sessionID: id)
+                  .frame(maxWidth: 372).padding(24)
+                  .frame(maxWidth: .infinity, maxHeight: .infinity)
+              } else {
+                FocusView(store: store)
+              }
+            case .history: HistoryView(store: store)
+            case .reminders: RemindersView(store: store)
             }
-          case .history: HistoryView(store: store)
-          case .reminders: RemindersView(store: store)
+          }.frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
+          if store.selection == .history || store.selection == .reminders {
+            LiveTimerBar(store: store)
           }
-        }.frame(maxWidth: .infinity, maxHeight: .infinity)
-          .safeAreaInset(edge: .bottom, spacing: 0) {
-            if store.selection == .history || store.selection == .reminders {
-              LiveTimerBar(store: store)
-            }
-          }
+        }
       }
     }
     .font(IntervalTheme.body)
@@ -215,7 +215,7 @@ struct HistoryView: View {
   private var daySummary: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text("Focus time").font(IntervalTheme.heading).foregroundStyle(.secondary)
-      Text(durationString(focusDuration)).font(.largeTitle.weight(.light)).monospacedDigit()
+      Text(durationString(focusDuration)).font(.largeTitle.weight(.regular)).monospacedDigit()
       Text("\(completedFocusCount) completed").font(IntervalTheme.body).foregroundStyle(
         .secondary)
     }.frame(maxWidth: .infinity, alignment: .leading)
@@ -514,7 +514,7 @@ struct ReflectionView: View {
       set: { store.updateSession(id: sessionID, feedback: feedback.wrappedValue, journal: $0) })
   }
   var body: some View {
-    VStack(spacing: 22) {
+    VStack(spacing: 24) {
       Spacer(minLength: 0)
       Text("How did that session feel?").font(.title2.weight(.semibold))
         .multilineTextAlignment(.center)
@@ -531,7 +531,12 @@ struct ReflectionView: View {
             }.frame(maxWidth: .infinity).padding(.vertical, 14)
               .background(
                 selected ? Color.accentColor.opacity(0.22) : Color.primary.opacity(0.05),
-                in: RoundedRectangle(cornerRadius: 12))
+                in: RoundedRectangle(cornerRadius: 12)
+              )
+              .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                  .strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 1.5)
+              }
           }
           .buttonStyle(.plain).accessibilityLabel(value.title)
           .accessibilityAddTraits(feedback.wrappedValue == value ? .isSelected : [])

@@ -89,12 +89,35 @@ struct TodoTextField: NSViewRepresentable {
         }
         parent.onDeleteEmpty()
       case #selector(NSResponder.moveUp(_:)):
+        guard isOnBoundaryVisualLine(textView, first: true) else { return false }
         parent.onMove(-1)
       case #selector(NSResponder.moveDown(_:)):
+        guard isOnBoundaryVisualLine(textView, first: false) else { return false }
         parent.onMove(1)
       default: return false
       }
       return true
+    }
+
+    private func isOnBoundaryVisualLine(_ textView: NSTextView, first: Bool) -> Bool {
+      guard let layoutManager = textView.layoutManager,
+        let textContainer = textView.textContainer
+      else { return true }
+
+      layoutManager.ensureLayout(for: textContainer)
+      let glyphRange = layoutManager.glyphRange(for: textContainer)
+      guard glyphRange.length > 0 else { return true }
+
+      let characterLocation = min(textView.selectedRange().location, textView.string.utf16.count)
+      let glyphIndex =
+        characterLocation == textView.string.utf16.count
+        ? NSMaxRange(glyphRange) - 1
+        : layoutManager.glyphIndexForCharacter(at: characterLocation)
+      var lineRange = NSRange()
+      layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: &lineRange)
+      return first
+        ? lineRange.location == glyphRange.location
+        : NSMaxRange(lineRange) == NSMaxRange(glyphRange)
     }
   }
 }

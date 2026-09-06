@@ -44,6 +44,34 @@ struct TodoKeyboardTests {
     #expect(try harness.focusedRow() == 1)
   }
 
+  @Test func arrowsMoveThroughWrappedTextBeforeNavigatingRows() async throws {
+    let wrapped = Array(repeating: "wrapped keyboard navigation", count: 8).joined(separator: " ")
+    let harness = try await Harness(titles: ["Before", wrapped, "After"])
+    defer { harness.close() }
+
+    try await harness.focusRow(1)
+    harness.moveInsertionPoint(to: 0)
+    await harness.send(keyCode: 125, characters: "\u{f701}")
+    #expect(try harness.focusedRow() == 1)
+    #expect(harness.insertionPoint() > 0)
+
+    await harness.send(keyCode: 126, characters: "\u{f700}")
+    #expect(try harness.focusedRow() == 1)
+    await harness.send(keyCode: 126, characters: "\u{f700}")
+    #expect(try harness.focusedRow() == 0)
+
+    try await harness.focusRow(1)
+    harness.moveInsertionPoint(to: wrapped.utf16.count)
+    await harness.send(keyCode: 126, characters: "\u{f700}")
+    #expect(try harness.focusedRow() == 1)
+    #expect(harness.insertionPoint() < wrapped.utf16.count)
+
+    await harness.send(keyCode: 125, characters: "\u{f701}")
+    #expect(try harness.focusedRow() == 1)
+    await harness.send(keyCode: 125, characters: "\u{f701}")
+    #expect(try harness.focusedRow() == 2)
+  }
+
   @Test func backspaceEditsWhitespaceBeforeDeletingEmptyRow() async throws {
     let harness = try await Harness(titles: ["First", "  "])
     defer { harness.close() }
@@ -111,13 +139,29 @@ private final class Harness {
     throw TodoKeyboardTestError.noFocusedEditor
   }
 
-  func moveInsertionPointToEnd() {
+  func moveInsertionPoint(to location: Int) {
     if let editor = window.firstResponder as? NSTextView {
-      editor.setSelectedRange(NSRange(location: editor.string.utf16.count, length: 0))
+      editor.setSelectedRange(NSRange(location: location, length: 0))
     } else if let field = window.firstResponder as? NSTextField {
       (field.currentEditor() as? NSTextView)?.setSelectedRange(
-        NSRange(location: field.stringValue.utf16.count, length: 0))
+        NSRange(location: location, length: 0))
     }
+  }
+
+  func moveInsertionPointToEnd() {
+    if let editor = window.firstResponder as? NSTextView {
+      moveInsertionPoint(to: editor.string.utf16.count)
+    } else if let field = window.firstResponder as? NSTextField {
+      moveInsertionPoint(to: field.stringValue.utf16.count)
+    }
+  }
+
+  func insertionPoint() -> Int {
+    if let editor = window.firstResponder as? NSTextView {
+      return editor.selectedRange().location
+    }
+    return ((window.firstResponder as? NSTextField)?.currentEditor() as? NSTextView)?
+      .selectedRange().location ?? 0
   }
 
   func send(keyCode: UInt16, characters: String) async {

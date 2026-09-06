@@ -48,9 +48,9 @@ struct SettingsView: View {
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
+        .foregroundStyle(.primary.opacity(0.78))
         .accessibilityLabel("Settings pages")
         .frame(width: 140)
-        .background(.ultraThinMaterial.opacity(0.35))
 
         VStack(alignment: .leading, spacing: 12) {
           Text(destinations.first(where: { $0.id == selectedTab })?.title ?? "Settings")
@@ -66,7 +66,7 @@ struct SettingsView: View {
             .font(.system(size: 14))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding(18)
+        .padding(20)
       }
     }
     .frame(width: 560, height: 450)
@@ -86,16 +86,15 @@ struct SettingsView: View {
           minuteRow("Long break", value: setting(\.longBreakMinutes), range: 1...60)
         }
         SettingsSection("Cadence") {
-          SettingsRow("Long break") {
-            HStack(spacing: 7) {
-              Text("Every \(store.data.settings.longBreakEvery) sessions")
-                .monospacedDigit()
-              Stepper("Long break cadence", value: setting(\.longBreakEvery), in: 1...12)
-                .labelsHidden()
-            }
+          HStack(spacing: 12) {
+            Text("Long break")
+            Spacer(minLength: 12)
+            Text("Every \(store.data.settings.longBreakEvery) sessions")
+              .monospacedDigit()
+            Stepper("Long break cadence", value: setting(\.longBreakEvery), in: 1...12)
+              .labelsHidden()
+              .accessibilityValue("Every \(store.data.settings.longBreakEvery) focus sessions")
           }
-          Text("Continue from feedback to begin your break.")
-            .font(.system(size: 14)).foregroundStyle(.secondary)
         }
         SettingsSection("Colors") {
           phaseColorPicker("Focus color", selection: phaseColorSetting(\.focusColor))
@@ -250,7 +249,7 @@ private struct SettingsPage<Content: View>: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 18) { content }
+      VStack(alignment: .leading, spacing: 24) { content }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.trailing, 6)
     }
@@ -267,11 +266,11 @@ private struct SettingsSection<Content: View>: View {
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
+    VStack(alignment: .leading, spacing: 12) {
       Text(title)
         .font(.system(size: 14, weight: .semibold))
-        .foregroundStyle(.secondary)
-      VStack(alignment: .leading, spacing: 10) { content }
+        .foregroundStyle(.primary)
+      VStack(alignment: .leading, spacing: 12) { content }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
   }
@@ -288,10 +287,10 @@ private struct SettingsRow<Control: View>: View {
 
   var body: some View {
     HStack(spacing: 12) {
-      Text(title)
+      Text(title).font(.system(size: 14))
       Spacer(minLength: 8)
       control
-        .frame(width: 140, alignment: .trailing)
+        .frame(width: 160, alignment: .trailing)
     }
   }
 }
@@ -325,13 +324,13 @@ private struct GeneralSettingsView: View {
         Toggle(isOn: panelSetting(\.notchEnabled)) {
           Text("Notch panel").frame(maxWidth: .infinity, alignment: .leading)
         }
-        Text("Hover the top of your display for your timer and to-dos.")
-          .foregroundStyle(.secondary)
+        Text("Click or hover at the top of your display for quick access.")
+          .font(.system(size: 13)).foregroundStyle(.secondary)
         Toggle(isOn: panelSetting(\.completionPopupEnabled)) {
           Text("Session prompts").frame(maxWidth: .infinity, alignment: .leading)
         }
         Text("A heads-up before your break and a reflection when focus ends.")
-          .foregroundStyle(.secondary)
+          .font(.system(size: 13)).foregroundStyle(.secondary)
       }.toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
       SettingsSection("Startup") {
         Toggle(isOn: Binding(get: { loginEnabled }, set: setLogin)) {
@@ -340,27 +339,30 @@ private struct GeneralSettingsView: View {
         if SMAppService.mainApp.status == .requiresApproval {
           Label(
             "Approval is required in System Settings → General → Login Items.",
-            systemImage: "exclamationmark.circle")
+            systemImage: "exclamationmark.circle"
+          )
+          .font(.system(size: 13)).foregroundStyle(.secondary)
         }
-        if let loginMessage { Text(loginMessage).font(.system(size: 14)).foregroundStyle(.red) }
+        if let loginMessage { Text(loginMessage).font(.system(size: 13)).foregroundStyle(.red) }
       }
       SettingsSection("Local data") {
         DisclosureGroup("Storage location") {
           Text(store.storageURL.path(percentEncoded: false))
-            .font(.system(size: 14))
+            .font(.system(size: 13))
             .foregroundStyle(.secondary)
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
         }
         Button("Export Data…", action: exportData)
         if let exportMessage {
-          Text(exportMessage).font(.system(size: 14)).foregroundStyle(.secondary)
+          Text(exportMessage).font(.system(size: 13)).foregroundStyle(.secondary)
         }
         Text("Exports local settings and activity; calendar event contents are excluded.")
-          .font(.system(size: 14)).foregroundStyle(.secondary)
+          .font(.system(size: 13)).foregroundStyle(.secondary)
       }
       SettingsSection("Privacy") {
         Text("No analytics or cloud storage; network access is only for updates.")
+          .font(.system(size: 13)).foregroundStyle(.secondary)
       }
     }
   }
@@ -406,7 +408,7 @@ private struct UpdatesSettingsView: View {
     SettingsPage {
       SettingsSection(store.updates.isConfigured ? "Updates" : "Updates unavailable") {
         Text(store.updates.configurationMessage)
-          .font(.system(size: 14))
+          .font(.system(size: 13))
           .foregroundStyle(store.updates.isConfigured ? Color.secondary : Color.orange)
         Toggle(
           isOn: Binding(
@@ -440,13 +442,13 @@ private struct CalendarSettingsView: View {
         switch store.calendarService.authorizationState {
         case .notDetermined:
           Text("Connect Calendar to show events and suppress reminders during meetings.")
-            .foregroundStyle(.secondary)
+            .font(.system(size: 13)).foregroundStyle(.secondary)
           Button("Enable Calendar Integration") { Task { await store.enableCalendarIntegration() } }
             .buttonStyle(.borderedProminent)
           Text(
             "macOS calls this Full Access. Interval only reads selected calendars and never changes events."
           )
-          .font(.system(size: 14)).foregroundStyle(.secondary)
+          .font(.system(size: 13)).foregroundStyle(.secondary)
         case .fullAccess:
           Toggle(
             isOn: Binding(
@@ -464,7 +466,8 @@ private struct CalendarSettingsView: View {
           .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
           if store.data.settings.calendarIntegrationEnabled {
             if store.calendarService.calendars.isEmpty {
-              Text("No calendars are available.").foregroundStyle(.secondary)
+              Text("No calendars are available.")
+                .font(.system(size: 13)).foregroundStyle(.secondary)
             } else {
               ForEach(store.calendarService.calendars) { calendar in
                 Toggle(
@@ -479,7 +482,7 @@ private struct CalendarSettingsView: View {
               }
               if store.data.settings.selectedCalendarIDs.isEmpty {
                 Text("No calendars selected. No events will be displayed or suppress reminders.")
-                  .font(.system(size: 14)).foregroundStyle(.secondary)
+                  .font(.system(size: 13)).foregroundStyle(.secondary)
               }
             }
           }
@@ -499,7 +502,8 @@ private struct CalendarSettingsView: View {
   }
 
   @ViewBuilder private func accessUnavailable(_ message: String) -> some View {
-    Label(message, systemImage: "calendar.badge.exclamationmark").foregroundStyle(.secondary)
+    Label(message, systemImage: "calendar.badge.exclamationmark")
+      .font(.system(size: 13)).foregroundStyle(.secondary)
     Button("Open Privacy Settings") {
       NSWorkspace.shared.open(
         URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!)

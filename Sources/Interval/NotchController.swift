@@ -71,6 +71,7 @@ final class NotchController: NSObject {
     let trackingView = NotchTrackingView()
     trackingView.onEnter = { [weak self] in self?.expand() }
     trackingView.onExit = { [weak self] in self?.scheduleCollapse() }
+    trackingView.onActivate = { [weak self] in self?.expand() }
     let host = NSHostingView(
       rootView: NotchRootView(store: store, expanded: false, geometry: geometry(), collapse: {}))
     // The panel owns its animated size; SwiftUI's expanded intrinsic size must not
@@ -133,7 +134,8 @@ final class NotchController: NSObject {
     guard let store else { return }
     host?.rootView = NotchRootView(
       store: store, expanded: expanded, geometry: geometry(),
-      collapse: { [weak self] in self?.collapse() })
+      collapse: { [weak self] in self?.collapse() },
+      expand: { [weak self] in self?.expand() })
   }
 
   private func reposition(animated: Bool) {
@@ -224,6 +226,7 @@ private final class NotchPanel: NSPanel {
 private final class NotchTrackingView: NSView {
   var onEnter: (() -> Void)?
   var onExit: (() -> Void)?
+  var onActivate: (() -> Void)?
   private var tracking: NSTrackingArea?
 
   override func updateTrackingAreas() {
@@ -237,6 +240,7 @@ private final class NotchTrackingView: NSView {
 
   override func mouseEntered(with event: NSEvent) { onEnter?() }
   override func mouseExited(with event: NSEvent) { onExit?() }
+  override func mouseDown(with event: NSEvent) { onActivate?() }
   override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
@@ -245,6 +249,7 @@ struct NotchRootView: View {
   let expanded: Bool
   let geometry: NotchGeometry
   let collapse: () -> Void
+  var expand: () -> Void = {}
   @State var page = 0
 
   private var accent: Color {
@@ -304,7 +309,7 @@ struct NotchRootView: View {
       .environment(\.colorScheme, .dark)
       .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 24, bottomTrailingRadius: 24))
     } else {
-      compact
+      Button(action: expand) { compact }.buttonStyle(.plain)
     }
   }
 
@@ -316,12 +321,12 @@ struct NotchRootView: View {
           .foregroundStyle(accent).frame(width: 88)
         Color.clear.frame(width: geometry.cutoutWidth)
         Text(store.completionSessionID == nil ? store.timerText : "Reflect")
-          .font(.system(size: 13, weight: .medium, design: .rounded)).monospacedDigit()
+          .font(.system(size: 13, weight: .medium)).monospacedDigit()
           .lineLimit(1).minimumScaleFactor(0.65)
           .foregroundStyle(.white.opacity(0.9)).frame(width: 88)
       } else {
         Text(store.completionSessionID == nil ? store.timerText : "Reflect")
-          .font(.system(size: 12, weight: .semibold, design: .rounded)).monospacedDigit()
+          .font(.system(size: 12, weight: .semibold)).monospacedDigit()
           .lineLimit(1).minimumScaleFactor(0.65)
           .padding(.horizontal, 18).frame(maxWidth: .infinity, maxHeight: .infinity)
           .foregroundStyle(.white)
@@ -334,7 +339,7 @@ struct NotchRootView: View {
     )
     .contentShape(Rectangle())
     .accessibilityLabel(
-      "\(store.breakEnded ? "Break ended" : store.timer.kind.title), \(spokenDuration(store.displayedTime)) \(store.breakEnded ? "overtime" : "remaining"). Hover to expand."
+      "\(store.breakEnded ? "Break ended" : store.timer.kind.title), \(spokenDuration(store.displayedTime)) \(store.breakEnded ? "overtime" : "remaining"). Click or hover to expand."
     )
   }
 }

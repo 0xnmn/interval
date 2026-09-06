@@ -300,8 +300,10 @@ struct SnapshotRequest {
         ReminderTakeoverView(
           reminder: store.data.reminders[0], shownAt: Date(), skip: {}, extend: { _ in }))
     case "reminder-fullscreen", "reminder-fullscreen-long", "reminder-fullscreen-wait",
-      "reminder-fullscreen-fallback":
-      size = NSSize(width: 900, height: 650)
+      "reminder-fullscreen-fallback", "reminder-fullscreen-large":
+      size =
+        request.scene == "reminder-fullscreen-large"
+        ? NSSize(width: 1440, height: 960) : NSSize(width: 900, height: 650)
       let wallpaper =
         request.scene == "reminder-fullscreen-fallback"
         ? nil

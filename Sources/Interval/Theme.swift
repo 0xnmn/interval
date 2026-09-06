@@ -92,17 +92,19 @@ private struct NativeGlass: NSViewRepresentable {
 
 struct IntervalPrimaryButton: ButtonStyle {
   @Environment(\.isEnabled) private var isEnabled
+  @State private var hovering = false
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .font(.callout.weight(.semibold))
+      .font(.system(size: 14, weight: .semibold))
       .foregroundStyle(Color.primary.opacity(isEnabled ? 0.9 : 0.45))
       .padding(.horizontal, 14).padding(.vertical, 7)
       .background(
-        Color.accentColor.opacity(configuration.isPressed ? 0.4 : 0.25),
+        Color.accentColor.opacity(configuration.isPressed ? 0.4 : hovering ? 0.32 : 0.25),
         in: RoundedRectangle(cornerRadius: 8)
       )
       .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(IntervalTheme.border) }
       .opacity(isEnabled ? 1 : 0.5)
       .contentShape(RoundedRectangle(cornerRadius: 8))
+      .onHover { hovering = $0 }
   }
 }

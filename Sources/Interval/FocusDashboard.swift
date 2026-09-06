@@ -28,7 +28,7 @@ struct FocusControls: View {
               .font(.title3).foregroundStyle(store.breakEnded ? .primary : .secondary)
           }
           Text(store.timerText)
-            .font(.system(size: 32, weight: .light, design: .rounded)).monospacedDigit()
+            .font(.system(size: 36, weight: .regular)).monospacedDigit()
             .lineLimit(1).minimumScaleFactor(0.65)
           if !store.breakEnded { timeControls }
           intervalActions
@@ -154,19 +154,20 @@ struct UpcomingReminders: View {
     }
   }
 
-  private func reminderStatus(_ reminder: Reminder) -> String {
-    if reminder.suppressDuringFocus && store.timer.kind == .focus && store.timer.status == .running
-    {
-      return "After focus"
-    }
-    if reminder.suppressDuringCalendar
-      && store.calendarService.todayEvents.contains(where: {
-        $0.isEligibleForReminderSuppression && $0.start <= store.now && $0.end > store.now
-      })
-    {
-      return "After event"
-    }
-    let remaining = (reminder.effectiveDueAt ?? store.now).timeIntervalSince(store.now)
+  func reminderStatus(_ reminder: Reminder) -> String {
+    let due = reminder.effectiveDueAt ?? store.now
+    let checkAt = max(store.now, due)
+    let focusEnd =
+      reminder.suppressDuringFocus && store.timer.kind == .focus
+        && store.timer.status == .running ? store.timer.deadline : nil
+    let eventEnd =
+      reminder.suppressDuringCalendar
+      ? store.calendarService.todayEvents.filter {
+        $0.isEligibleForReminderSuppression && $0.start <= checkAt && $0.end > checkAt
+      }.map(\.end).max() : nil
+    if let eventEnd, eventEnd >= (focusEnd ?? checkAt) { return "After event" }
+    if let focusEnd, focusEnd > checkAt { return "After focus" }
+    let remaining = due.timeIntervalSince(store.now)
     return remaining <= 0 ? "When idle" : "In \(durationString(remaining))"
   }
 }
@@ -191,9 +192,8 @@ struct FocusDial: View {
       ClockSector(fraction: fraction).fill(accent.gradient.opacity(0.7)).padding(40)
       Capsule().fill(accent).frame(width: 5, height: 110)
         .offset(y: -49).rotationEffect(.degrees(fraction * 360))
-      Circle().fill(.regularMaterial).frame(width: 30, height: 30)
-        .overlay { Circle().fill(.white.opacity(0.65)).padding(5) }
-        .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+      Circle().fill(IntervalTheme.surface).frame(width: 30, height: 30)
+        .overlay { Circle().fill(accent.opacity(0.12)).padding(5) }
         .overlay { Circle().strokeBorder(accent.opacity(0.5), lineWidth: 3) }
     }.frame(width: 250, height: 250).scaleEffect(diameter / 250)
       .frame(width: diameter, height: diameter)
@@ -234,14 +234,14 @@ struct FocusDayPanel: View {
     }
   }
   var body: some View {
-    ThemedSplitView(isVertical: false, minimumFirst: 110, minimumSecond: 400) {
+    ThemedSplitView(isVertical: false, minimumFirst: 220, minimumSecond: 280) {
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
           Text("To-dos").font(IntervalTheme.heading)
           TodoList(store: store)
           UpcomingReminders(store: store).padding(.top, 12)
-        }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
-      }.frame(minHeight: 110, idealHeight: 190, maxHeight: .infinity)
+        }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
+      }.frame(minHeight: 220, idealHeight: 300, maxHeight: .infinity).clipped()
     } second: {
       VStack(spacing: 0) {
         VStack(spacing: 12) {
@@ -255,7 +255,7 @@ struct FocusDayPanel: View {
         DayTimeline(store: store, selectedSessionID: $selectedSessionID, date: selectedDay)
           .id(calendar.startOfDay(for: selectedDay))
           .padding(.horizontal, 16)
-      }.frame(minHeight: 400, idealHeight: 440, maxHeight: .infinity)
+      }.frame(minHeight: 280, idealHeight: 360, maxHeight: .infinity)
     }
     .onAppear { store.calendarService.show(month: selectedDay) }
     .onChange(of: calendar.startOfDay(for: store.now)) { old, new in
@@ -329,7 +329,12 @@ struct FocusDayPanel: View {
               .background(
                 calendar.isDate(day, inSameDayAs: selectedDay)
                   ? Color.accentColor.opacity(0.2) : Color.primary.opacity(0.035),
-                in: RoundedRectangle(cornerRadius: 7))
+                in: RoundedRectangle(cornerRadius: 7)
+              )
+              .overlay {
+                RoundedRectangle(cornerRadius: 7).strokeBorder(
+                  calendar.isDate(day, inSameDayAs: selectedDay) ? Color.accentColor : .clear)
+              }
           }.buttonStyle(.plain).accessibilityLabel(day.formatted(date: .complete, time: .omitted))
             .accessibilityAddTraits(
               calendar.isDate(day, inSameDayAs: selectedDay) ? .isSelected : [])
