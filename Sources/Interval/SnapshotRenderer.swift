@@ -135,6 +135,12 @@ struct SnapshotRequest {
     ]
     if scene == "reminders-empty" { reminders = [] }
     if scene == "reminder-max-emoji" { reminders[0].emojiSize = 180 }
+    if scene == "reminder-fullscreen-long" {
+      reminders[1].emojiSize = 180
+      reminders[1].message = String(
+        repeating: "Look into the distance and relax your shoulders. ", count: 40)
+    }
+    if scene == "focus-hour" { timer.duration = 3_600 }
     return PersistedData(
       settings: settings, activeTimer: timer,
       todos: [
@@ -245,7 +251,7 @@ struct SnapshotRequest {
       view = AnyView(
         ReminderTakeoverView(
           reminder: store.data.reminders[0], shownAt: Date(), skip: {}, extend: { _ in }))
-    case "reminder-fullscreen":
+    case "reminder-fullscreen", "reminder-fullscreen-long":
       size = NSSize(width: 900, height: 650)
       view = AnyView(
         ReminderTakeoverView(

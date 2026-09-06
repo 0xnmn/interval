@@ -421,46 +421,102 @@ struct ReminderTakeoverView: View {
   let skip: () -> Void
   let extend: (TimeInterval) -> Void
 
-  var body: some View {
-    ZStack {
-      if reminder.presentation == .fullscreen {
-        Color(white: 0.18).opacity(0.97).ignoresSafeArea()
-      }
+  static func remainingSeconds(reminder: Reminder, shownAt: Date, now: Date) -> Int {
+    max(0, Int(ceil(reminder.displaySeconds - now.timeIntervalSince(shownAt))))
+  }
 
-      VStack(spacing: 16) {
-        Text(reminder.emoji)
-          .font(.system(size: min(180, max(32, reminder.emojiSize))))
-          .lineLimit(1)
-        ScrollView {
-          VStack(spacing: 10) {
-            Text(reminder.title).font(.system(size: 34, weight: .semibold))
-              .multilineTextAlignment(.center)
-            Text(reminder.message).font(.system(size: 18)).foregroundStyle(.white.opacity(0.82))
-              .multilineTextAlignment(.center).frame(maxWidth: 640)
-          }
-          .frame(maxWidth: .infinity)
+  var body: some View {
+    TimelineView(.periodic(from: .now, by: 0.25)) { context in
+      ZStack {
+        if reminder.presentation == .fullscreen {
+          Color(white: 0.18).opacity(0.97).ignoresSafeArea()
+          fullscreenContent(now: context.date)
+        } else {
+          floatingContent(now: context.date)
         }
-        .frame(minHeight: 100, maxHeight: 260)
-        TimelineView(.periodic(from: .now, by: 0.25)) { context in
-          let remaining = max(0, 5 - Int(context.date.timeIntervalSince(shownAt)))
-          HStack(spacing: 14) {
-            Menu("Extend") {
-              ForEach([5, 10, 15], id: \.self) { minutes in
-                Button("\(minutes) minutes") { extend(TimeInterval(minutes * 60)) }
-              }
-            }
-            .buttonStyle(.bordered)
-            Button(remaining > 0 ? "Skip in \(remaining)s" : "Skip", action: skip)
-              .buttonStyle(.borderedProminent)
-              .disabled(remaining > 0)
-          }
-        }
-        .font(.system(size: 14, weight: .semibold))
       }
-      .padding(28)
-      .frame(maxWidth: 720)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .preferredColorScheme(.dark)
+  }
+
+  private func fullscreenContent(now: Date) -> some View {
+    VStack(spacing: 0) {
+      Text(now.formatted(date: .omitted, time: .shortened))
+        .font(.system(size: 15, weight: .medium, design: .rounded))
+        .foregroundStyle(.white.opacity(0.72))
+        .monospacedDigit()
+
+      Spacer(minLength: 24)
+      reminderContent(countdownSize: 54, now: now)
+      Spacer(minLength: 24)
+      actions(now: now)
+    }
+    .padding(.horizontal, 28).padding(.vertical, 24)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+
+  private func floatingContent(now: Date) -> some View {
+    VStack(spacing: 16) {
+      Text(reminder.emoji).font(.system(size: reminder.clamped().emojiSize)).lineLimit(1)
+      messageContent.frame(minHeight: 100, maxHeight: 260)
+      actions(now: now)
+    }
+    .padding(28)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+
+  private func reminderContent(countdownSize: CGFloat, now: Date) -> some View {
+    VStack(spacing: 10) {
+      Text(reminder.emoji)
+        .font(.system(size: min(180, max(32, reminder.emojiSize))))
+        .lineLimit(1)
+      messageContent.frame(height: 140)
+      countdown(size: countdownSize, now: now)
+        .padding(.top, 8)
+    }
+    .frame(maxWidth: 720)
+  }
+
+  private var messageContent: some View {
+    ScrollView {
+      VStack(spacing: 10) {
+        Text(reminder.title).font(.system(size: 34, weight: .semibold))
+        Text(reminder.message).font(.system(size: 18)).foregroundStyle(.white.opacity(0.82))
+      }.multilineTextAlignment(.center).frame(maxWidth: .infinity)
+    }
+    .frame(maxWidth: 640)
+    .defaultScrollAnchor(.center, for: .alignment)
+  }
+
+  private func countdown(size: CGFloat, now: Date) -> some View {
+    Text(
+      duration(
+        ReminderTakeoverView.remainingSeconds(
+          reminder: reminder, shownAt: shownAt, now: now))
+    )
+    .font(.system(size: size, weight: .medium, design: .monospaced))
+    .monospacedDigit()
+    .accessibilityLabel("Time remaining")
+  }
+
+  private func actions(now: Date) -> some View {
+    let skipRemaining = max(0, Int(ceil(5 - now.timeIntervalSince(shownAt))))
+    return HStack(spacing: 14) {
+      Menu("Extend") {
+        ForEach([5, 10, 15], id: \.self) { minutes in
+          Button("\(minutes) minutes") { extend(TimeInterval(minutes * 60)) }
+        }
+      }
+      .buttonStyle(.bordered)
+      Button(skipRemaining > 0 ? "Skip in \(skipRemaining)s" : "Skip", action: skip)
+        .buttonStyle(.borderedProminent)
+        .disabled(skipRemaining > 0)
+    }
+    .font(.system(size: 14, weight: .semibold))
+  }
+
+  private func duration(_ seconds: Int) -> String {
+    String(format: "%02d:%02d", seconds / 60, seconds % 60)
   }
 }

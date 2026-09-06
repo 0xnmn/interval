@@ -494,20 +494,20 @@ struct AppStoreTests {
     try withStore { store, _ in
       let start = Date(timeIntervalSince1970: 10_000)
       let observedAt = start.addingTimeInterval(120)
-      let originalDeadline = start.addingTimeInterval(3_600)
+      let originalDeadline = start.addingTimeInterval(2_400)
       store.data.activeTimer = TimerState(
-        kind: kind, duration: 3_600, status: .running, startedAt: start,
+        kind: kind, duration: 2_400, status: .running, startedAt: start,
         deadline: originalDeadline)
 
       store.adjustCurrentTime(by: adjustment, at: observedAt)
 
-      #expect(store.timer.duration == 3_600 + adjustment)
+      #expect(store.timer.duration == 2_400 + adjustment)
       #expect(store.timer.deadline == originalDeadline.addingTimeInterval(adjustment))
       #expect(TimerEngine.activeDuration(store.timer, now: observedAt) == 120)
     }
   }
 
-  @Test(arguments: [(TimeInterval(-20_000), TimeInterval(60)), (20_000, 10_800)])
+  @Test(arguments: [(TimeInterval(-20_000), TimeInterval(60)), (20_000, 3_480)])
   func adjustingRunningTimerClampsRemainingTime(
     adjustment: TimeInterval, expectedRemaining: TimeInterval
   ) throws {
@@ -523,6 +523,20 @@ struct AppStoreTests {
       #expect(TimerEngine.remaining(store.timer, now: observedAt) == expectedRemaining)
       #expect(store.timer.duration == 120 + expectedRemaining)
       #expect(TimerEngine.activeDuration(store.timer, now: observedAt) == 120)
+    }
+  }
+
+  @Test func legacyOverCapTimerCannotBeExtended() throws {
+    try withStore { store, _ in
+      let start = Date(timeIntervalSince1970: 10_000)
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 7_200, status: .running, startedAt: start,
+        deadline: start.addingTimeInterval(7_200))
+      let original = store.timer
+
+      store.adjustCurrentTime(by: 300, at: start.addingTimeInterval(100))
+
+      #expect(store.timer == original)
     }
   }
 

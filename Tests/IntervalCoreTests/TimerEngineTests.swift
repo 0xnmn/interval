@@ -14,6 +14,13 @@ import Testing
     #expect(timer.deadline == origin.addingTimeInterval(1_500))
   }
 
+  @Test func legacyReadyTimerCannotStartLongerThanOneHour() {
+    var timer = TimerState(kind: .focus, duration: 7_200)
+    TimerEngine.start(&timer, now: origin)
+    #expect(timer.duration == 3_600)
+    #expect(timer.deadline == origin.addingTimeInterval(3_600))
+  }
+
   @Test func completionIsIdempotent() {
     var timer = TimerState(kind: .focus, duration: 10)
     TimerEngine.start(&timer, now: origin)
@@ -50,6 +57,44 @@ import Testing
     #expect(timer.duration == 260)
     #expect(timer.deadline == origin.addingTimeInterval(260))
     #expect(TimerEngine.remaining(timer, now: origin.addingTimeInterval(200)) == 60)
+  }
+
+  @Test func adjustmentCapsTotalPlannedDurationRatherThanRemainingTime() {
+    var timer = TimerState(kind: .focus, duration: 1_500)
+    TimerEngine.start(&timer, now: origin)
+    let observedAt = origin.addingTimeInterval(100)
+
+    TimerEngine.adjustRemaining(&timer, by: 10_000, now: observedAt)
+
+    #expect(timer.duration == 3_600)
+    #expect(TimerEngine.remaining(timer, now: observedAt) == 3_500)
+    #expect(timer.deadline == observedAt.addingTimeInterval(3_500))
+    #expect(TimerEngine.activeDuration(timer, now: observedAt) == 100)
+  }
+
+  @Test func readyAdjustmentCapsPlannedDurationAtOneHour() {
+    var timer = TimerState(kind: .focus, duration: 1_500)
+    TimerEngine.adjustRemaining(&timer, by: 10_000, now: origin)
+    #expect(timer.duration == 3_600)
+    #expect(TimerEngine.remaining(timer, now: origin) == 3_600)
+  }
+
+  @Test func legacyOverCapRunningTimerIsPreservedAndCannotGrow() {
+    var timer = TimerState(
+      kind: .focus, duration: 7_200, status: .running, startedAt: origin,
+      deadline: origin.addingTimeInterval(7_200))
+    let observedAt = origin.addingTimeInterval(100)
+    let original = timer
+
+    TimerEngine.adjustRemaining(&timer, by: 300, now: observedAt)
+
+    #expect(timer == original)
+    #expect(TimerEngine.activeDuration(timer, now: observedAt) == 100)
+
+    TimerEngine.adjustRemaining(&timer, by: -300, now: observedAt)
+    #expect(timer.duration == 6_900)
+    #expect(timer.deadline == origin.addingTimeInterval(6_900))
+    #expect(TimerEngine.activeDuration(timer, now: observedAt) == 100)
   }
 
   @Test func removingTimeDuringFinalMinuteNeverExtendsTimer() {

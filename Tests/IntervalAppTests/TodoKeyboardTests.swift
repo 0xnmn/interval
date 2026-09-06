@@ -93,6 +93,7 @@ private final class Harness {
 
   func focusRow(_ index: Int) async throws {
     let row = editableRows()[index]
+    #expect(row.focusRingType == .none)
     guard window.makeFirstResponder(row) else { throw TodoKeyboardTestError.couldNotFocus }
     await pump()
   }

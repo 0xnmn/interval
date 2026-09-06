@@ -7,6 +7,8 @@ struct SessionIdentity: View {
 
   var body: some View {
     VStack(spacing: 12) {
+      Text(store.timer.kind == .focus ? "What's your focus?" : "Take a moment.")
+        .font(.system(size: 22, weight: .medium))
       HStack(spacing: 10) {
         Menu {
           Button("Others") { store.selectCategory(nil) }
@@ -24,14 +26,19 @@ struct SessionIdentity: View {
           Divider()
           Button("Manage Categories…") { managingCategories = true }
         } label: {
-          Text(store.timer.categoryName ?? "Category").lineLimit(1)
-        }.menuStyle(.borderlessButton).frame(maxWidth: 170)
+          HStack(spacing: 8) {
+            Circle().fill(store.data.settings.focusColor.color).frame(width: 6, height: 6)
+            Text(store.timer.categoryName ?? "Category").lineLimit(1)
+          }
+        }.menuStyle(.borderlessButton).fixedSize().padding(.horizontal, 12).padding(.vertical, 5)
+          .background(.white.opacity(0.06), in: Capsule())
           .accessibilityLabel("Session category")
       }.font(IntervalTheme.body)
       TextField(
-        "",
+        "Intention",
         text: Binding(get: { store.data.sessionTitle }, set: store.setSessionTitle), axis: .vertical
-      ).textFieldStyle(.plain).font(IntervalTheme.heading).multilineTextAlignment(.center)
+      ).textFieldStyle(.plain).font(IntervalTheme.body).padding(10)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
         .lineLimit(1...2).accessibilityLabel("Session title")
     }.sheet(isPresented: $managingCategories) {
       CategoryManager(store: store)

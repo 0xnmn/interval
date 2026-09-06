@@ -82,9 +82,9 @@ struct SettingsView: View {
     case 0:
       SettingsPage {
         SettingsSection("Durations") {
-          minuteRow("Focus", value: setting(\.focusMinutes), range: 1...180)
+          minuteRow("Focus", value: setting(\.focusMinutes), range: 1...60)
           minuteRow("Short break", value: setting(\.shortBreakMinutes), range: 1...60)
-          minuteRow("Long break", value: setting(\.longBreakMinutes), range: 1...90)
+          minuteRow("Long break", value: setting(\.longBreakMinutes), range: 1...60)
         }
         SettingsSection("Cadence") {
           SettingsRow("Long break") {

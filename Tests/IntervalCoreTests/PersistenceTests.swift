@@ -109,7 +109,16 @@ import Testing
   let settings = try store.load().settings
   #expect(
     settings
-      == .init(focusMinutes: 1, shortBreakMinutes: 1, longBreakMinutes: 90, longBreakEvery: 1))
+      == .init(focusMinutes: 1, shortBreakMinutes: 1, longBreakMinutes: 60, longBreakEvery: 1))
+}
+
+@Test func allConfiguredTimerDurationsClampToOneHour() {
+  let settings = IntervalSettings(
+    focusMinutes: 180, shortBreakMinutes: 90, longBreakMinutes: 120
+  ).clamped()
+  #expect(settings.focusMinutes == 60)
+  #expect(settings.shortBreakMinutes == 60)
+  #expect(settings.longBreakMinutes == 60)
 }
 
 @Test func calendarGridHonorsFirstWeekdayAndLeapYear() {

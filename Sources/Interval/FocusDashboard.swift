@@ -12,75 +12,88 @@ struct FocusControls: View {
   }
 
   var body: some View {
-    ScrollView {
-      VStack(spacing: 18) {
-        SessionIdentity(store: store).padding(.top, 8)
-        FocusDial(remaining: store.remaining, duration: store.timer.duration, accent: accent)
-        timeControls
-        HStack(spacing: 24) {
-          if store.timer.kind == .focus {
+    GeometryReader { geometry in
+      ScrollView {
+        VStack(spacing: 12) {
+          HStack(spacing: 24) {
+            Spacer()
+            if store.timer.kind == .focus {
+              Button {
+                if active { confirmingBreak = true } else { store.startBreakNow() }
+              } label: {
+                Label("Break", systemImage: "cup.and.saucer")
+              }.help("Start a break now").foregroundStyle(store.data.settings.breakColor.color)
+            } else if active {
+              Button {
+                store.endBreak()
+              } label: {
+                Label("End break", systemImage: "briefcase")
+              }.help("End break · Return to focus").foregroundStyle(
+                store.data.settings.focusColor.color)
+            }
             Button {
-              if active { confirmingBreak = true } else { store.startBreakNow() }
+              confirmingAbandon = true
             } label: {
-              Label("Break", systemImage: "cup.and.saucer")
-            }.help("Start a break now").foregroundStyle(store.data.settings.breakColor.color)
-          } else if active {
-            Button {
-              store.endBreak()
-            } label: {
-              Label("End break", systemImage: "briefcase")
-            }.help("End break · Return to focus").foregroundStyle(
-              store.data.settings.focusColor.color)
+              Label("Abandon", systemImage: "stop")
+            }.disabled(!active).help("Abandon interval")
+          }.buttonStyle(IntervalIconButton()).foregroundStyle(.primary)
+          SessionIdentity(store: store)
+          Spacer(minLength: 8)
+          FocusDial(
+            remaining: store.remaining, accent: accent,
+            diameter: min(250, max(180, geometry.size.height - 400)))
+          Text(durationString(store.remaining))
+            .font(.system(size: 32, weight: .light, design: .rounded)).monospacedDigit()
+          timeControls
+          Spacer(minLength: 8)
+          if let message = store.inAppNotification ?? store.recoveryMessage {
+            Text(message).font(IntervalTheme.body).foregroundStyle(.secondary)
           }
-          Button {
-            confirmingAbandon = true
-          } label: {
-            Label("Abandon", systemImage: "stop")
-          }.disabled(!active).help("Abandon interval")
-        }.buttonStyle(IntervalIconButton()).foregroundStyle(.primary)
-        if let message = store.inAppNotification ?? store.recoveryMessage {
-          Text(message).font(IntervalTheme.body).foregroundStyle(.secondary)
-        }
-        if let error = store.audioError {
-          Label(error, systemImage: "speaker.slash").font(IntervalTheme.body).foregroundStyle(
-            .orange)
-        }
-        upcomingReminders
-      }.padding(24).frame(maxWidth: .infinity)
-    }.defaultScrollAnchor(.center, for: .alignment)
-      .alert("Start a break now?", isPresented: $confirmingBreak) {
-        Button("Keep Focusing", role: .cancel) {}
-        Button("Start Break") { store.startBreakNow() }
-      } message: {
-        Text("This unfinished focus session will be saved as abandoned. Your focus time is kept.")
+          if let error = store.audioError {
+            Label(error, systemImage: "speaker.slash").font(IntervalTheme.body).foregroundStyle(
+              .orange)
+          }
+        }.padding(20).frame(maxWidth: .infinity).frame(minHeight: geometry.size.height)
       }
-      .alert("Abandon this interval?", isPresented: $confirmingAbandon) {
-        Button("Keep Going", role: .cancel) {}
-        Button("Abandon", role: .destructive, action: store.abandon)
-      } message: {
-        Text("Elapsed active time will be kept in Stats.")
+    }
+    .safeAreaInset(edge: .bottom, spacing: 0) {
+      if !active {
+        Button(action: store.startSession) {
+          Text(store.timer.kind == .focus ? "Start session" : "Start break")
+            .font(IntervalTheme.heading).frame(maxWidth: .infinity).padding(.vertical, 9)
+        }.buttonStyle(.borderedProminent).tint(accent).controlSize(.large)
+          .clipShape(Capsule()).padding(.horizontal, 24).padding(.bottom, 20)
       }
+    }
+    .alert("Start a break now?", isPresented: $confirmingBreak) {
+      Button("Keep Focusing", role: .cancel) {}
+      Button("Start Break") { store.startBreakNow() }
+    } message: {
+      Text("This unfinished focus session will be saved as abandoned. Your focus time is kept.")
+    }
+    .alert("Abandon this interval?", isPresented: $confirmingAbandon) {
+      Button("Keep Going", role: .cancel) {}
+      Button("Abandon", role: .destructive, action: store.abandon)
+    } message: {
+      Text("Elapsed active time will be kept in Stats.")
+    }
   }
 
   private var timeControls: some View {
     HStack(spacing: 12) {
       adjustmentButton(direction: -1)
       Group {
-        if active, let start = store.timer.startedAt, let end = store.timer.deadline {
-          Text(
-            "\(start.formatted(date: .omitted, time: .shortened)) → \(end.formatted(date: .omitted, time: .shortened))"
-          )
-          .font(IntervalTheme.body).monospacedDigit().foregroundStyle(.secondary)
-          .lineLimit(1).minimumScaleFactor(0.85)
-          .help("Started \(start.formatted()) · Ends \(end.formatted())")
-          .accessibilityLabel(
-            "Started \(start.formatted(date: .omitted, time: .shortened)), ends \(end.formatted(date: .omitted, time: .shortened))"
-          )
-        } else {
-          Button(action: store.startSession) {
-            Label("Start", systemImage: "play.fill")
-          }.buttonStyle(IntervalIconButton()).foregroundStyle(accent).help("Start interval")
-        }
+        let start = store.timer.startedAt ?? store.now
+        let end = store.timer.deadline ?? store.now.addingTimeInterval(store.remaining)
+        Text(
+          "\(start.formatted(date: .omitted, time: .shortened)) → \(end.formatted(date: .omitted, time: .shortened))"
+        )
+        .font(IntervalTheme.body).monospacedDigit().foregroundStyle(.secondary)
+        .lineLimit(1).minimumScaleFactor(0.85)
+        .help("Started \(start.formatted()) · Ends \(end.formatted())")
+        .accessibilityLabel(
+          "Started \(start.formatted(date: .omitted, time: .shortened)), ends \(end.formatted(date: .omitted, time: .shortened))"
+        )
       }.frame(maxWidth: .infinity)
       adjustmentButton(direction: 1)
     }
@@ -92,7 +105,7 @@ struct FocusControls: View {
     } label: {
       Image(systemName: direction > 0 ? "plus" : "minus")
     }.buttonStyle(IntervalIconButton())
-      .disabled(direction > 0 ? store.remaining >= 10_800 : store.remaining <= 60)
+      .disabled(direction > 0 ? store.timer.duration >= 3_600 : store.remaining <= 60)
       .accessibilityLabel(direction > 0 ? "Add 5 minutes" : "Remove 5 minutes")
       .help(
         direction > 0
@@ -107,7 +120,11 @@ struct FocusControls: View {
       }
   }
 
-  private var upcomingReminders: some View {
+}
+
+private struct UpcomingReminders: View {
+  @Bindable var store: AppStore
+  var body: some View {
     let reminders = store.data.reminders.filter { $0.isEnabled && $0.effectiveDueAt != nil }
       .sorted { $0.effectiveDueAt! < $1.effectiveDueAt! }
     return VStack(alignment: .leading, spacing: 14) {
@@ -144,11 +161,12 @@ struct FocusControls: View {
   }
 }
 
-private struct FocusDial: View {
+struct FocusDial: View {
   let remaining: TimeInterval
-  let duration: TimeInterval
   let accent: Color
-  private var fraction: Double { min(1, max(0, remaining / max(1, duration))) }
+  var diameter: CGFloat = 250
+  static func fraction(for seconds: TimeInterval) -> Double { min(1, max(0, seconds / 3_600)) }
+  private var fraction: Double { Self.fraction(for: remaining) }
 
   var body: some View {
     ZStack {
@@ -157,19 +175,30 @@ private struct FocusDial: View {
           .frame(width: tick % 5 == 0 ? 2 : 1, height: tick % 5 == 0 ? 12 : 6)
           .offset(y: -116).rotationEffect(.degrees(Double(tick) * 6))
       }
-      Circle().fill(accent.opacity(0.06)).padding(27)
-      Circle().stroke(.white.opacity(0.06), lineWidth: 6).padding(27)
-      Circle().trim(from: 0, to: fraction)
-        .stroke(accent.gradient, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-        .rotationEffect(.degrees(-90)).padding(27)
-      Circle().fill(accent).frame(width: 10, height: 10)
-        .shadow(color: accent.opacity(0.5), radius: 5)
-        .offset(y: -98).rotationEffect(.degrees(fraction * 360))
-      Text(durationString(remaining))
-        .font(.system(size: 42, weight: .light, design: .rounded)).monospacedDigit()
-    }.frame(width: 250, height: 250)
+      Circle().fill(accent.opacity(0.10)).padding(40)
+      ClockSector(fraction: fraction).fill(accent.gradient.opacity(0.7)).padding(40)
+      Capsule().fill(accent).frame(width: 5, height: 110)
+        .offset(y: -49).rotationEffect(.degrees(fraction * 360))
+      Circle().fill(.regularMaterial).frame(width: 30, height: 30)
+        .overlay { Circle().strokeBorder(accent.opacity(0.5), lineWidth: 3) }
+    }.frame(width: 250, height: 250).scaleEffect(diameter / 250)
+      .frame(width: diameter, height: diameter)
       .accessibilityElement(children: .ignore)
       .accessibilityLabel("Time remaining").accessibilityValue(spokenDuration(remaining))
+  }
+}
+
+private struct ClockSector: Shape {
+  let fraction: Double
+  func path(in rect: CGRect) -> Path {
+    Path { path in
+      let center = CGPoint(x: rect.midX, y: rect.midY)
+      path.move(to: center)
+      path.addArc(
+        center: center, radius: min(rect.width, rect.height) / 2,
+        startAngle: .degrees(-90), endAngle: .degrees(-90 + fraction * 360), clockwise: false)
+      path.closeSubpath()
+    }
   }
 }
 
@@ -187,11 +216,11 @@ struct FocusDayPanel: View {
         VStack(alignment: .leading, spacing: 16) {
           Text("To-dos").font(IntervalTheme.heading)
           TodoList(store: store)
+          UpcomingReminders(store: store).padding(.top, 12)
         }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
-      }.frame(minHeight: 140, idealHeight: 300, maxHeight: .infinity)
-      ScrollView {
+      }.frame(minHeight: 110, idealHeight: 190, maxHeight: .infinity)
+      VStack(spacing: 0) {
         VStack(alignment: .leading, spacing: 20) {
-          Text("Today's focus").font(IntervalTheme.heading)
           HStack(spacing: 28) {
             VStack(alignment: .leading, spacing: 4) {
               Text("\(Int(sessions.reduce(0) { $0 + $1.activeDuration } / 60))m")
@@ -209,10 +238,11 @@ struct FocusDayPanel: View {
             Spacer()
             Text(store.now.formatted(.dateTime.month(.abbreviated).day()))
               .font(IntervalTheme.body).foregroundStyle(.secondary)
-          }.padding(.top, 12)
-          dayTimeline
+          }
         }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
-      }.frame(minHeight: 200, idealHeight: 320, maxHeight: .infinity)
+        DayTimeline(store: store, selectedSessionID: $selectedSessionID)
+          .padding(.horizontal, 16)
+      }.frame(minHeight: 400, idealHeight: 440, maxHeight: .infinity)
     }.sheet(
       isPresented: Binding(
         get: { selectedSessionID != nil }, set: { if !$0 { selectedSessionID = nil } }
@@ -231,54 +261,4 @@ struct FocusDayPanel: View {
     }
   }
 
-  private var dayItems: [HistoryItem] {
-    let logs = store.data.sessions.filter {
-      Calendar.autoupdatingCurrent.isDate($0.endedAt, inSameDayAs: store.now)
-    }.map(HistoryItem.session)
-    let events =
-      store.calendarService.isEnabled && store.calendarService.authorizationState == .fullAccess
-      ? store.calendarService.todayEvents.map(HistoryItem.calendar) : []
-    return (logs + events).sorted {
-      $0.start == $1.start ? $0.id < $1.id : $0.start < $1.start
-    }
-  }
-
-  private var dayTimeline: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      if dayItems.isEmpty {
-        Text("No activity yet today").font(IntervalTheme.body).foregroundStyle(.secondary)
-      }
-      ForEach(dayItems) { item in
-        HStack(alignment: .top, spacing: 10) {
-          VStack(spacing: 4) {
-            Circle().fill(.white.opacity(0.4)).frame(width: 5, height: 5)
-            Rectangle().fill(IntervalTheme.border).frame(width: 1)
-          }.frame(width: 6).padding(.top, 8)
-          Group {
-            switch item {
-            case .session(let session):
-              Button {
-                selectedSessionID = session.id
-              } label: {
-                SessionRow(session: session, showsReflection: false)
-                  .frame(maxWidth: .infinity, alignment: .leading)
-              }.buttonStyle(.plain)
-            case .calendar(let event): CalendarEventRow(event: event)
-            }
-          }
-          .padding(.bottom, 18)
-        }.fixedSize(horizontal: false, vertical: true)
-      }
-      if !store.calendarService.isEnabled || store.calendarService.authorizationState != .fullAccess
-      {
-        SettingsLink { Label("Connect your calendar", systemImage: "calendar.badge.plus") }
-          .buttonStyle(.plain).font(IntervalTheme.body).foregroundStyle(.secondary).padding(
-            .top, 12)
-      } else if store.calendarService.selectedCalendarIDs.isEmpty {
-        SettingsLink { Label("Choose calendars", systemImage: "calendar.badge.plus") }
-          .buttonStyle(.plain).font(IntervalTheme.body).foregroundStyle(.secondary).padding(
-            .top, 12)
-      }
-    }
-  }
 }

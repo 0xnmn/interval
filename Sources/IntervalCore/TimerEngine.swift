@@ -23,6 +23,7 @@ public enum TimerEngine {
 
   public static func start(_ state: inout TimerState, now: Date) {
     guard state.status == .ready else { return }
+    state.duration = min(state.duration, 3_600)
     state.status = .running
     state.startedAt = now
     state.deadline = now.addingTimeInterval(state.duration)
@@ -30,7 +31,7 @@ public enum TimerEngine {
 
   public static func adjustRemaining(
     _ state: inout TimerState, by seconds: TimeInterval, now: Date,
-    minimum: TimeInterval = 60, maximum: TimeInterval = 10_800
+    minimum: TimeInterval = 60, maximum: TimeInterval = 3_600
   ) {
     guard state.status == .ready || state.status == .running else {
       return
@@ -38,7 +39,14 @@ public enum TimerEngine {
     // A stale hover choice must never add time when subtracting near the deadline.
     if seconds < 0 && remaining(state, now: now) <= minimum { return }
     let elapsed = activeDuration(state, now: now)
-    let adjustedRemaining = min(maximum, max(minimum, remaining(state, now: now) + seconds))
+    let currentRemaining = remaining(state, now: now)
+    // Legacy running timers may already exceed the cap. Preserve their accounting, but do not
+    // allow them to grow further. New and in-cap timers are limited by total planned duration.
+    if seconds > 0 && state.duration >= maximum { return }
+    let maximumRemaining =
+      state.duration > maximum ? currentRemaining : max(0, maximum - elapsed)
+    let adjustedRemaining = min(
+      maximumRemaining, max(minimum, currentRemaining + seconds))
     state.duration = elapsed + adjustedRemaining
     if state.status == .running {
       state.deadline = now.addingTimeInterval(adjustedRemaining)

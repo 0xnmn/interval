@@ -126,9 +126,9 @@ public struct IntervalSettings: Codable, Equatable, Sendable {
 
   public func clamped() -> Self {
     .init(
-      focusMinutes: focusMinutes.clamped(to: 1...180),
+      focusMinutes: focusMinutes.clamped(to: 1...60),
       shortBreakMinutes: shortBreakMinutes.clamped(to: 1...60),
-      longBreakMinutes: longBreakMinutes.clamped(to: 1...90),
+      longBreakMinutes: longBreakMinutes.clamped(to: 1...60),
       longBreakEvery: longBreakEvery.clamped(to: 1...12), focusColor: focusColor,
       breakColor: breakColor, focusSound: focusSound,
       breakSound: breakSound,

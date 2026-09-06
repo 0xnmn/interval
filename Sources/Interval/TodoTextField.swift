@@ -19,6 +19,7 @@ struct TodoTextField: NSViewRepresentable {
     field.isEditable = true
     field.isSelectable = true
     field.isBordered = false
+    field.focusRingType = .none
     field.drawsBackground = false
     field.font = .systemFont(ofSize: 14)
     field.placeholderString = "To-do"

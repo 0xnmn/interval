@@ -62,6 +62,12 @@ final class AppStore {
       save()
     }
     if data.activeTimer == nil { data.activeTimer = timer(for: .focus) }
+    if data.activeTimer?.status == .ready, let duration = data.activeTimer?.duration,
+      duration > 3_600
+    {
+      data.activeTimer?.duration = 3_600
+      save()
+    }
     if runtimeEnabled {
       self.calendarService.configure(
         enabled: data.settings.calendarIntegrationEnabled,
