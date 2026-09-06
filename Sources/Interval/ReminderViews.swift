@@ -396,13 +396,15 @@ struct ReminderTakeoverView: View {
   var body: some View {
     ZStack {
       GlassBackground()
-      RoundedRectangle(cornerRadius: 28)
-        .stroke(
-          LinearGradient(
-            colors: [IntervalTheme.accent.opacity(0.22), Color.white.opacity(0.035)],
-            startPoint: .topLeading, endPoint: .bottomTrailing)
-        )
-        .padding(10)
+      if reminder.presentation != .fullscreen {
+        RoundedRectangle(cornerRadius: 28)
+          .stroke(
+            LinearGradient(
+              colors: [IntervalTheme.accent.opacity(0.22), Color.white.opacity(0.035)],
+              startPoint: .topLeading, endPoint: .bottomTrailing)
+          )
+          .padding(10)
+      }
 
       VStack(spacing: 0) {
         Spacer(minLength: 32)
@@ -429,7 +431,9 @@ struct ReminderTakeoverView: View {
         .font(.subheadline.weight(.medium))
       }
       .padding(34)
+      .frame(maxWidth: 720, maxHeight: reminder.presentation == .fullscreen ? 520 : .infinity)
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
     .preferredColorScheme(.dark)
   }
 }

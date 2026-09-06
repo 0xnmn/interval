@@ -40,7 +40,7 @@ The default build targets the build Mac's architecture. It is a local developmen
 - Settings changes affect the next timer, not a running timer.
 - Calendar suppression covers overlapping selected-calendar events, including all-day events, except canceled/declined events. Denied/disabled Calendar access cannot provide suppression.
 - Missed reminders are skipped while the session is unavailable and on relaunch; there is no replay of every missed recurrence. Visible reminders are serialized. Postponement affects only the current occurrence, not the saved interval.
-- Full-screen reminders use ordinary, dismissible floating app panels, not a system lock screen. They respect display work areas and do not disable app switching.
+- Full-screen reminders use edge-to-edge, nonactivating overlays on every display, including above other apps’ fullscreen Spaces. They cover the menu bar and Dock, but remain dismissible with Escape and do not lock the system. Interval temporarily acts as a menu-bar utility during a fullscreen reminder, restoring its normal Dock presence afterward. Floating reminders remain compact panels.
 
 ## Keyboard and accessibility
 

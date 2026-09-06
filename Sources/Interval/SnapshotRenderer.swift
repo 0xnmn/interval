@@ -150,6 +150,32 @@ struct SnapshotRequest {
   }
 
   static func render(request: SnapshotRequest, store: AppStore) async throws {
+    if request.scene == "reminder-overlay" {
+      // Exercise the real controller, not a reminder view inside a snapshot window.
+      let controller = ReminderOverlayController()
+      defer { controller.close() }
+      let reminder = store.data.reminders[1]
+      let existing = Set(NSApp.windows.map(\.windowNumber))
+      controller.update(
+        .reminder(reminderID: reminder.id, shownAt: fixtureNow),
+        reminder: reminder, store: store)
+      // Production excludes reminder panels from legacy screen captures. This fixture
+      // contains no user content and explicitly opts in so the compositor is tested.
+      for panel in NSApp.windows where !existing.contains(panel.windowNumber) {
+        panel.sharingType = .readOnly
+      }
+      try await Task.sleep(for: .seconds(1))
+      try FileManager.default.createDirectory(
+        at: URL(fileURLWithPath: request.path).deletingLastPathComponent(),
+        withIntermediateDirectories: true)
+      let capture = Process()
+      capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+      capture.arguments = ["-x", "-D", "1", request.path]
+      try capture.run()
+      capture.waitUntilExit()
+      guard capture.terminationStatus == 0 else { throw CocoaError(.fileWriteUnknown) }
+      return
+    }
     let size: NSSize
     let view: AnyView
     if request.scene == "focus-countdown" { store.now = fixtureNow.addingTimeInterval(67) }

@@ -21,13 +21,18 @@ enum UserIdleMonitor {
   private var panels: [NSPanel] = []
   private var shown: ReminderOverlay?
   private var shownReminder: Reminder?
+  private weak var shownStore: AppStore?
   private var warningHost: NSHostingView<ReminderWarningView>?
   private var cursorDisplayLink: CADisplayLink?
+  private var previousActivationPolicy: NSApplication.ActivationPolicy?
   private let cursorLocation: () -> NSPoint
 
   init(cursorLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation }) {
     self.cursorLocation = cursorLocation
     super.init()
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(screensChanged),
+      name: NSApplication.didChangeScreenParametersNotification, object: nil)
   }
 
   deinit { cursorDisplayLink?.invalidate() }
@@ -53,6 +58,7 @@ enum UserIdleMonitor {
     close()
     shown = overlay
     shownReminder = reminder
+    shownStore = store
     switch overlay {
     case .warning:
       let panel = NSPanel(
@@ -74,7 +80,15 @@ enum UserIdleMonitor {
       link.add(to: .main, forMode: .common)
       cursorDisplayLink = link
     case .reminder:
-      let cursor = NSEvent.mouseLocation
+      if reminder.presentation == .fullscreen {
+        // Foreground apps cannot join another app's native fullscreen Space.
+        // Act as an overlay utility only for the takeover, then restore the Dock presence.
+        let policy = NSApp.activationPolicy()
+        if policy == .regular, NSApp.setActivationPolicy(.accessory) {
+          previousActivationPolicy = policy
+        }
+      }
+      let cursor = cursorLocation()
       let cursorScreen =
         NSScreen.screens.first(where: { $0.frame.contains(cursor) }) ?? NSScreen.main
       let screens =
@@ -82,20 +96,33 @@ enum UserIdleMonitor {
       panels = screens.map { screen in
         let rect =
           reminder.presentation == .fullscreen
-          ? safeFrame(for: screen)
+          ? screen.frame
           : centered(size: NSSize(width: 520, height: 480), in: screen.visibleFrame)
         let panel = EscapePanel(
           contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered,
           defer: false)
         configure(panel)
-        panel.level = .floating
+        let fullscreen = reminder.presentation == .fullscreen
+        panel.hasShadow = !fullscreen
+        panel.hidesOnDeactivate = false
+        panel.isFloatingPanel = true
+        // isFloatingPanel resets the level; apply the overlay level afterward.
+        panel.level = fullscreen ? .screenSaver : .floating
+        panel.isMovable = false
+        panel.animationBehavior = .none
+        panel.collectionBehavior = [
+          .canJoinAllSpaces, .canJoinAllApplications, .fullScreenAuxiliary, .stationary,
+          .ignoresCycle,
+        ]
+        // Set after the level: normal window positioning may otherwise constrain the
+        // frame to the desktop work area, excluding the menu bar and Dock.
+        panel.setFrame(rect, display: false)
         panel.contentView = NSHostingView(
           rootView: ReminderTakeoverView(
             reminder: reminder,
             dismiss: { store.dismissReminder(reminder.id) },
             snooze: { store.snoozeReminder(reminder.id) }))
         panel.onEscape = { store.dismissReminder(reminder.id) }
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.sharingType = .none
         if screen == cursorScreen {
           panel.makeKeyAndOrderFront(nil)
@@ -108,6 +135,7 @@ enum UserIdleMonitor {
   }
 
   func close() {
+    shownStore = nil
     cursorDisplayLink?.invalidate()
     cursorDisplayLink = nil
     warningHost = nil
@@ -116,8 +144,23 @@ enum UserIdleMonitor {
       $0.close()
     }
     panels = []
+    if let policy = previousActivationPolicy {
+      previousActivationPolicy = nil
+      NSApp.setActivationPolicy(policy)
+    }
     shown = nil
     shownReminder = nil
+  }
+  @objc private func screensChanged() {
+    guard let overlay = shown, let reminder = shownReminder,
+      let store = shownStore
+    else { return }
+    // Rebuild without toggling app policy (which can itself change desktop geometry).
+    let policy = previousActivationPolicy
+    previousActivationPolicy = nil
+    shown = nil
+    update(overlay, reminder: reminder, store: store)
+    previousActivationPolicy = policy
   }
   private func configure(_ panel: NSPanel) {
     panel.isReleasedWhenClosed = false
@@ -142,9 +185,6 @@ enum UserIdleMonitor {
     NSRect(
       x: rect.midX - size.width / 2, y: rect.midY - size.height / 2, width: size.width,
       height: size.height)
-  }
-  private func safeFrame(for screen: NSScreen) -> NSRect {
-    screen.visibleFrame.insetBy(dx: 8, dy: 8)
   }
 }
 

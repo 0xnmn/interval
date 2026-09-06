@@ -165,16 +165,6 @@ final class AppStore {
         })
     }
     observers.append(
-      NotificationCenter.default.addObserver(
-        forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
-      ) { [weak self] _ in
-        Task { @MainActor in
-          guard let self else { return }
-          self.overlayController.close()
-          self.tickReminders(at: Date())
-        }
-      })
-    observers.append(
       center.addObserver(
         forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
       ) { [weak self] notification in
