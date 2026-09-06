@@ -12,6 +12,25 @@ enum IntervalTheme {
   static let border = Color.primary.opacity(0.07)
   static let body = Font.system(size: 14)
   static let heading = Font.system(size: 14, weight: .semibold)
+  static let icon = Font.system(size: 16, weight: .medium)
+}
+
+enum IntervalMotion {
+  static let selection = Animation.easeInOut(duration: 0.16)
+
+  // Only fade on entry. Dismissal stays immediate so an invisible overlay can never block work.
+  @MainActor static func reveal(_ window: NSWindow, reduceMotion: Bool? = nil) {
+    let reduced = reduceMotion ?? NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    guard !reduced else {
+      window.alphaValue = 1
+      return
+    }
+    window.alphaValue = 0
+    NSAnimationContext.runAnimationGroup { context in
+      context.duration = 0.24
+      window.animator().alphaValue = 1
+    }
+  }
 }
 
 extension AppAppearance {
@@ -45,11 +64,12 @@ extension PhaseColor {
 
 struct IntervalIconButton: ButtonStyle {
   @Environment(\.isEnabled) private var isEnabled
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var hovering = false
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label.labelStyle(.iconOnly)
-      .font(.system(size: 17, weight: .medium))
+      .font(IntervalTheme.icon)
       .frame(width: 36, height: 36)
       .background(
         Color.primary.opacity(configuration.isPressed ? 0.18 : hovering ? 0.12 : 0.06),
@@ -57,6 +77,8 @@ struct IntervalIconButton: ButtonStyle {
       )
       .contentShape(RoundedRectangle(cornerRadius: 9))
       .opacity(isEnabled ? 1 : 0.3)
+      .animation(reduceMotion ? nil : IntervalMotion.selection, value: hovering)
+      .animation(reduceMotion ? nil : IntervalMotion.selection, value: configuration.isPressed)
       .onHover { hovering = $0 }
   }
 }
@@ -92,6 +114,7 @@ private struct NativeGlass: NSViewRepresentable {
 
 struct IntervalPrimaryButton: ButtonStyle {
   @Environment(\.isEnabled) private var isEnabled
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var hovering = false
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
@@ -105,6 +128,8 @@ struct IntervalPrimaryButton: ButtonStyle {
       .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(IntervalTheme.border) }
       .opacity(isEnabled ? 1 : 0.5)
       .contentShape(RoundedRectangle(cornerRadius: 8))
+      .animation(reduceMotion ? nil : IntervalMotion.selection, value: hovering)
+      .animation(reduceMotion ? nil : IntervalMotion.selection, value: configuration.isPressed)
       .onHover { hovering = $0 }
   }
 }

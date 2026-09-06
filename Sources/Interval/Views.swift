@@ -10,13 +10,14 @@ enum Destination: String, CaseIterable, Identifiable {
     switch self {
     case .focus: "timer"
     case .history: "chart.bar"
-    case .reminders: "checklist"
+    case .reminders: "bell"
     }
   }
 }
 
 struct MainView: View {
   @Bindable var store: AppStore
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     ZStack {
@@ -28,7 +29,7 @@ struct MainView: View {
               store.selection = item
             } label: {
               Image(systemName: item.icon)
-                .font(.system(size: 18, weight: .medium)).frame(width: 38, height: 38)
+                .font(IntervalTheme.icon).frame(width: 36, height: 36)
                 .background(
                   (store.selection ?? .focus) == item ? Color.primary.opacity(0.10) : .clear,
                   in: RoundedRectangle(cornerRadius: 10))
@@ -37,10 +38,11 @@ struct MainView: View {
             .foregroundStyle((store.selection ?? .focus) == item ? .primary : .secondary)
             .help(item.rawValue).accessibilityLabel(item.rawValue)
             .accessibilityAddTraits((store.selection ?? .focus) == item ? .isSelected : [])
+            .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.selection)
           }
           Spacer(minLength: 20)
           SettingsLink {
-            Image(systemName: "gearshape").font(.system(size: 18)).frame(width: 38, height: 38)
+            Image(systemName: "gearshape").font(IntervalTheme.icon).frame(width: 36, height: 36)
           }.buttonStyle(.plain).help("Settings · ⌘,").accessibilityLabel("Settings")
         }.padding(.vertical, 20).frame(width: 60).foregroundStyle(.secondary)
         Rectangle().fill(IntervalTheme.border).frame(width: 1)
@@ -59,6 +61,9 @@ struct MainView: View {
             case .reminders: RemindersView(store: store)
             }
           }.frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
+            .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.selection)
+            .animation(
+              reduceMotion ? nil : IntervalMotion.selection, value: store.completionSessionID)
           if store.selection == .history || store.selection == .reminders {
             LiveTimerBar(store: store)
           }
@@ -501,6 +506,7 @@ struct SessionRow: View {
 
 struct ReflectionView: View {
   @Bindable var store: AppStore
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   let sessionID: UUID
   private var session: SessionRecord? { store.data.sessions.first { $0.id == sessionID } }
   private var feedback: Binding<SessionFeedback?> {
@@ -540,6 +546,7 @@ struct ReflectionView: View {
           }
           .buttonStyle(.plain).accessibilityLabel(value.title)
           .accessibilityAddTraits(feedback.wrappedValue == value ? .isSelected : [])
+          .animation(reduceMotion ? nil : IntervalMotion.selection, value: feedback.wrappedValue)
         }
       }
       WritingArea(text: journal, placeholder: "Add a thought…", label: "Journal")
@@ -643,6 +650,7 @@ extension String {
 
 struct MenuBarView: View {
   @Bindable var store: AppStore
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   var showsAppActions = true
   @Environment(\.openWindow) private var openWindow
   var body: some View {
@@ -690,6 +698,7 @@ struct MenuBarView: View {
         }
       }
     }.font(IntervalTheme.body).frame(width: 600, height: 480).tint(IntervalTheme.accent)
+      .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.completionSessionID)
       .accessibilityElement(children: .contain)
       .accessibilityLabel(
         "\(store.breakEnded ? "Break ended" : store.timer.kind.title), \(spokenDuration(store.displayedTime)) \(store.breakEnded ? "overtime" : "remaining")"

@@ -246,6 +246,7 @@ private final class NotchTrackingView: NSView {
 
 struct NotchRootView: View {
   @Bindable var store: AppStore
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   let expanded: Bool
   let geometry: NotchGeometry
   let collapse: () -> Void
@@ -273,22 +274,24 @@ struct NotchRootView: View {
             )
             .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
             Spacer()
-            ForEach(store.completionSessionID == nil ? 0..<3 : 0..<0) { index in
+            ForEach(store.completionSessionID == nil ? 0..<3 : 0..<0, id: \.self) { index in
               Button {
                 page = index
               } label: {
                 Image(systemName: ["timer", "checklist", "bell"][index])
-                  .frame(width: 26, height: 26)
+                  .font(IntervalTheme.icon).frame(width: 32, height: 32)
                   .foregroundStyle(page == index ? .white : .gray)
                   .background(
                     page == index ? Color.white.opacity(0.12) : .clear,
                     in: RoundedRectangle(cornerRadius: 7))
               }.buttonStyle(.plain).help(["Timer", "To-dos", "Reminders"][index])
                 .accessibilityLabel(["Timer", "To-dos", "Reminders"][index])
+                .accessibilityAddTraits(page == index ? .isSelected : [])
             }
             Button(action: collapse) {
-              Image(systemName: "chevron.up").frame(width: 26, height: 26)
-            }.buttonStyle(.plain).foregroundStyle(.secondary).help("Collapse")
+              Image(systemName: "chevron.up").font(IntervalTheme.icon).frame(width: 32, height: 32)
+            }.buttonStyle(.plain).foregroundStyle(.secondary).help("Collapse").accessibilityLabel(
+              "Collapse")
           }
           if let id = store.completionSessionID {
             ScrollView { ReflectionView(store: store, sessionID: id) }
@@ -300,6 +303,7 @@ struct NotchRootView: View {
             FocusControls(store: store, compact: true, showsDial: false)
           }
         }.padding(22)
+          .animation(reduceMotion ? nil : IntervalMotion.selection, value: page)
           .frame(
             width: NotchGeometry.expandedSize.width,
             height: store.completionSessionID != nil

@@ -4,6 +4,7 @@ import SwiftUI
 
 struct RemindersView: View {
   @Bindable var store: AppStore
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var selection: UUID?
   @State private var deleting: Reminder?
 
@@ -115,12 +116,12 @@ struct RemindersView: View {
         Button {
           store.previewReminder(reminder.id)
         } label: {
-          Label("Preview reminder", systemImage: "play.rectangle")
+          Label("Preview reminder", systemImage: "eye")
         }.buttonStyle(IntervalIconButton()).help("Preview reminder")
         Menu {
           Button("Delete Reminder…", role: .destructive) { deleting = reminder }
         } label: {
-          Image(systemName: "ellipsis").font(.system(size: 17, weight: .medium)).frame(
+          Image(systemName: "ellipsis").font(IntervalTheme.icon).frame(
             width: 36, height: 36)
         }
         .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
@@ -179,6 +180,7 @@ struct RemindersView: View {
       selection == reminder.id ? IntervalTheme.accent.opacity(0.11) : Color.primary.opacity(0.025),
       in: RoundedRectangle(cornerRadius: 11)
     )
+    .animation(reduceMotion ? nil : IntervalMotion.selection, value: selection)
   }
 
   private var addMenu: some View {
@@ -191,7 +193,7 @@ struct RemindersView: View {
         }
       }
     } label: {
-      Image(systemName: "plus").font(.system(size: 17, weight: .medium)).frame(
+      Image(systemName: "plus").font(IntervalTheme.icon).frame(
         width: 36, height: 36)
     }
     .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
@@ -234,6 +236,7 @@ struct RemindersView: View {
 private struct ReminderEditor: View {
   let reminder: Reminder
   @Bindable var store: AppStore
+  @State private var previewSound: NSSound?
 
   private func binding<T>(_ keyPath: WritableKeyPath<Reminder, T>) -> Binding<T> {
     Binding(
@@ -347,7 +350,20 @@ private struct ReminderEditor: View {
             Spacer()
             Picker("Sound", selection: binding(\.sound)) {
               ForEach(ReminderSound.allCases, id: \.self) { Text($0.title).tag($0) }
-            }.labelsHidden().fixedSize().frame(width: 190, alignment: .trailing)
+            }.labelsHidden().frame(width: 140)
+            Button {
+              previewSound?.stop()
+              // Named sounds are cached. Keep previews independent of a live reminder cue.
+              let sound =
+                NSSound(named: NSSound.Name(binding(\.sound).wrappedValue.title))?.copy()
+                as? NSSound
+              previewSound = sound
+              sound?.play()
+            } label: {
+              Label("Preview sound", systemImage: "speaker.wave.2")
+            }.buttonStyle(IntervalIconButton())
+              .disabled(binding(\.sound).wrappedValue == .none)
+              .help("Preview reminder sound")
           }
         }
       }
@@ -355,6 +371,9 @@ private struct ReminderEditor: View {
     }
     .font(.system(size: 14))
     .background(GlassBackground())
+    .onDisappear { previewSound?.stop() }
+    .onChange(of: binding(\.sound).wrappedValue) { _, _ in previewSound?.stop() }
+    .onChange(of: store.reminderOverlay) { _, _ in previewSound?.stop() }
   }
 
   private func toggleRow(_ title: String, value: Binding<Bool>) -> some View {
@@ -624,6 +643,7 @@ struct ReminderTakeoverView: View {
 
 private struct ReminderGlassButtonStyle: ButtonStyle {
   @Environment(\.isEnabled) private var isEnabled
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @State private var hovering = false
 
@@ -642,6 +662,8 @@ private struct ReminderGlassButtonStyle: ButtonStyle {
       .overlay(Capsule().strokeBorder(.white.opacity(hovering ? 0.5 : 0.22)))
       .opacity(isEnabled ? 1 : 0.65)
       .contentShape(Capsule())
+      .animation(reduceMotion ? nil : IntervalMotion.selection, value: hovering)
+      .animation(reduceMotion ? nil : IntervalMotion.selection, value: configuration.isPressed)
       .onHover { hovering = $0 }
   }
 }

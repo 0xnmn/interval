@@ -127,6 +127,7 @@ import SwiftUI
     panel.onEscape = { [weak self] in self?.dismissPermanently() }
     self.panel = panel
     position(panel)
+    IntervalMotion.reveal(panel)
     panel.orderFrontRegardless()
   }
 
@@ -150,6 +151,7 @@ import SwiftUI
     }
     self.panel = panel
     position(panel)
+    IntervalMotion.reveal(panel)
     panel.orderFrontRegardless()
   }
 
@@ -162,6 +164,7 @@ import SwiftUI
         .background(GlassBackground())
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous)))
     panel.setFrame(Self.frame(size: Self.reflectionSize, in: targetVisibleFrame()), display: true)
+    IntervalMotion.reveal(panel)
     // The explicit click on Reflect opts into keyboard interaction without activating
     // the application or opening its main window.
     panel.makeKeyAndOrderFront(nil)
@@ -178,9 +181,7 @@ import SwiftUI
     panel.hidesOnDeactivate = false
     panel.isFloatingPanel = true
     panel.level = .floating
-    panel.animationBehavior =
-      NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-      ? .none : .utilityWindow
+    panel.animationBehavior = .none
     panel.collectionBehavior = [
       .canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle,
     ]
@@ -332,6 +333,7 @@ struct SessionCompletionToast: View {
 private struct CompletionPillButtonStyle: ButtonStyle {
   let prominent: Bool
   @Environment(\.isEnabled) private var isEnabled
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var hovering = false
 
   func makeBody(configuration: Configuration) -> some View {
@@ -347,6 +349,8 @@ private struct CompletionPillButtonStyle: ButtonStyle {
       .overlay { Capsule().strokeBorder(IntervalTheme.border) }
       .contentShape(Capsule())
       .opacity(isEnabled ? 1 : 0.4)
+      .animation(reduceMotion ? nil : IntervalMotion.selection, value: hovering)
+      .animation(reduceMotion ? nil : IntervalMotion.selection, value: configuration.isPressed)
       .onHover { hovering = $0 }
   }
 }

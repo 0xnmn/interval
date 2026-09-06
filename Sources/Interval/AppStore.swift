@@ -310,7 +310,7 @@ final class AppStore {
     let activeDuration = TimerEngine.activeDuration(value, now: actionDate)
     TimerEngine.abandon(&value)
     notifications.cancel(value)
-    audio.stop()
+    audio.fadeOut()
     record(value, outcome: .abandoned, endedAt: actionDate, activeDuration: activeDuration)
     data.activeTimer = timer(for: .focus)
     save()
@@ -338,7 +338,7 @@ final class AppStore {
       let activeDuration = TimerEngine.activeDuration(focus, now: date)
       TimerEngine.abandon(&focus)
       notifications.cancel(focus)
-      audio.stop()
+      audio.fadeOut()
       record(focus, outcome: .abandoned, endedAt: date, activeDuration: activeDuration)
     } else {
       guard focus.status == .ready else { return }
@@ -367,7 +367,7 @@ final class AppStore {
     }
     let elapsed = TimerEngine.activeDuration(value, now: date)
     notifications.cancel(value)
-    audio.stop()
+    audio.fadeOut()
     record(value, outcome: .completed, endedAt: date, activeDuration: elapsed)
     var next = timer(for: .focus)
     TimerEngine.start(&next, now: date)
@@ -707,7 +707,7 @@ final class AppStore {
       value, outcome: .completed, endedAt: priorDeadline ?? date, activeDuration: value.duration)
     let completedSession = data.sessions.last?.id
     notifications.completed(value)
-    audio.stop()
+    audio.fadeOut()
     if value.kind == .focus {
       data.completedFocusCount += 1
       completionSessionID = completedSession
@@ -764,7 +764,7 @@ final class AppStore {
       syncAudio(for: value)
     } else {
       notifications.cancel(value)
-      audio.stop()
+      audio.fadeOut()
     }
   }
   private func syncAudio(for value: TimerState) {

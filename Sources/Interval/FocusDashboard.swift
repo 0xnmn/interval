@@ -3,6 +3,7 @@ import SwiftUI
 
 struct FocusControls: View {
   @Bindable var store: AppStore
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   var compact = false
   var showsDial = true
   @State private var confirmingAbandon = false
@@ -41,6 +42,8 @@ struct FocusControls: View {
               .orange)
           }
         }.padding(20).frame(maxWidth: .infinity).frame(minHeight: geometry.size.height)
+          .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.timer.kind)
+          .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.breakEnded)
       }
     }
     .safeAreaInset(edge: .bottom, spacing: 0) {

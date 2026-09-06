@@ -107,6 +107,7 @@ enum UserIdleMonitor {
       panel.ignoresMouseEvents = true
       panels = [panel]
       positionWarning()
+      IntervalMotion.reveal(panel)
       panel.orderFrontRegardless()
       let target = CursorFrameTarget { [weak self] in self?.positionWarning() }
       let link = panel.displayLink(target: target, selector: #selector(CursorFrameTarget.frame))
@@ -173,6 +174,7 @@ enum UserIdleMonitor {
           }
         }
         panel.sharingType = fullscreen ? .readOnly : .none
+        IntervalMotion.reveal(panel)
         if screen == cursorScreen {
           panel.makeKeyAndOrderFront(nil)
         } else {

@@ -320,7 +320,7 @@ extension Comparable {
 
 public enum ReminderPresentation: String, Codable, CaseIterable, Sendable {
   case fullscreen, floating
-  public var title: String { rawValue.capitalized }
+  public var title: String { self == .fullscreen ? "Full screen" : "Floating" }
 }
 
 public enum ReminderPosition: String, Codable, CaseIterable, Sendable {
