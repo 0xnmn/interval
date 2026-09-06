@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import CoreImage
 import IntervalCore
 import QuartzCore
 import SwiftUI
@@ -26,15 +27,20 @@ enum UserIdleMonitor {
   private var cursorDisplayLink: CADisplayLink?
   private var previousActivationPolicy: NSApplication.ActivationPolicy?
   private let cursorLocation: () -> NSPoint
+  private let wallpaperForScreen: @MainActor (NSScreen) -> NSImage?
   private let cueCallback: ((ReminderSound) -> Void)?
   private var cueSound: NSSound?
   private var lastCueOccurrence: CueOccurrence?
 
   init(
     cursorLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation },
-    playCue: ((ReminderSound) -> Void)? = nil
+    playCue: ((ReminderSound) -> Void)? = nil,
+    wallpaperForScreen: @escaping @MainActor (NSScreen) -> NSImage? = { screen in
+      ReminderOverlayController.wallpaperImage(for: screen)
+    }
   ) {
     self.cursorLocation = cursorLocation
+    self.wallpaperForScreen = wallpaperForScreen
     self.cueCallback = playCue
     super.init()
     NotificationCenter.default.addObserver(
@@ -43,6 +49,20 @@ enum UserIdleMonitor {
   }
 
   deinit { cursorDisplayLink?.invalidate() }
+
+  static func wallpaperImage(for screen: NSScreen) -> NSImage? {
+    guard let url = NSWorkspace.shared.desktopImageURL(for: screen),
+      let image = CIImage(contentsOf: url), !image.extent.isEmpty
+    else { return nil }
+    // Render the soft backdrop once per display/occurrence, not on every timer tick.
+    let scale = min(1, 1600 / max(image.extent.width, image.extent.height))
+    let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+    let blurred = scaled.clampedToExtent()
+      .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 60])
+      .cropped(to: scaled.extent)
+    guard let rendered = CIContext().createCGImage(blurred, from: scaled.extent) else { return nil }
+    return NSImage(cgImage: rendered, size: scaled.extent.size)
+  }
 
   func update(_ overlay: ReminderOverlay?, reminder: Reminder?, store: AppStore) {
     guard let overlay, let reminder else {
@@ -134,14 +154,25 @@ enum UserIdleMonitor {
         // Set after the level: normal window positioning may otherwise constrain the
         // frame to the desktop work area, excluding the menu bar and Dock.
         panel.setFrame(rect, display: false)
-        panel.contentView = NSHostingView(
+        let host = NSHostingView(
           rootView: ReminderTakeoverView(
             reminder: reminder,
             shownAt: shownAt,
             skip: { store.dismissReminder(reminder.id) },
-            extend: { store.snoozeReminder(reminder.id, seconds: $0) }))
-        panel.onEscape = { store.dismissReminder(reminder.id) }
-        panel.sharingType = .none
+            extend: { store.snoozeReminder(reminder.id, seconds: $0) },
+            wallpaper: fullscreen ? wallpaperForScreen(screen) : nil))
+        if fullscreen { host.safeAreaRegions = [] }
+        panel.contentView = host
+        var shortcut = ReminderSkipShortcut()
+        panel.onEscape = {
+          if fullscreen, let event = NSApp.currentEvent, event.type == .keyDown, event.isARepeat {
+            return
+          }
+          if !fullscreen || shortcut.press(at: Date(), shownAt: shownAt) {
+            store.dismissReminder(reminder.id)
+          }
+        }
+        panel.sharingType = fullscreen ? .readOnly : .none
         if screen == cursorScreen {
           panel.makeKeyAndOrderFront(nil)
         } else {
@@ -264,4 +295,21 @@ private final class EscapePanel: NSPanel {
   var onEscape: (() -> Void)?
   override var canBecomeKey: Bool { true }
   override func cancelOperation(_ sender: Any?) { onEscape?() }
+}
+
+struct ReminderSkipShortcut {
+  private var lastPress: Date?
+
+  mutating func press(at date: Date, shownAt: Date) -> Bool {
+    guard date.timeIntervalSince(shownAt) >= 5 else {
+      lastPress = nil
+      return false
+    }
+    if let previous = lastPress, (0...1).contains(date.timeIntervalSince(previous)) {
+      lastPress = nil
+      return true
+    }
+    lastPress = date
+    return false
+  }
 }

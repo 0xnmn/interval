@@ -1,11 +1,50 @@
 import AppKit
 import IntervalCore
+import SwiftUI
 import Testing
 
 @testable import Interval
 
 @MainActor @Suite("Cursor warning", .serialized)
 struct ReminderOverlayTests {
+  @Test(arguments: [60.0, 300.0])
+  func fullscreenTimeButtonsDeferOnlyThisOccurrence(seconds: TimeInterval) throws {
+    _ = NSApplication.shared
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = AppStore(
+      persistence: JSONStore(fileURL: directory.appendingPathComponent("data.json")),
+      runtimeEnabled: false)
+    let now = Date()
+    let reminder = Reminder(
+      title: "Look away", intervalSeconds: 600, displaySeconds: 20,
+      presentation: .fullscreen, dueAt: now.addingTimeInterval(-10))
+    store.data.reminders = [reminder]
+    store.reminderOverlay = .reminder(reminderID: reminder.id, shownAt: now.addingTimeInterval(-6))
+    let controller = ReminderOverlayController(wallpaperForScreen: { _ in nil })
+    defer { controller.close() }
+    let existing = Set(NSApp.windows.map(\.windowNumber))
+    controller.update(store.reminderOverlay, reminder: reminder, store: store)
+    let panel = try #require(NSApp.windows.first { !existing.contains($0.windowNumber) })
+    let host = try #require(panel.contentView as? NSHostingView<ReminderTakeoverView>)
+    let before = Date()
+    host.rootView.extend(seconds)
+    let due = try #require(store.data.reminders[0].snoozedUntil)
+    #expect(due >= before.addingTimeInterval(seconds))
+    #expect(due <= Date().addingTimeInterval(seconds))
+    #expect(store.data.reminders[0].intervalSeconds == 600)
+    #expect(store.reminderOverlay == nil)
+  }
+
+  @Test func doubleEscapeRequiresTwoPressesAfterSkipGate() {
+    let start = Date(timeIntervalSince1970: 1000)
+    var shortcut = ReminderSkipShortcut()
+    let results = [4.8, 5, 5.5, 6, 8, 8.5].map {
+      shortcut.press(at: start.addingTimeInterval($0), shownAt: start)
+    }
+    #expect(results == [false, false, true, false, false, true])
+  }
+
   @Test func fullscreenReminderCoversEveryDisplayWithNativeTakeoverPanels() throws {
     _ = NSApplication.shared
     let originalPolicy = NSApp.activationPolicy()
@@ -20,7 +59,12 @@ struct ReminderOverlayTests {
       runtimeEnabled: false)
     let reminder = Reminder(title: "Look away", presentation: .fullscreen)
     let existing = Set(NSApp.windows.map(\.windowNumber))
-    let controller = ReminderOverlayController()
+    var wallpaperScreens: [NSScreen] = []
+    let wallpapers = screens.map { _ in NSImage(size: NSSize(width: 100, height: 100)) }
+    let controller = ReminderOverlayController(wallpaperForScreen: { screen in
+      wallpaperScreens.append(screen)
+      return wallpapers[screens.firstIndex(of: screen)!]
+    })
     defer { controller.close() }
 
     controller.update(
@@ -31,9 +75,13 @@ struct ReminderOverlayTests {
     }
 
     #expect(panels.count == screens.count)
+    #expect(wallpaperScreens == screens)
     #expect(NSApp.activationPolicy() == .accessory)
     for screen in screens {
       let panel = try #require(panels.first { $0.frame == screen.frame })
+      let host = try #require(panel.contentView as? NSHostingView<ReminderTakeoverView>)
+      #expect(host.rootView.wallpaper === wallpapers[screens.firstIndex(of: screen)!])
+      #expect(host.safeAreaRegions.isEmpty)
       #expect(panel.level == .screenSaver)
       #expect(panel.styleMask == [.borderless, .nonactivatingPanel])
       #expect(!panel.styleMask.contains(.fullScreen))

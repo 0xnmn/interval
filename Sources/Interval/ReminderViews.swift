@@ -418,6 +418,7 @@ struct ReminderTakeoverView: View {
   let shownAt: Date
   let skip: () -> Void
   let extend: (TimeInterval) -> Void
+  var wallpaper: NSImage? = nil
 
   static func remainingSeconds(reminder: Reminder, shownAt: Date, now: Date) -> Int {
     max(0, Int(ceil(reminder.displaySeconds - now.timeIntervalSince(shownAt))))
@@ -427,7 +428,7 @@ struct ReminderTakeoverView: View {
     TimelineView(.periodic(from: .now, by: 0.25)) { context in
       ZStack {
         if reminder.presentation == .fullscreen {
-          IntervalTheme.surface.opacity(0.97).ignoresSafeArea()
+          fullscreenBackground
           fullscreenContent(now: context.date)
         } else {
           floatingContent(now: context.date)
@@ -437,20 +438,49 @@ struct ReminderTakeoverView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
+  private var fullscreenBackground: some View {
+    GeometryReader { geometry in
+      ZStack {
+        if let wallpaper {
+          Image(nsImage: wallpaper)
+            .resizable()
+            .scaledToFill()
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        } else {
+          LinearGradient(
+            colors: [Color(white: 0.2), Color(white: 0.06)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          )
+        }
+        Color.black.opacity(0.42)
+      }
+      .frame(width: geometry.size.width, height: geometry.size.height)
+      .clipped()
+    }
+    .ignoresSafeArea()
+  }
+
   private func fullscreenContent(now: Date) -> some View {
     VStack(spacing: 0) {
       Text(now.formatted(date: .omitted, time: .shortened))
-        .font(.system(size: 15, weight: .medium, design: .rounded))
-        .foregroundStyle(.secondary)
+        .font(.system(size: 17, weight: .medium, design: .rounded))
+        .foregroundStyle(.white.opacity(0.9))
         .monospacedDigit()
 
       Spacer(minLength: 24)
-      reminderContent(countdownSize: 54, now: now)
+      ScrollView { fullscreenReminderContent.frame(maxWidth: .infinity) }
+        .defaultScrollAnchor(.center, for: .alignment)
+      countdown(size: 54, now: now)
+        .foregroundStyle(.white.opacity(0.9)).padding(.top, 24)
       Spacer(minLength: 24)
-      actions(now: now)
+      fullscreenActions(now: now)
     }
-    .padding(.horizontal, 28).padding(.vertical, 24)
+    .padding(.horizontal, 28)
+    .padding(.top, 60)
+    .padding(.bottom, 44)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .environment(\.colorScheme, .dark)
   }
 
   private func floatingContent(now: Date) -> some View {
@@ -463,15 +493,21 @@ struct ReminderTakeoverView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
-  private func reminderContent(countdownSize: CGFloat, now: Date) -> some View {
-    VStack(spacing: 10) {
+  private var fullscreenReminderContent: some View {
+    VStack(spacing: 14) {
       Text(reminder.emoji)
         .font(.system(size: min(180, max(32, reminder.emojiSize))))
         .lineLimit(1)
-      messageContent.frame(height: 140)
-      countdown(size: countdownSize, now: now)
-        .padding(.top, 8)
+      Text(reminder.title)
+        .font(.system(size: 34, weight: .semibold))
+      if !reminder.message.isEmpty {
+        Text(reminder.message)
+          .font(.system(size: 18))
+          .foregroundStyle(.white.opacity(0.82))
+      }
     }
+    .foregroundStyle(.white)
+    .multilineTextAlignment(.center)
     .frame(maxWidth: 720)
   }
 
@@ -513,7 +549,60 @@ struct ReminderTakeoverView: View {
     .font(.system(size: 14, weight: .semibold))
   }
 
+  private func fullscreenActions(now: Date) -> some View {
+    let skipRemaining = max(0, Int(ceil(5 - now.timeIntervalSince(shownAt))))
+    return VStack(spacing: 12) {
+      HStack(spacing: 10) {
+        Button {
+          extend(60)
+        } label: {
+          Label("+1 min", systemImage: "clock.arrow.circlepath")
+        }.help("Remind me again in 1 minute")
+        Button {
+          extend(5 * 60)
+        } label: {
+          Label("+5 min", systemImage: "clock.arrow.circlepath")
+        }.help("Remind me again in 5 minutes")
+        Button(action: skip) {
+          Label(
+            skipRemaining > 0 ? "Skip in \(skipRemaining)s" : "Skip",
+            systemImage: "forward.end.fill"
+          )
+        }
+        .disabled(skipRemaining > 0)
+      }
+      .buttonStyle(ReminderGlassButtonStyle())
+
+      Text("Press Esc twice to skip")
+        .font(.system(size: 15))
+        .foregroundStyle(.white.opacity(0.72))
+        .opacity(skipRemaining == 0 ? 1 : 0)
+        .accessibilityHidden(skipRemaining > 0)
+    }
+    .foregroundStyle(.white)
+  }
+
   private func duration(_ seconds: Int) -> String {
     String(format: "%02d:%02d", seconds / 60, seconds % 60)
+  }
+}
+
+private struct ReminderGlassButtonStyle: ButtonStyle {
+  @Environment(\.isEnabled) private var isEnabled
+  @State private var hovering = false
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .font(.system(size: 16, weight: .semibold))
+      .foregroundStyle(.white)
+      .padding(.horizontal, 22).padding(.vertical, 12)
+      .background(.ultraThinMaterial, in: Capsule())
+      .background(
+        Color.white.opacity(configuration.isPressed ? 0.22 : hovering ? 0.14 : 0.04), in: Capsule()
+      )
+      .overlay(Capsule().strokeBorder(.white.opacity(hovering ? 0.5 : 0.25)))
+      .opacity(isEnabled ? 1 : 0.45)
+      .contentShape(Capsule())
+      .onHover { hovering = $0 }
   }
 }

@@ -297,12 +297,20 @@ struct SnapshotRequest {
       view = AnyView(
         ReminderTakeoverView(
           reminder: store.data.reminders[0], shownAt: Date(), skip: {}, extend: { _ in }))
-    case "reminder-fullscreen", "reminder-fullscreen-long":
+    case "reminder-fullscreen", "reminder-fullscreen-long", "reminder-fullscreen-wait",
+      "reminder-fullscreen-fallback":
       size = NSSize(width: 900, height: 650)
+      let wallpaper =
+        request.scene == "reminder-fullscreen-fallback"
+        ? nil
+        : NSScreen.screens.first
+          .flatMap { ReminderOverlayController.wallpaperImage(for: $0) }
       view = AnyView(
         ReminderTakeoverView(
-          reminder: store.data.reminders[1], shownAt: Date().addingTimeInterval(-6), skip: {},
-          extend: { _ in }))
+          reminder: store.data.reminders[1],
+          shownAt: Date().addingTimeInterval(request.scene == "reminder-fullscreen-wait" ? 0 : -6),
+          skip: {},
+          extend: { _ in }, wallpaper: wallpaper))
     case "settings":
       size = NSSize(width: 560, height: 450)
       view = AnyView(SettingsView(store: store))
