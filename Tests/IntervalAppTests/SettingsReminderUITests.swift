@@ -7,6 +7,30 @@ import Testing
 
 @MainActor @Suite("Settings and reminder native UI", .serialized)
 struct SettingsReminderUITests {
+  @Test func menuReflectionEditsThoughtsWithoutLeavingPopup() async throws {
+    let store = try makeStore()
+    defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }
+    store.data = SnapshotRenderer.fixture(scene: "menu-review")
+    let id = try #require(store.data.sessions.first?.id)
+    store.completionSessionID = id
+    let harness = try await NativeViewHarness(rootView: AnyView(MenuBarView(store: store)))
+    defer { harness.close() }
+    let editor = try #require(
+      harness.descendants.compactMap { $0 as? NSTextView }.first { $0.isEditable })
+    #expect(harness.window.makeFirstResponder(editor))
+    editor.insertText(
+      "Made progress.\nNext: polish the details.",
+      replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+    await harness.pump()
+    #expect(
+      store.data.sessions.first { $0.id == id }?.journal
+        == "Made progress.\nNext: polish the details.")
+    #expect(store.completionSessionID == id)
+    #expect(
+      try JSONStore(fileURL: store.storageURL).load().sessions.first { $0.id == id }?.journal
+        == "Made progress.\nNext: polish the details.")
+  }
+
   @Test func menuChecklistEditsPersistAndReturnAddsRow() async throws {
     let store = try makeStore()
     defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }

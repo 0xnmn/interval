@@ -516,7 +516,8 @@ struct ReflectionView: View {
   var body: some View {
     VStack(spacing: 22) {
       Spacer(minLength: 0)
-      Text("Focus complete").font(.title2.weight(.semibold))
+      Text("How did that session feel?").font(.title2.weight(.semibold))
+        .multilineTextAlignment(.center)
       HStack(spacing: 8) {
         ForEach(SessionFeedback.allCases, id: \.self) { value in
           let selected = feedback.wrappedValue == value
@@ -643,8 +644,9 @@ struct MenuBarView: View {
       GlassBackground()
       VStack(spacing: 0) {
         HStack(spacing: 0) {
-          if store.completionSessionID != nil {
-            reviewCompletedFocus
+          if let sessionID = store.completionSessionID {
+            ReflectionView(store: store, sessionID: sessionID)
+              .padding(18)
               .frame(width: 300).frame(maxHeight: .infinity)
           } else {
             FocusControls(store: store, compact: true)
@@ -685,20 +687,6 @@ struct MenuBarView: View {
         "\(store.timer.kind.title), \(store.timer.status.rawValue), \(spokenDuration(store.remaining)) remaining"
       )
   }
-  private var reviewCompletedFocus: some View {
-    VStack(spacing: 14) {
-      Image(systemName: "checkmark.circle.fill")
-        .font(.system(size: 36)).foregroundStyle(store.data.settings.focusColor.color)
-      Text("Focus complete").font(IntervalTheme.heading)
-      Text("Review how this session felt before starting your break.")
-        .foregroundStyle(.secondary).multilineTextAlignment(.center)
-      Button {
-        openMainWindow(showFocus: true)
-      } label: {
-        Label("Review completed focus", systemImage: "square.and.pencil")
-      }.buttonStyle(.borderedProminent).tint(store.data.settings.focusColor.color)
-    }.padding(24)
-  }
   @ViewBuilder private var reminderActions: some View {
     if let reminder = activeReminder {
       VStack(alignment: .leading, spacing: 7) {
@@ -716,8 +704,7 @@ struct MenuBarView: View {
       }
     }
   }
-  private func openMainWindow(showFocus: Bool = false) {
-    if showFocus { store.showFocus() }
+  private func openMainWindow() {
     openWindow(id: "main")
     NSApp.activate(ignoringOtherApps: true)
   }
