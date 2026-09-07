@@ -216,16 +216,6 @@ struct SnapshotRequest {
       _ = store.calendarService.hasEvent(at: fixtureNow)
     }
     switch request.scene {
-    case "almost-time":
-      store.data.activeTimer = TimerState(
-        kind: .focus, duration: 1500, status: .running,
-        startedAt: fixtureNow.addingTimeInterval(-1444), deadline: fixtureNow.addingTimeInterval(56)
-      )
-      size = SessionCompletionController.almostTimeSize
-      view = AnyView(AlmostTimeToast(store: store, startBreak: {}, extend: { _ in }))
-    case "completion-toast":
-      size = SessionCompletionController.toastSize
-      view = AnyView(SessionCompletionToast(later: {}, reflect: {}))
     case "notch-compact", "notch-expanded", "notch-fallback", "notch-todos", "notch-reminders",
       "notch-reflection", "notch-running", "notch-overtime":
       let geometry =

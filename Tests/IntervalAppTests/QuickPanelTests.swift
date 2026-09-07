@@ -33,28 +33,6 @@ struct QuickPanelTests {
         == settings)
   }
 
-  @Test func completionIsNotRepeatedAfterEscapeButCanResumeTemporaryHide() throws {
-    let store = makeStore()
-    defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }
-    store.data = SnapshotRenderer.fixture(scene: "menu-review")
-    store.completionSessionID = store.data.sessions.first?.id
-    let controller = SessionCompletionController()
-    defer { controller.close() }
-    let original = Set(NSApp.windows.map(\.windowNumber))
-    controller.update(store: store)
-    let panel = try #require(
-      NSApp.windows.first { !original.contains($0.windowNumber) && $0.isVisible })
-    #expect(!panel.isKeyWindow)
-    controller.close()
-    controller.update(store: store)
-    let resumed = try #require(
-      NSApp.windows.first { !original.contains($0.windowNumber) && $0.isVisible })
-    resumed.cancelOperation(nil)
-    controller.update(store: store)
-    #expect(!NSApp.windows.contains { !original.contains($0.windowNumber) && $0.isVisible })
-    #expect(store.completionSessionID != nil)
-  }
-
   @Test func nativeNotchHoverAndClickExpandAndEscapeCollapses() async throws {
     let store = makeStore()
     defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }

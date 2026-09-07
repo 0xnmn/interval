@@ -129,7 +129,7 @@ import Testing
     #expect(NSApplication.shared.appearance == nil)
   }
 
-  @Test func notchMenuAndPopupGlassFollowLiveAppearanceChanges() async throws {
+  @Test func notchAndMenuGlassFollowLiveAppearanceChanges() async throws {
     let original = NSApplication.shared.appearance
     defer { NSApplication.shared.appearance = original }
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -141,7 +141,6 @@ import Testing
       AnyView(NotchRootView(store: store, expanded: true, geometry: .fallback, collapse: {})),
       AnyView(NotchRootView(store: store, expanded: false, geometry: .fallback, collapse: {})),
       AnyView(MenuBarView(store: store)),
-      AnyView(SessionCompletionToast(later: {}, reflect: {})),
     ]
     let panels = views.map { view in
       let panel = NSPanel(

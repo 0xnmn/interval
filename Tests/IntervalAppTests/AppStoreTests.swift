@@ -18,6 +18,31 @@ struct AppStoreTests {
     try body(store, persistence)
   }
 
+  @Test(arguments: [false, true])
+  func overtimeAlertsStopOnAbandonOrResume(resume: Bool) throws {
+    try withStore { store, _ in
+      let deadline = Date().addingTimeInterval(-1)
+      store.data.activeTimer = TimerState(
+        kind: .shortBreak, duration: 300, status: .running,
+        startedAt: deadline.addingTimeInterval(-300), deadline: deadline)
+      store.reconcile(at: deadline)
+      let id = store.timer.id
+      #expect(store.breakEnded)
+      #expect(store.notifications.overtimeTimerID == id)
+      store.reconcile(at: deadline.addingTimeInterval(600))
+      #expect(store.notifications.overtimeTimerID == id)
+      store.resumeFocusFromNotification(timerID: UUID())
+      #expect(store.breakEnded)
+      if resume { store.resumeFocusFromNotification(timerID: id) } else { store.abandon() }
+      #expect(store.timer.kind == .focus)
+      #expect(store.timer.status == (resume ? .running : .ready))
+      #expect(store.notifications.overtimeTimerID == nil)
+      let next = store.timer
+      store.resumeFocusFromNotification(timerID: id)
+      #expect(store.timer == next)
+    }
+  }
+
   @Test func calendarClockOnlyInvalidatesOnMinuteChanges() throws {
     try withStore { store, _ in
       let minute = Date(timeIntervalSinceReferenceDate: 60_000)

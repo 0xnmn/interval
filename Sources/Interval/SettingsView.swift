@@ -329,9 +329,9 @@ private struct GeneralSettingsView: View {
         Text("Click or hover at the top of your display for quick access.")
           .font(.system(size: 13)).foregroundStyle(.secondary)
         Toggle(isOn: panelSetting(\.completionPopupEnabled)) {
-          Text("Session prompts").frame(maxWidth: .infinity, alignment: .leading)
+          Text("One-minute heads-up").frame(maxWidth: .infinity, alignment: .leading)
         }
-        Text("A heads-up before your break and a reflection when focus ends.")
+        Text("Native notifications before focus ends. Overdue breaks remind you every 5 minutes.")
           .font(.system(size: 13)).foregroundStyle(.secondary)
       }.toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
       SettingsSection("Startup") {

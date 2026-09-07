@@ -6,11 +6,28 @@ import UserNotifications
 
 @MainActor final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
   var fallback: ((String) -> Void)?
+  var resumeFocus: ((UUID) -> Void)?
+  private(set) var overtimeTimerID: UUID?
+  private var overtimeUpdate: Task<Void, Never>?
+  static let overtimeInterval: TimeInterval = 5 * 60
+  private static let overtimeIdentifier = "interval.break-overtime"
+  private static let overtimeCategory = "interval.break-overtime.actions"
+  private static let resumeAction = "interval.resume-focus"
   private let center: UNUserNotificationCenter?
   init(enabled: Bool = true) {
     center = enabled ? UNUserNotificationCenter.current() : nil
     super.init()
     center?.delegate = self
+    center?.removePendingNotificationRequests(withIdentifiers: [Self.overtimeIdentifier])
+    center?.setNotificationCategories([
+      UNNotificationCategory(
+        identifier: Self.overtimeCategory,
+        actions: [
+          UNNotificationAction(
+            identifier: Self.resumeAction, title: "Resume focus", options: [.foreground])
+        ],
+        intentIdentifiers: [])
+    ])
   }
   func status() async -> UNAuthorizationStatus {
     await center?.notificationSettings().authorizationStatus ?? .notDetermined
@@ -21,9 +38,25 @@ import UserNotifications
   static func completionTitle(for kind: TimerKind) -> String {
     kind == .focus ? "How did that session feel?" : "Ready to focus?"
   }
-  func schedule(timer: TimerState) {
+  static func headsUpRequest(timer: TimerState, now: Date = Date()) -> UNNotificationRequest? {
+    guard timer.kind == .focus, timer.status == .running, let deadline = timer.deadline,
+      deadline.timeIntervalSince(now) > 60
+    else { return nil }
+    let content = UNMutableNotificationContent()
+    content.title = "Almost time for a break"
+    content.body = "Your focus session is almost finished."
+    content.sound = .default
+    return UNNotificationRequest(
+      identifier: timer.id.uuidString + ".heads-up", content: content,
+      trigger: UNTimeIntervalNotificationTrigger(
+        timeInterval: max(1, deadline.timeIntervalSince(now) - 60), repeats: false))
+  }
+
+  func schedule(timer: TimerState, headsUpEnabled: Bool = true) {
     guard let center else { return }
-    center.removePendingNotificationRequests(withIdentifiers: [timer.id.uuidString])
+    center.removePendingNotificationRequests(withIdentifiers: [
+      timer.id.uuidString, timer.id.uuidString + ".heads-up",
+    ])
     guard timer.status == .running, let deadline = timer.deadline else { return }
     let content = UNMutableNotificationContent()
     content.title = Self.completionTitle(for: timer.kind)
@@ -32,20 +65,77 @@ import UserNotifications
       ? "Your focus session ended. Take a moment to reflect."
       : "Your break is over. Return when you’re ready."
     content.sound = .default
-    center.add(
+    var requests = [
       UNNotificationRequest(
         identifier: timer.id.uuidString, content: content,
         trigger: UNTimeIntervalNotificationTrigger(
           timeInterval: max(1, deadline.timeIntervalSinceNow), repeats: false))
-    ) { [weak self] error in
-      guard let error else { return }
-      Task { @MainActor in
-        self?.fallback?("Couldn’t schedule the completion alert: \(error.localizedDescription)")
+    ]
+    if headsUpEnabled, let headsUp = Self.headsUpRequest(timer: timer) { requests.append(headsUp) }
+    for request in requests {
+      center.add(request) { [weak self] error in
+        guard let error else { return }
+        Task { @MainActor in
+          self?.fallback?("Couldn’t schedule the session alert: \(error.localizedDescription)")
+        }
       }
     }
   }
   func cancel(_ timer: TimerState) {
-    center?.removePendingNotificationRequests(withIdentifiers: [timer.id.uuidString])
+    center?.removePendingNotificationRequests(withIdentifiers: [
+      timer.id.uuidString, timer.id.uuidString + ".heads-up",
+    ])
+    if overtimeTimerID == timer.id { updateOvertime(timer: nil) }
+  }
+
+  static func overtimeRequest(timer: TimerState?) -> UNNotificationRequest? {
+    guard let timer, timer.kind != .focus, timer.status == .completed else { return nil }
+    let content = UNMutableNotificationContent()
+    content.title = "Ready to get back to it?"
+    content.body = "Your break has ended. Resume focus when you’re ready."
+    content.sound = .default
+    content.categoryIdentifier = overtimeCategory
+    content.userInfo = ["timerID": timer.id.uuidString]
+    return UNNotificationRequest(
+      identifier: overtimeIdentifier, content: content,
+      trigger: UNTimeIntervalNotificationTrigger(timeInterval: overtimeInterval, repeats: true))
+  }
+
+  func updateOvertime(timer: TimerState?) {
+    let nextID = timer.flatMap { $0.kind != .focus && $0.status == .completed ? $0.id : nil }
+    guard overtimeTimerID != nextID else { return }
+    overtimeTimerID = nextID
+    guard let center else { return }
+    let previous = overtimeUpdate
+    overtimeUpdate = Task { [weak self] in
+      // Finish an in-flight add before canceling/replacing it when focus resumes.
+      await previous?.value
+      guard let self, self.overtimeTimerID == nextID else { return }
+      center.removePendingNotificationRequests(withIdentifiers: [Self.overtimeIdentifier])
+      center.removeDeliveredNotifications(withIdentifiers: [Self.overtimeIdentifier])
+      guard let request = Self.overtimeRequest(timer: timer) else { return }
+      do { try await center.add(request) } catch {
+        self.fallback?("Couldn’t schedule the break reminder: \(error.localizedDescription)")
+      }
+    }
+  }
+
+  nonisolated func userNotificationCenter(
+    _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    let info = response.notification.request.content.userInfo
+    if response.actionIdentifier == Self.resumeAction,
+      let value = info["timerID"] as? String, let id = UUID(uuidString: value)
+    {
+      Task { @MainActor [weak self] in
+        self?.resumeFocus?(id)
+        await self?.overtimeUpdate?.value
+        completionHandler()
+      }
+      return
+    }
+    completionHandler()
   }
   func completed(_ timer: TimerState) {
     // Do not remove the pending request here: completion can race the notification daemon.

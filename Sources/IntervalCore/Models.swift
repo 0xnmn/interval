@@ -89,6 +89,7 @@ public enum AppAppearance: String, Codable, CaseIterable, Sendable {
 public struct IntervalSettings: Codable, Equatable, Sendable {
   public var appearance: AppAppearance
   public var notchEnabled: Bool
+  /// Legacy persisted name, now controls the native one-minute heads-up notification.
   public var completionPopupEnabled: Bool
   public var focusMinutes: Int
   public var shortBreakMinutes: Int

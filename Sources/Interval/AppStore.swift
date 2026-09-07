@@ -37,7 +37,6 @@ final class AppStore {
   private var reminderEngine = ReminderEngine()
   private let overlayController = ReminderOverlayController()
   private let notchController = NotchController()
-  private let completionController = SessionCompletionController()
   private var systemIsSleeping = false
   private var screenSaverIsRunning = false
   private var screenIsLocked = false
@@ -103,6 +102,7 @@ final class AppStore {
     updates.prepareForInstall = { [weak self] in self?.checkpointForTermination() }
     updates.start()
     notifications.fallback = { [weak self] message in self?.inAppNotification = message }
+    notifications.resumeFocus = { [weak self] id in self?.resumeFocusFromNotification(timerID: id) }
     audio.failure = { [weak self] message in self?.audioError = message }
     reconcileReminderBacklog(at: now)
     if data.activeTimer?.status == .running { syncServices(for: timer) }
@@ -311,6 +311,7 @@ final class AppStore {
     let actionDate = Date()
     now = actionDate
     if breakEnded {
+      notifications.cancel(timer)
       data.activeTimer = timer(for: .focus)
       inAppNotification = nil
       recoveryMessage = nil
@@ -318,6 +319,7 @@ final class AppStore {
       return
     }
     if reconcile(at: actionDate, autoStart: false) {
+      notifications.cancel(timer)
       completionSessionID = nil
       data.activeTimer = timer(for: .focus)
       save()
@@ -371,6 +373,11 @@ final class AppStore {
     save()
     syncServices(for: next)
     tickReminders(at: date)
+  }
+
+  func resumeFocusFromNotification(timerID: UUID) {
+    guard timer.id == timerID, breakEnded else { return }
+    endBreak()
   }
 
   func endBreak(at date: Date = Date()) {
@@ -558,6 +565,11 @@ final class AppStore {
     save()
     updateQuickPanels()
     if data.activeTimer?.status == .running,
+      old.completionPopupEnabled != settings.completionPopupEnabled
+    {
+      notifications.schedule(timer: timer, headsUpEnabled: settings.completionPopupEnabled)
+    }
+    if data.activeTimer?.status == .running,
       old.focusSound != settings.focusSound || old.breakSound != settings.breakSound
         || old.soundVolume != settings.soundVolume
     {
@@ -604,7 +616,6 @@ final class AppStore {
   func checkpointForTermination() {
     guard runtimeEnabled else { return }
     notchController.close()
-    completionController.close()
     checkpointForInactivity(at: Date())
   }
 
@@ -633,7 +644,6 @@ final class AppStore {
   }
   private func sessionBecameUnavailable() {
     notchController.close()
-    completionController.close()
     checkpointForInactivity(at: Date())
     reminderEngine.cancel()
     reminderOverlay = nil
@@ -697,11 +707,9 @@ final class AppStore {
     guard runtimeEnabled else { return }
     guard sessionIsActive, reminderOverlay == nil else {
       notchController.close()
-      completionController.close()
       return
     }
     notchController.update(store: self)
-    completionController.update(store: self)
   }
 
   private func reconcileReminderBacklog(at date: Date) {
@@ -730,6 +738,7 @@ final class AppStore {
 
   @discardableResult func reconcile(at date: Date, autoStart: Bool = true) -> Bool {
     now = date
+    defer { notifications.updateOvertime(timer: data.activeTimer) }
     guard var value = data.activeTimer else { return false }
     let priorDeadline = value.deadline
     guard TimerEngine.reconcile(&value, now: date) else { return false }
@@ -791,7 +800,7 @@ final class AppStore {
   }
   private func syncServices(for value: TimerState) {
     if value.status == .running {
-      notifications.schedule(timer: value)
+      notifications.schedule(timer: value, headsUpEnabled: data.settings.completionPopupEnabled)
       syncAudio(for: value)
     } else {
       notifications.cancel(value)
