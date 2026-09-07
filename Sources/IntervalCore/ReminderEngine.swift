@@ -67,6 +67,19 @@ public struct ReminderEngine: Equatable, Sendable {
       return nil
     }
 
+    // Only the repeat interval pauses. A visible warning or reminder must still finish.
+    for index in reminders.indices where reminders[index].isEnabled {
+      let reminder = reminders[index]
+      guard reminder.id != overlay?.reminderID,
+        isIdlePaused(reminder, environment),
+        let idle = environment.idleSeconds
+      else { continue }
+      // Charge only the part of this sample after the idle threshold, not the debounce itself.
+      let paused = min(sampleGap, max(0, idle - reminder.idleDelaySeconds))
+      reminders[index].dueAt = reminder.dueAt?.addingTimeInterval(paused)
+      reminders[index].snoozedUntil = reminder.snoozedUntil?.addingTimeInterval(paused)
+    }
+
     if case .reminder(let id, let shownAt) = overlay,
       let reminder = reminders.first(where: { $0.id == id })
     {
@@ -104,6 +117,7 @@ public struct ReminderEngine: Equatable, Sendable {
     guard
       let candidate = reminders.filter({
         $0.isEnabled && $0.effectiveDueAt != nil && !isSuppressed($0, environment)
+          && !isIdlePaused($0, environment)
       })
       .sorted(by: {
         ($0.effectiveDueAt!, $0.id.uuidString) < ($1.effectiveDueAt!, $1.id.uuidString)
@@ -145,6 +159,11 @@ public struct ReminderEngine: Equatable, Sendable {
   private func isSuppressed(_ reminder: Reminder, _ environment: ReminderEnvironment) -> Bool {
     (reminder.suppressDuringFocus && environment.focusIsRunningOrPaused)
       || (reminder.suppressDuringCalendar && environment.calendarHasEvent)
+  }
+
+  private func isIdlePaused(_ reminder: Reminder, _ environment: ReminderEnvironment) -> Bool {
+    reminder.pauseWhenIdle
+      && (environment.idleSeconds.map { $0 >= reminder.idleDelaySeconds } ?? false)
   }
 
   private mutating func complete(_ id: UUID, reminders: inout [Reminder], now: Date) {

@@ -307,6 +307,21 @@ private struct ReminderEditor: View {
           toggleRow("Hide during focus", value: binding(\.suppressDuringFocus))
           toggleRow("Hide during calendar events", value: binding(\.suppressDuringCalendar))
             .help("Uses selected calendars")
+          toggleRow("Pause when idle", value: binding(\.pauseWhenIdle))
+            .help("Pause the repeat interval when there is no mouse or keyboard activity.")
+          if binding(\.pauseWhenIdle).wrappedValue {
+            HStack {
+              Text("Idle delay")
+              Spacer()
+              Text("\(Int(binding(\.idleDelaySeconds).wrappedValue)) sec").monospacedDigit()
+              Stepper(
+                "Idle delay in seconds", value: binding(\.idleDelaySeconds), in: 1...3_600, step: 1
+              )
+              .labelsHidden()
+              .accessibilityValue("\(Int(binding(\.idleDelaySeconds).wrappedValue)) seconds")
+            }
+            .help("Resume the interval as soon as you move the mouse or use the keyboard.")
+          }
         }
 
         editorSection("Display") {

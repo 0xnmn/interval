@@ -21,6 +21,7 @@ final class AppStore {
   private let audio = AmbientAudio()
   private let persistence: JSONStore
   private var persistenceLocked = false
+  private var reminderSaveDueAt: Date?
   private var ticker: Task<Void, Never>?
   private var observers: [NSObjectProtocol] = []
   private var reminderEngine = ReminderEngine()
@@ -656,7 +657,11 @@ final class AppStore {
       idleSeconds: idleSeconds)
     reminderOverlay = reminderEngine.tick(
       reminders: &data.reminders, now: date, environment: environment)
-    if before != data.reminders { save() }
+    // Idle intervals move deadlines every tick; coalesce persistence, not the visible counter.
+    if before != data.reminders, reminderSaveDueAt == nil {
+      reminderSaveDueAt = date.addingTimeInterval(5)
+    }
+    if let saveDue = reminderSaveDueAt, date >= saveDue { save() }
     let reminder = reminderOverlay.flatMap { visible in
       data.reminders.first { $0.id == visible.reminderID }
     }
@@ -750,6 +755,7 @@ final class AppStore {
   }
   private func checkpoint(force: Bool = false) {
     guard var value = data.activeTimer, value.status == .running else {
+      if force { save() }
       return
     }
     let elapsed = TimerEngine.activeDuration(value, now: now)
@@ -782,6 +788,7 @@ final class AppStore {
       try persistence.save(data)
       persistenceError = nil
       didSave = true
+      reminderSaveDueAt = nil
     } catch {
       persistenceError = "Couldn’t save changes: \(error.localizedDescription)"
       didSave = false

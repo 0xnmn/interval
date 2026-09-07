@@ -142,9 +142,7 @@ struct SnapshotRequest {
       scene == "history-disabled" || scene == "history-no-selection"
       ? [] : [session] + additionalSessions
     var reminders = [
-      Reminder(
-        title: "Look away", message: "Look at something far away for 20 seconds.", emoji: "👀",
-        intervalSeconds: 600, displaySeconds: 20, dueAt: fixtureNow.addingTimeInterval(600)),
+      Reminder.templates(startingAt: fixtureNow)[0],
       Reminder(
         title: "Water", message: "Take a moment to drink some water.", emoji: "💧",
         intervalSeconds: 3_600, displaySeconds: 60, presentation: .fullscreen,
@@ -277,8 +275,11 @@ struct SnapshotRequest {
     case "reminders-expanded":
       size = NSSize(width: 780, height: 620)
       view = AnyView(
-        RemindersView(store: store, selection: store.data.reminders[0].id, advanced: true)
-          .safeAreaInset(edge: .bottom, spacing: 0) { LiveTimerBar(store: store) })
+        VStack(spacing: 0) {
+          RemindersView(store: store, selection: store.data.reminders[0].id, advanced: true)
+            .clipped()
+          LiveTimerBar(store: store)
+        })
     case "reminder-editor", "reminder-editor-expanded", "reminder-editor-bottom":
       size = NSSize(width: 420, height: 474)
       view = AnyView(

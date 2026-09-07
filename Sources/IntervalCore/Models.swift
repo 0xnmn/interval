@@ -354,6 +354,8 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
   public var sound: ReminderSound
   public var suppressDuringFocus: Bool
   public var suppressDuringCalendar: Bool
+  public var pauseWhenIdle: Bool
+  public var idleDelaySeconds: TimeInterval
   public var dueAt: Date?
   /// A temporary due date for the current occurrence. It never changes the recurrence anchor.
   public var snoozedUntil: Date?
@@ -366,7 +368,8 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
     displaySeconds: TimeInterval = 10,
     presentation: ReminderPresentation = .floating, suppressDuringFocus: Bool = true,
     suppressDuringCalendar: Bool = true, dueAt: Date? = nil, snoozedUntil: Date? = nil,
-    isEnabled: Bool = true, position: ReminderPosition = .center, sound: ReminderSound = .none
+    isEnabled: Bool = true, position: ReminderPosition = .center, sound: ReminderSound = .none,
+    pauseWhenIdle: Bool = false, idleDelaySeconds: TimeInterval = 10
   ) {
     self.id = id
     self.title = title
@@ -380,6 +383,8 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
     self.sound = sound
     self.suppressDuringFocus = suppressDuringFocus
     self.suppressDuringCalendar = suppressDuringCalendar
+    self.pauseWhenIdle = pauseWhenIdle
+    self.idleDelaySeconds = idleDelaySeconds
     self.dueAt = dueAt
     self.snoozedUntil = snoozedUntil
     self.isEnabled = isEnabled
@@ -395,6 +400,8 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
     value.emojiSize = emojiSize.isFinite ? emojiSize.clamped(to: 32...180) : 72
     value.intervalSeconds =
       intervalSeconds.isFinite ? intervalSeconds.clamped(to: 60...86_400) : 1_200
+    value.idleDelaySeconds =
+      idleDelaySeconds.isFinite ? idleDelaySeconds.clamped(to: 1...3_600) : 10
     value.displaySeconds =
       displaySeconds.isFinite
       ? displaySeconds.clamped(to: (presentation == .fullscreen ? 5 : 2)...600) : 10
@@ -403,7 +410,8 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
 
   private enum CodingKeys: String, CodingKey {
     case id, title, message, emoji, emojiSize, intervalSeconds, displaySeconds, presentation,
-      suppressDuringFocus, suppressDuringCalendar, dueAt, snoozedUntil, isEnabled, position, sound
+      suppressDuringFocus, suppressDuringCalendar, dueAt, snoozedUntil, isEnabled, position, sound,
+      pauseWhenIdle, idleDelaySeconds
   }
   public init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -421,6 +429,8 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
     suppressDuringFocus = try c.decodeIfPresent(Bool.self, forKey: .suppressDuringFocus) ?? true
     suppressDuringCalendar =
       try c.decodeIfPresent(Bool.self, forKey: .suppressDuringCalendar) ?? true
+    pauseWhenIdle = try c.decodeIfPresent(Bool.self, forKey: .pauseWhenIdle) ?? false
+    idleDelaySeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .idleDelaySeconds) ?? 10
     dueAt = try c.decodeIfPresent(Date.self, forKey: .dueAt)
     snoozedUntil = try c.decodeIfPresent(Date.self, forKey: .snoozedUntil)
     isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
@@ -430,7 +440,8 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
     [
       Reminder(
         title: "Look away", message: "Look at something far away for 20 seconds.", emoji: "👀",
-        intervalSeconds: 600, displaySeconds: 20, dueAt: date.addingTimeInterval(600)),
+        intervalSeconds: 600, displaySeconds: 20, dueAt: date.addingTimeInterval(600),
+        pauseWhenIdle: true),
       Reminder(
         title: "Posture", message: "Relax your shoulders and reset your posture.", emoji: "🪑",
         intervalSeconds: 1_200, displaySeconds: 10, dueAt: date.addingTimeInterval(1_200)),

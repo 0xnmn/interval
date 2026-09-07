@@ -103,6 +103,24 @@ struct SettingsReminderUITests {
     #expect(saved.reminders.first(where: { $0.id == reminder.id })?.title == "Persisted title")
   }
 
+  @Test func idlePreferencesPersistAndInactiveCheckpointFlushesShiftedDeadline() throws {
+    let reminder = Reminder.templates()[0]
+    let store = try makeStore(reminders: [reminder])
+    defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }
+    var edited = reminder
+    edited.idleDelaySeconds = 23
+    store.updateReminder(edited)
+    let saved = try JSONStore(fileURL: store.storageURL).load()
+    #expect(saved.reminders[0].pauseWhenIdle)
+    #expect(saved.reminders[0].idleDelaySeconds == 23)
+    store.data.activeTimer = nil
+    store.data.reminders[0].dueAt = reminder.dueAt?.addingTimeInterval(123)
+    store.checkpointForInactivity(at: Date())
+    #expect(
+      try JSONStore(fileURL: store.storageURL).load().reminders[0].dueAt
+        == store.data.reminders[0].dueAt)
+  }
+
   private func makeStore(reminders: [Reminder] = []) throws -> AppStore {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
