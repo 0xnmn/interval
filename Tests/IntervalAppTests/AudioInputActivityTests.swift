@@ -24,20 +24,22 @@ import Testing
     #expect(released == nil)
   }
 
-  @Test func microphonePausesWarningAndOnlyPostCallIdleCounts() {
+  @Test func microphoneSuppressesWarningAndOnlyPostCallIdleCounts() {
     let start = Date(timeIntervalSince1970: 1000)
     let input = AudioInputActivity()
     var reminders = [Reminder(title: "Eyes", dueAt: start.addingTimeInterval(10))]
     var engine = ReminderEngine()
     func environment(at date: Date) -> ReminderEnvironment {
       let idle = input.effectiveIdleSeconds(600, at: date)
-      return .init(isUserIdle: idle >= 1, idleSeconds: idle)
+      return .init(isUserIdle: idle >= 1, idleSeconds: idle, audioInputIsActive: input.isActive)
     }
     engine.tick(reminders: &reminders, now: start, environment: environment(at: start))
     input.update(isActive: true, at: start)
     let end = start.addingTimeInterval(120)
     engine.tick(reminders: &reminders, now: end, environment: environment(at: end))
-    #expect(engine.overlay == .warning(reminderID: reminders[0].id, remaining: 10, isPaused: true))
+    #expect(engine.overlay == nil)
+    #expect(reminders[0].effectiveDueAt! > end)
+    reminders[0].dueAt = end.addingTimeInterval(10)
     input.update(isActive: false, at: end)
     engine.tick(reminders: &reminders, now: end, environment: environment(at: end))
     #expect(engine.overlay == .warning(reminderID: reminders[0].id, remaining: 10, isPaused: true))

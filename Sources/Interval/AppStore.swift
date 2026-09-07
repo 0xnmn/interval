@@ -94,6 +94,7 @@ final class AppStore {
     reconcile(at: now, autoStart: false)
     guard runtimeEnabled else { return }
     audioInputActivity.start()
+    audioInputActivity.onChange = { [weak self] in self?.tickReminders(at: Date()) }
     data.settings.appearance.apply()
     updates.shouldDeferInstall = { [weak self] in
       guard let self else { return false }
@@ -109,7 +110,7 @@ final class AppStore {
     if data.activeTimer?.status == .running { syncServices(for: timer) }
     workspaceSessionIsActive = true
     refreshSessionState()
-    updateQuickPanels()
+    tickReminders(at: now)
     ticker = Task { [weak self] in
       while !Task.isCancelled {
         // Only the cursor warning needs sub-second activity feedback. Timer deadlines
@@ -665,6 +666,7 @@ final class AppStore {
   private func tickReminders(at date: Date) {
     guard runtimeEnabled else { return }
     defer { updateQuickPanels() }
+    if audioInputActivity.isActive, previewReminderID != nil { cancelCurrentOverlay() }
     if let previewReminderID, let expiry = previewExpiresAt, date < expiry {
       guard let reminder = data.reminders.first(where: { $0.id == previewReminderID }) else {
         cancelOverlay(for: previewReminderID)
@@ -682,7 +684,7 @@ final class AppStore {
     let environment = ReminderEnvironment(
       isSessionActive: sessionIsActive, isUserIdle: idleSeconds >= 1,
       focusIsRunningOrPaused: focusBusy, calendarHasEvent: calendarService.hasEvent(at: date),
-      idleSeconds: idleSeconds)
+      idleSeconds: idleSeconds, audioInputIsActive: audioInputActivity.isActive)
     reconcileReminders(at: date, environment: environment)
     let reminder = reminderOverlay.flatMap { visible in
       data.reminders.first { $0.id == visible.reminderID }

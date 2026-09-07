@@ -16,16 +16,19 @@ public struct ReminderEnvironment: Equatable, Sendable {
   public var isUserIdle: Bool
   public var focusIsRunningOrPaused: Bool
   public var calendarHasEvent: Bool
+  public var audioInputIsActive: Bool
   /// Idle duration reported by the OS. Prefer this over inferring idle time between samples.
   public var idleSeconds: TimeInterval?
   public init(
     isSessionActive: Bool = true, isUserIdle: Bool = true, focusIsRunningOrPaused: Bool = false,
-    calendarHasEvent: Bool = false, idleSeconds: TimeInterval? = nil
+    calendarHasEvent: Bool = false, idleSeconds: TimeInterval? = nil,
+    audioInputIsActive: Bool = false
   ) {
     self.isSessionActive = isSessionActive
     self.isUserIdle = isUserIdle
     self.focusIsRunningOrPaused = focusIsRunningOrPaused
     self.calendarHasEvent = calendarHasEvent
+    self.audioInputIsActive = audioInputIsActive
     self.idleSeconds = idleSeconds
   }
 }
@@ -45,13 +48,15 @@ public struct ReminderEngine: Equatable, Sendable {
   ) -> ReminderOverlay? {
     let sampleGap = max(0, now.timeIntervalSince(lastTick ?? now))
     let verifiedIdle: TimeInterval
-    if let idle = environment.idleSeconds {
+    if environment.audioInputIsActive {
+      verifiedIdle = 0
+    } else if let idle = environment.idleSeconds {
       verifiedIdle = environment.isUserIdle ? min(sampleGap, max(0, idle)) : 0
     } else {
       verifiedIdle = environment.isUserIdle && priorWasIdle && sampleGap <= 2 ? sampleGap : 0
     }
     lastTick = now
-    priorWasIdle = environment.isUserIdle
+    priorWasIdle = environment.isUserIdle && !environment.audioInputIsActive
     if let visible = overlay,
       !reminders.contains(where: { $0.id == visible.reminderID && $0.isEnabled })
     {
@@ -161,12 +166,13 @@ public struct ReminderEngine: Equatable, Sendable {
   }
 
   private func isSuppressed(_ reminder: Reminder, _ environment: ReminderEnvironment) -> Bool {
-    (reminder.suppressDuringFocus && environment.focusIsRunningOrPaused)
+    environment.audioInputIsActive
+      || (reminder.suppressDuringFocus && environment.focusIsRunningOrPaused)
       || (reminder.suppressDuringCalendar && environment.calendarHasEvent)
   }
 
   private func isIdlePaused(_ reminder: Reminder, _ environment: ReminderEnvironment) -> Bool {
-    reminder.pauseWhenIdle
+    !environment.audioInputIsActive && reminder.pauseWhenIdle
       && (environment.idleSeconds.map { $0 >= reminder.idleDelaySeconds } ?? false)
   }
 

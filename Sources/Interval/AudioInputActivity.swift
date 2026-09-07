@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreAudio
 import Foundation
 import Observation
@@ -5,7 +6,13 @@ import Observation
 /// Observes input-stream activity, never audio samples. Output-only playback does not count.
 @MainActor @Observable final class AudioInputActivity {
   private(set) var isActive = false
+  @ObservationIgnored var onChange: (() -> Void)?
   private var endedAt: Date?
+  @ObservationIgnored private var started = false
+  @ObservationIgnored private var coreAudioIsActive = false
+  @ObservationIgnored private var captureDevices: [AVCaptureDevice] = []
+  @ObservationIgnored private var captureDeviceObservations: [NSKeyValueObservation] = []
+  @ObservationIgnored private var captureDeviceNotifications: [NSObjectProtocol] = []
   @ObservationIgnored private var processes: [AudioObjectID] = []
   @ObservationIgnored private var listeners: [Listener] = []
 
@@ -16,7 +23,20 @@ import Observation
   }
 
   func start() {
-    guard listeners.isEmpty else { return }
+    guard !started else { return }
+    started = true
+
+    let center = NotificationCenter.default
+    for name in [
+      AVCaptureDevice.wasConnectedNotification, AVCaptureDevice.wasDisconnectedNotification,
+    ] {
+      captureDeviceNotifications.append(
+        center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+          MainActor.assumeIsolated { self?.refreshCaptureDevices() }
+        })
+    }
+    refreshCaptureDevices()
+
     let system = AudioObjectID(kAudioObjectSystemObject)
     listen(to: system, selector: kAudioHardwarePropertyProcessObjectList, rebuild: true)
     listen(to: system, selector: kAudioHardwarePropertyServiceRestarted, rebuild: true)
@@ -24,6 +44,8 @@ import Observation
   }
 
   deinit {
+    captureDeviceObservations.forEach { $0.invalidate() }
+    captureDeviceNotifications.forEach(NotificationCenter.default.removeObserver)
     for var listener in listeners {
       AudioObjectRemovePropertyListenerBlock(
         listener.object, &listener.address, .main, listener.block)
@@ -39,6 +61,22 @@ import Observation
     guard active != isActive else { return }
     if !active { endedAt = date }
     isActive = active
+    onChange?()
+  }
+
+  private func refreshCaptureDevices() {
+    captureDeviceObservations.forEach { $0.invalidate() }
+    captureDeviceObservations.removeAll()
+    captureDevices =
+      AVCaptureDevice.DiscoverySession(
+        deviceTypes: [.microphone], mediaType: .audio, position: .unspecified
+      ).devices
+    captureDeviceObservations = captureDevices.map { device in
+      device.observe(\.isInUseByAnotherApplication, options: []) { [weak self] _, _ in
+        Task { @MainActor [weak self] in self?.refreshActivity() }
+      }
+    }
+    refreshActivity()
   }
 
   private func refreshProcesses() {
@@ -80,14 +118,15 @@ import Observation
   }
 
   private func refreshActivity() {
-    let active = processes.contains { process in
+    coreAudioIsActive = processes.contains { process in
       var address = Self.address(kAudioProcessPropertyIsRunningInput)
       var running: UInt32 = 0
       var size = UInt32(MemoryLayout<UInt32>.size)
       return AudioObjectGetPropertyData(process, &address, 0, nil, &size, &running) == noErr
         && running != 0
     }
-    update(isActive: active, at: Date())
+    let captureDeviceIsActive = captureDevices.contains(where: \.isInUseByAnotherApplication)
+    update(isActive: coreAudioIsActive || captureDeviceIsActive, at: Date())
   }
 
   private func listen(
