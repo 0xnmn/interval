@@ -43,7 +43,7 @@ final class AppStore {
   private var screenIsLocked = false
   private var workspaceSessionIsActive = false
   private var sessionIsOnConsole = false
-  private var previewReminderID: UUID?
+  private(set) var previewReminderID: UUID?
   private var previewExpiresAt: Date?
   private let runtimeEnabled: Bool
   var selection: Destination? = .focus
@@ -123,7 +123,7 @@ final class AppStore {
           }
         try? await Task.sleep(for: delay, tolerance: .milliseconds(50))
         guard !Task.isCancelled, let self else { return }
-        self.reconcile(at: Date())
+        self.reconcile(at: Date(), autoStart: self.sessionIsActive)
         self.tickReminders(at: self.now)
         self.checkpoint()  // Its elapsed-time guard handles coalesced or delayed wakeups.
       }
@@ -270,13 +270,13 @@ final class AppStore {
     save()
   }
   func dismissReminder(_ id: UUID, at date: Date = Date()) {
-    guard case .reminder(let visibleID, let shownAt) = reminderOverlay,
-      visibleID == id, date.timeIntervalSince(shownAt) >= 5
-    else { return }
     if previewReminderID == id {
       cancelOverlay(for: id)
       return
     }
+    guard case .reminder(let visibleID, let shownAt) = reminderOverlay,
+      visibleID == id, date.timeIntervalSince(shownAt) >= 5
+    else { return }
     reminderEngine.dismiss(id, reminders: &data.reminders, now: date)
     cancelOverlay(for: id)
     save()
@@ -293,12 +293,12 @@ final class AppStore {
 
   func startSession() {
     if completionSessionID != nil {
-      showFocus()
+      if timer.status == .ready { continueAfterReflection() } else { showFocus() }
       return
     }
     let actionDate = Date()
     now = actionDate
-    if reconcile(at: actionDate, autoStart: false) { return }
+    if reconcile(at: actionDate) { return }
     guard var value = data.activeTimer, value.status == .ready else { return }
     inAppNotification = nil
     recoveryMessage = nil
@@ -312,6 +312,7 @@ final class AppStore {
   func abandon() {
     let actionDate = Date()
     now = actionDate
+    completionSessionID = nil
     if breakEnded {
       notifications.cancel(timer)
       data.activeTimer = timer(for: .focus)
@@ -341,7 +342,7 @@ final class AppStore {
 
   func adjustCurrentTime(by seconds: TimeInterval, at date: Date = Date()) {
     now = date
-    if reconcile(at: date, autoStart: false) { return }
+    if reconcile(at: date) { return }
     guard completionSessionID == nil, var value = data.activeTimer,
       value.status == .ready || value.status == .running
     else { return }
@@ -353,7 +354,11 @@ final class AppStore {
 
   func startBreakNow(at date: Date = Date()) {
     now = date
-    if reconcile(at: date, autoStart: false) { return }
+    reconcile(at: date, autoStart: false)
+    if completionSessionID != nil {
+      continueAfterReflection(at: date)
+      return
+    }
     guard completionSessionID == nil, var focus = data.activeTimer, focus.kind == .focus else {
       return
     }
@@ -393,6 +398,7 @@ final class AppStore {
     guard let value = data.activeTimer, value.id == current.id else {
       return
     }
+    completionSessionID = nil
     let elapsed = TimerEngine.activeDuration(value, now: date)
     notifications.cancel(value)
     audio.fadeOut()
@@ -464,7 +470,7 @@ final class AppStore {
     guard title != data.sessionTitle else { return }
     let date = Date()
     now = date
-    reconcile(at: date, autoStart: false)
+    reconcile(at: date)
     data.sessionTitle = title
     data.activeTimer?.title = title
     save()
@@ -472,7 +478,7 @@ final class AppStore {
   func selectCategory(_ id: UUID?) {
     let date = Date()
     now = date
-    reconcile(at: date, autoStart: false)
+    reconcile(at: date)
     guard id == nil || data.categories.contains(where: { $0.id == id }) else { return }
     let categoryName = data.categories.first(where: { $0.id == id })?.name
     data.selectedCategoryID = id
@@ -485,7 +491,7 @@ final class AppStore {
     guard !name.isEmpty else { return nil }
     let date = Date()
     now = date
-    reconcile(at: date, autoStart: false)
+    reconcile(at: date)
     if let existing = data.categories.first(where: {
       $0.name.compare(name, options: [.caseInsensitive]) == .orderedSame
     }) {
@@ -512,7 +518,7 @@ final class AppStore {
     else { return }
     let date = Date()
     now = date
-    reconcile(at: date, autoStart: false)
+    reconcile(at: date)
     data.categories[index].name = name
     if data.activeTimer?.categoryID == id { data.activeTimer?.categoryName = name }
     save()
@@ -521,7 +527,7 @@ final class AppStore {
     guard data.categories.contains(where: { $0.id == id }) else { return }
     let date = Date()
     now = date
-    reconcile(at: date, autoStart: false)
+    reconcile(at: date)
     data.categories.removeAll { $0.id == id }
     if data.selectedCategoryID == id { data.selectedCategoryID = nil }
     if data.activeTimer?.status == .ready && data.activeTimer?.categoryID == id {
@@ -538,6 +544,10 @@ final class AppStore {
   }
   func continueAfterReflection(at date: Date = Date()) {
     guard completionSessionID != nil else { return }
+    if breakEnded {
+      endBreak(at: date)
+      return
+    }
     completionSessionID = nil
     guard var next = data.activeTimer, next.kind != .focus, next.status == .ready else { return }
     now = date
@@ -796,7 +806,11 @@ final class AppStore {
       data.completedFocusCount += 1
       completionSessionID = completedSession
       showFocus()
-      data.activeTimer = timer(for: suggestedBreak)
+      var next = timer(for: suggestedBreak)
+      // Recovery observes missed deadlines without replaying phases while away.
+      // During normal operation, reflection never gates the break clock.
+      if autoStart { TimerEngine.start(&next, now: date) }
+      data.activeTimer = next
       save()
       syncServices(for: timer)
       return true

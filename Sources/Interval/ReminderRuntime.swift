@@ -117,6 +117,7 @@ enum UserIdleMonitor {
       cursorDisplayLink = link
     case .reminder(_, let shownAt):
       playCueOnce(reminder.sound, reminderID: reminder.id, shownAt: shownAt)
+      let isPreview = store.previewReminderID == reminder.id
       // Foreground apps cannot join another app's native fullscreen Space.
       // Act as an overlay utility only for the takeover, then restore the Dock presence.
       let policy = NSApp.activationPolicy()
@@ -155,7 +156,7 @@ enum UserIdleMonitor {
             shownAt: shownAt,
             skip: { store.dismissReminder(reminder.id) },
             extend: { store.snoozeReminder(reminder.id, seconds: $0) },
-            wallpaper: wallpaper, animatesEntrance: !preservesCue))
+            wallpaper: wallpaper, animatesEntrance: !preservesCue, isPreview: isPreview))
         host.safeAreaRegions = []
         panel.contentView = host
         var shortcut = ReminderSkipShortcut()
@@ -163,7 +164,9 @@ enum UserIdleMonitor {
           if let event = NSApp.currentEvent, event.type == .keyDown, event.isARepeat {
             return
           }
-          if shortcut.press(at: Date(), shownAt: shownAt) {
+          if isPreview {
+            store.dismissReminder(reminder.id)
+          } else if shortcut.press(at: Date(), shownAt: shownAt) {
             store.dismissReminder(reminder.id)
           }
         }

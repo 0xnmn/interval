@@ -175,8 +175,13 @@ struct HistoryView: View {
           ScrollView {
             VStack(alignment: .leading, spacing: 24) {
               daySummary
-              categoryBreakdown
-              feedbackBreakdown
+              if focusSessions.isEmpty {
+                Text("No focus sessions on this day.")
+                  .font(IntervalTheme.body).foregroundStyle(.secondary)
+              } else {
+                categoryBreakdown
+                feedbackBreakdown
+              }
               if let calendarStatus {
                 Label(calendarStatus, systemImage: "calendar.badge.exclamationmark")
                   .font(IntervalTheme.body).foregroundStyle(.secondary).frame(
@@ -413,6 +418,7 @@ struct ReflectionView: View {
   @Bindable var store: AppStore
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   let sessionID: UUID
+  var compact = false
   private var session: SessionRecord? { store.data.sessions.first { $0.id == sessionID } }
   private var feedback: Binding<SessionFeedback?> {
     Binding(
@@ -425,9 +431,10 @@ struct ReflectionView: View {
       set: { store.updateSession(id: sessionID, feedback: feedback.wrappedValue, journal: $0) })
   }
   var body: some View {
-    VStack(spacing: 24) {
-      Spacer(minLength: 0)
-      Text("How did that session feel?").font(.title2.weight(.semibold))
+    VStack(spacing: compact ? 10 : 18) {
+      if !compact { Spacer(minLength: 0) }
+      Text("How did that session feel?")
+        .font(compact ? IntervalTheme.heading : .title2.weight(.semibold))
         .multilineTextAlignment(.center)
         .intervalEntrance()
       HStack(spacing: 8) {
@@ -436,11 +443,11 @@ struct ReflectionView: View {
           Button {
             setFeedback(value)
           } label: {
-            VStack(spacing: 8) {
+            VStack(spacing: compact ? 4 : 8) {
               Text(value == .distracted ? "🫠" : value == .neutral ? "😐" : "🎯").font(
-                .system(size: 28))
+                .system(size: compact ? 22 : 28))
               Text(value.title).font(IntervalTheme.body)
-            }.frame(maxWidth: .infinity).padding(.vertical, 14)
+            }.frame(maxWidth: .infinity).padding(.vertical, compact ? 8 : 14)
               .background(
                 selected ? Color.accentColor.opacity(0.22) : Color.primary.opacity(0.05),
                 in: RoundedRectangle(cornerRadius: 12)
@@ -455,15 +462,46 @@ struct ReflectionView: View {
           .animation(reduceMotion ? nil : IntervalMotion.selection, value: feedback.wrappedValue)
         }
       }.intervalEntrance(delay: 0.08)
-      WritingArea(text: journal, placeholder: "Add a thought…", label: "Journal")
-        .frame(height: 112)
-        .intervalEntrance(delay: 0.14)
-      Button("Continue") { store.continueAfterReflection() }
-        .buttonStyle(IntervalPrimaryButton()).keyboardShortcut(.return, modifiers: .command)
-        .help("Continue · ⌘Return")
-        .intervalEntrance(delay: 0.20)
-      Spacer(minLength: 0)
+      if !compact {
+        WritingArea(text: journal, placeholder: "Add a thought…", label: "Journal")
+          .frame(height: 112)
+          .intervalEntrance(delay: 0.14)
+      } else {
+        Spacer(minLength: 0)
+      }
+      ViewThatFits(in: .horizontal) {
+        if compact {
+          HStack(spacing: 12) {
+            breakStatus
+            Spacer(minLength: 0)
+            action
+          }
+        }
+        VStack(spacing: 12) {
+          breakStatus
+          action
+        }
+      }
+      if !compact { Spacer(minLength: 0) }
     }
+  }
+  @ViewBuilder private var breakStatus: some View {
+    if store.timer.kind != .focus && store.timer.status != .ready {
+      Text("\(store.breakEnded ? "Break ended" : "Taking a break") · \(store.timerText)")
+        .font(IntervalTheme.body).monospacedDigit().foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+  }
+  private var action: some View {
+    Button(
+      store.breakEnded
+        ? "Resume focus" : store.timer.status == .ready ? "Start break" : "Continue break"
+    ) {
+      store.continueAfterReflection()
+    }
+    .buttonStyle(IntervalPrimaryButton()).keyboardShortcut(.return, modifiers: .command)
+    .help("Reflection is optional · ⌘Return")
+    .intervalEntrance(delay: 0.20)
   }
   private func setFeedback(_ value: SessionFeedback) { feedback.wrappedValue = value }
 }
@@ -517,27 +555,30 @@ struct SessionInspector: View {
         }
         LabeledContent("Outcome", value: session.outcome.rawValue.capitalized)
       }
-      Section("Reflection") {
-        Picker(
-          "Focus",
-          selection: Binding<SessionFeedback?>(
-            get: { session.feedback.flatMap(SessionFeedback.init(rawValue:)) },
-            set: {
-              store.updateSession(id: session.id, feedback: $0, journal: session.journal ?? "")
-            })
-        ) {
-          Text("Pending").tag(SessionFeedback?.none)
-          ForEach(SessionFeedback.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
+      if session.kind == .focus {
+        Section("Reflection") {
+          Picker(
+            "Focus",
+            selection: Binding<SessionFeedback?>(
+              get: { session.feedback.flatMap(SessionFeedback.init(rawValue:)) },
+              set: {
+                store.updateSession(id: session.id, feedback: $0, journal: session.journal ?? "")
+              })
+          ) {
+            Text("Not rated").tag(SessionFeedback?.none)
+            ForEach(SessionFeedback.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
+          }
+          TextEditor(
+            text: Binding(
+              get: { session.journal ?? "" },
+              set: {
+                store.updateSession(
+                  id: session.id,
+                  feedback: session.feedback.flatMap(SessionFeedback.init(rawValue:)),
+                  journal: $0)
+              })
+          ).frame(minHeight: 120)
         }
-        TextEditor(
-          text: Binding(
-            get: { session.journal ?? "" },
-            set: {
-              store.updateSession(
-                id: session.id, feedback: session.feedback.flatMap(SessionFeedback.init(rawValue:)),
-                journal: $0)
-            })
-        ).frame(minHeight: 120)
       }
     }.formStyle(.grouped).scrollContentBackground(.hidden).padding(12)
   }
@@ -619,9 +660,14 @@ struct MenuBarView: View {
       VStack(alignment: .leading, spacing: 7) {
         Text(reminder.title).font(IntervalTheme.heading)
         HStack {
-          extendMenu(reminder)
-          Button("Skip") { store.dismissReminder(reminder.id) }
-            .disabled(!canSkipActiveReminder)
+          if store.previewReminderID == reminder.id {
+            Button("Close preview") { store.dismissReminder(reminder.id) }
+          } else {
+            extendMenu(reminder)
+            Button(skipDelay > 0 ? "Skip available in \(skipDelay)s" : "Skip") {
+              store.dismissReminder(reminder.id)
+            }.disabled(skipDelay > 0)
+          }
         }
       }
     } else if let reminder = warningReminder {
@@ -643,9 +689,9 @@ struct MenuBarView: View {
     guard case .reminder(let id, _) = store.reminderOverlay else { return nil }
     return store.data.reminders.first { $0.id == id }
   }
-  private var canSkipActiveReminder: Bool {
-    guard case .reminder(_, let shownAt) = store.reminderOverlay else { return false }
-    return store.now.timeIntervalSince(shownAt) >= 5
+  private var skipDelay: Int {
+    guard case .reminder(_, let shownAt) = store.reminderOverlay else { return 5 }
+    return max(0, Int(ceil(5 - store.now.timeIntervalSince(shownAt))))
   }
   private func extendMenu(_ reminder: Reminder) -> some View {
     Menu("Extend") {

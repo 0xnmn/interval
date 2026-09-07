@@ -7,12 +7,15 @@ struct LiveTimerBar: View {
   @State private var confirmingAbandon = false
 
   private var accent: Color {
-    (store.completionSessionID != nil || store.timer.kind == .focus
+    (store.timer.kind == .focus
       ? store.data.settings.focusColor : store.data.settings.breakColor).color
   }
 
   private var title: String {
-    if store.completionSessionID != nil { return "Focus complete" }
+    if store.breakEnded { return "Break ended" }
+    if store.timer.kind != .focus {
+      return store.timer.status == .ready ? "Break" : "Taking a break"
+    }
     let value = store.timer.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return value.isEmpty ? store.timer.kind.title : value
   }
@@ -24,22 +27,18 @@ struct LiveTimerBar: View {
       } label: {
         HStack(spacing: 10) {
           Image(
-            systemName: store.completionSessionID != nil || store.timer.kind == .focus
+            systemName: store.timer.kind == .focus
               ? "timer" : "cup.and.saucer"
           )
           .font(.system(size: 17, weight: .medium)).foregroundStyle(accent)
           HStack(spacing: 8) {
             Text(title)
               .font(IntervalTheme.heading).lineLimit(1)
-            Text(
-              store.completionSessionID != nil
-                ? "Review"
-                : store.breakEnded
-                  ? "Break ended"
-                  : store.timer.status == .running ? store.timer.kind.title : "Ready"
-            )
-            .font(IntervalTheme.body).foregroundStyle(.secondary).lineLimit(1)
-            .fixedSize()
+            if store.timer.kind == .focus || store.timer.status == .ready {
+              Text(store.timer.status == .ready ? "Ready" : "Focus")
+                .font(IntervalTheme.body).foregroundStyle(.secondary).lineLimit(1)
+                .fixedSize()
+            }
           }
         }
       }.buttonStyle(.plain).help("Open focus timer")
@@ -48,18 +47,19 @@ struct LiveTimerBar: View {
         Button {
           store.showFocus()
         } label: {
-          Text("Review focus")
+          Label("Reflect", systemImage: "square.and.pencil")
         }
-        .buttonStyle(IntervalPrimaryButton())
+        .buttonStyle(IntervalIconButton())
         .help("Review completed focus")
-      } else {
+      }
+      Group {
         Text(store.timerText).font(.title2.weight(.medium)).monospacedDigit()
           .foregroundStyle(accent).fixedSize()
           .accessibilityLabel("Live \(store.timer.kind.title) timer")
           .accessibilityValue(spokenDuration(store.displayedTime))
         if store.timer.status == .ready {
           if store.timer.kind == .focus {
-            Button(action: store.startSession) { Text("Start") }
+            Button(action: store.startSession) { Text("Start session") }
               .buttonStyle(IntervalPrimaryButton())
               .foregroundStyle(accent).help("Start session")
           } else {

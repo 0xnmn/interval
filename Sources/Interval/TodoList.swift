@@ -13,7 +13,7 @@ struct TodoList: View {
             "", isOn: Binding(get: { todo.isCompleted }, set: { _ in store.toggleTodo(todo.id) })
           )
           .toggleStyle(.checkbox).labelsHidden().tint(.accentColor)
-          .accessibilityLabel("Complete \(todo.title)")
+          .accessibilityLabel("Mark \(todo.title) \(todo.isCompleted ? "incomplete" : "complete")")
           TodoTextField(
             text: Binding(
               get: { store.data.todos.first { $0.id == todo.id }?.title ?? "" },
@@ -27,7 +27,9 @@ struct TodoList: View {
           )
           .help("Return: new item · ↑/↓: move · Backspace on empty: delete")
           .contextMenu {
-            Button("Toggle completed") { store.toggleTodo(todo.id) }
+            Button(todo.isCompleted ? "Mark incomplete" : "Mark complete") {
+              store.toggleTodo(todo.id)
+            }
             Button("Delete to-do", role: .destructive) { delete(todo.id) }
           }
           .accessibilityAction(named: "Delete to-do") { delete(todo.id) }

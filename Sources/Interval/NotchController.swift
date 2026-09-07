@@ -322,7 +322,7 @@ struct NotchRootView: View {
             .foregroundStyle(accent)
             Text(
               headsUp != nil
-                ? headsUp!.actionTitle
+                ? headsUp!.statusTitle
                 : store.completionSessionID != nil
                   ? "Reflect"
                   : store.breakEnded
@@ -352,7 +352,7 @@ struct NotchRootView: View {
             ).disabled(store.breakEnded)
           }
           if let id = store.completionSessionID {
-            ScrollView { ReflectionView(store: store, sessionID: id) }
+            ReflectionView(store: store, sessionID: id, compact: true)
           } else if let headsUp {
             NotchHeadsUpView(store: store, headsUp: headsUp, dismiss: collapse)
           } else if page == 1 {

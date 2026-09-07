@@ -14,6 +14,13 @@ struct NotchHeadsUp: Equatable {
   let symbol: String
   var eligible = true
 
+  var statusTitle: String {
+    switch target {
+    case .focus: "Focus ends soon"
+    case .reminder: "Reminder coming up"
+    }
+  }
+
   var actionTitle: String {
     switch target {
     case .focus: "Extend focus"

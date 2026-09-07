@@ -112,9 +112,9 @@ struct AppStoreTests {
           startedAt: deadline.addingTimeInterval(-1500), deadline: deadline)
         store.reconcile(at: deadline)
         #expect(store.data.completedFocusCount == count)
-        #expect(store.timer.status == .ready)
+        #expect(store.timer.status == .running)
         #expect(store.timer.kind == (count == 4 ? .longBreak : .shortBreak))
-        #expect(store.timer.startedAt == nil)
+        #expect(store.timer.startedAt == deadline)
         #expect(store.completionSessionID == store.data.sessions.last?.id)
         #expect(store.data.sessions.count == count * 2 - 1)
         #expect(store.data.sessions.last?.endedAt == deadline)
@@ -244,7 +244,7 @@ struct AppStoreTests {
     }
   }
 
-  @Test func startAtBoundaryCompletesButDoesNotRunNextPhase() throws {
+  @Test func startAtBoundaryCompletesAndStartsBreak() throws {
     try withStore { store, _ in
       let deadline = Date().addingTimeInterval(-1)
       store.data.activeTimer = TimerState(
@@ -256,7 +256,7 @@ struct AppStoreTests {
       #expect(store.data.sessions.count == 1)
       #expect(store.data.sessions[0].outcome == .completed)
       #expect(store.timer.kind == .shortBreak)
-      #expect(store.timer.status == .ready)
+      #expect(store.timer.status == .running)
       #expect(store.timer.elapsedBeforePause == 0)
       #expect(store.completionSessionID == store.data.sessions[0].id)
     }
@@ -299,7 +299,7 @@ struct AppStoreTests {
     }
   }
 
-  @Test func lateFocusTransitionWaitsForReflectionAndStartsAtContinueDate() throws {
+  @Test func recoveredFocusDoesNotReplayBreakAndCanStartWithoutReflection() throws {
     try withStore { store, _ in
       let deadline = Date(timeIntervalSince1970: 10_000)
       let observedAt = deadline.addingTimeInterval(86_400)
@@ -307,7 +307,7 @@ struct AppStoreTests {
         kind: .focus, duration: 1500, status: .running,
         startedAt: deadline.addingTimeInterval(-1500), deadline: deadline)
 
-      #expect(store.reconcile(at: observedAt))
+      #expect(store.reconcile(at: observedAt, autoStart: false))
       #expect(store.data.sessions.count == 1)
       #expect(store.data.sessions[0].endedAt == deadline)
       #expect(store.timer.kind == .shortBreak)
@@ -332,7 +332,7 @@ struct AppStoreTests {
     }
   }
 
-  @Test func selectingFeedbackDoesNotStartPendingBreak() throws {
+  @Test func reflectionDoesNotDelayOrResetAutomaticBreak() throws {
     try withStore { store, _ in
       let deadline = Date(timeIntervalSince1970: 10_000)
       store.data.activeTimer = TimerState(
@@ -340,12 +340,44 @@ struct AppStoreTests {
         startedAt: deadline.addingTimeInterval(-1500), deadline: deadline)
       store.reconcile(at: deadline)
       let sessionID = try #require(store.completionSessionID)
+      let runningBreak = store.timer
+      #expect(runningBreak.status == .running)
+      #expect(runningBreak.deadline == deadline.addingTimeInterval(300))
+      #expect(store.data.sessions[0].feedback == nil)
+      #expect(store.data.sessions[0].journal == nil)
 
       store.updateSession(id: sessionID, feedback: .focused, journal: "Done")
 
       #expect(store.completionSessionID == sessionID)
       #expect(store.timer.kind == .shortBreak)
-      #expect(store.timer.status == .ready)
+      #expect(store.timer == runningBreak)
+      store.continueAfterReflection(at: deadline.addingTimeInterval(60))
+      #expect(store.completionSessionID == nil)
+      #expect(store.timer == runningBreak)
+    }
+  }
+
+  @Test(arguments: [false, true])
+  func leavingBreakClearsUnfilledReflection(resume: Bool) throws {
+    try withStore { store, _ in
+      let date = Date()
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 1500, status: .running,
+        startedAt: date.addingTimeInterval(-1500), deadline: date)
+      store.reconcile(at: date)
+      #expect(store.completionSessionID != nil)
+      if resume {
+        store.reconcile(at: date.addingTimeInterval(300))
+        #expect(store.breakEnded)
+        store.continueAfterReflection(at: date.addingTimeInterval(310))
+      } else {
+        store.abandon()
+      }
+      #expect(store.completionSessionID == nil)
+      #expect(store.timer.kind == .focus)
+      #expect(store.timer.status == (resume ? .running : .ready))
+      #expect(store.data.sessions[0].feedback == nil)
+      #expect(store.data.sessions[0].journal == nil)
     }
   }
 
@@ -364,7 +396,7 @@ struct AppStoreTests {
       #expect(store.selection == .focus)
       #expect(store.completionSessionID == sessionID)
       #expect(store.timer.kind == .shortBreak)
-      #expect(store.timer.status == .ready)
+      #expect(store.timer.status == .running)
     }
   }
 
@@ -634,7 +666,7 @@ struct AppStoreTests {
     }
   }
 
-  @Test func adjustAtDeadlineCompletesAndDoesNotBypassReflection() throws {
+  @Test func adjustAtDeadlineStartsBreakWithoutExtendingIt() throws {
     try withStore { store, _ in
       let deadline = Date(timeIntervalSince1970: 10_000)
       store.data.activeTimer = TimerState(
@@ -646,7 +678,7 @@ struct AppStoreTests {
       #expect(store.data.sessions.count == 1)
       #expect(store.completionSessionID == store.data.sessions[0].id)
       #expect(store.timer.kind == .shortBreak)
-      #expect(store.timer.status == .ready)
+      #expect(store.timer.status == .running)
       #expect(store.timer.duration == 300)
     }
   }
@@ -797,7 +829,7 @@ struct AppStoreTests {
     }
   }
 
-  @Test func readyFocusStartsBreakWithoutRecordAndDeadlineStillRequiresReflection() throws {
+  @Test func manualBreakAtDeadlineDoesNotRequireReflection() throws {
     try withStore { store, _ in
       let date = Date(timeIntervalSince1970: 10_000)
       store.data.completedFocusCount = 4
@@ -815,9 +847,10 @@ struct AppStoreTests {
       store.startBreakNow(at: deadline)
       #expect(store.data.sessions.count == 1)
       #expect(store.data.sessions[0].outcome == .completed)
-      #expect(store.completionSessionID == store.data.sessions[0].id)
+      #expect(store.completionSessionID == nil)
       #expect(store.timer.kind == .shortBreak)
-      #expect(store.timer.status == .ready)
+      #expect(store.timer.status == .running)
+      #expect(store.timer.startedAt == deadline)
     }
   }
 
@@ -832,10 +865,6 @@ struct AppStoreTests {
       #expect(store.data.reminders == before)
       store.previewReminder(id)
       store.dismissReminder(id)
-      #expect(store.reminderOverlay != nil)
-      if case .reminder(_, let shownAt) = store.reminderOverlay {
-        store.dismissReminder(id, at: shownAt.addingTimeInterval(5))
-      }
       #expect(store.reminderOverlay == nil)
       #expect(store.data.reminders == before)
     }

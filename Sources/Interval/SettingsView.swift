@@ -131,7 +131,7 @@ struct SettingsView: View {
             .accessibilityValue("\(Int(store.data.settings.soundVolume * 100)) percent")
           }
         }
-        SettingsSection("Alerts") {
+        SettingsSection("Notifications") {
           if notificationStatus == .authorized {
             Label("Notifications enabled", systemImage: "checkmark.circle.fill").foregroundStyle(
               .green)
@@ -331,7 +331,7 @@ private struct GeneralSettingsView: View {
         Toggle(isOn: panelSetting(\.completionPopupEnabled)) {
           Text("One-minute heads-up").frame(maxWidth: .infinity, alignment: .leading)
         }
-        Text("Native notifications before focus ends. Overdue breaks remind you every 5 minutes.")
+        Text("Send a native notification one minute before focus ends.")
           .font(.system(size: 13)).foregroundStyle(.secondary)
       }.toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
       SettingsSection("Startup") {
@@ -409,6 +409,10 @@ private struct UpdatesSettingsView: View {
   var body: some View {
     SettingsPage {
       SettingsSection(store.updates.isConfigured ? "Updates" : "Updates unavailable") {
+        LabeledContent(
+          "Version",
+          value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+            ?? "Development")
         Text(store.updates.configurationMessage)
           .font(.system(size: 13))
           .foregroundStyle(store.updates.isConfigured ? Color.secondary : Color.orange)

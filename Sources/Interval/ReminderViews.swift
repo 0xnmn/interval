@@ -203,8 +203,17 @@ struct RemindersView: View {
   }
 
   private var emptyTemplates: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      Text("Templates").font(.system(size: 14)).foregroundStyle(.secondary)
+    VStack(alignment: .leading, spacing: 12) {
+      Text("No reminders yet").font(.system(size: 17, weight: .semibold))
+      Button {
+        selection = store.addReminder()
+      } label: {
+        Label("New reminder", systemImage: "plus")
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.borderedProminent)
+
+      Text("Start from a template").font(.system(size: 14)).foregroundStyle(.secondary)
       ForEach(Reminder.templates(startingAt: store.now)) { template in
         Button {
           selection = store.addReminder(template: template)
@@ -213,6 +222,9 @@ struct RemindersView: View {
             Text(template.emoji).font(.title3)
             Text(template.title).font(.system(size: 14, weight: .medium))
             Spacer()
+            Image(systemName: "plus")
+              .font(.system(size: 12, weight: .semibold))
+              .foregroundStyle(.secondary)
           }
           .padding(12).contentShape(Rectangle())
           .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8))
@@ -256,17 +268,23 @@ private struct ReminderEditor: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 18) {
         editorSection("Content") {
-          TextField("Title", text: binding(\.title))
-            .textFieldStyle(.plain)
-            .padding(8)
-            .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-            .accessibilityLabel("Reminder title")
-          TextField("Message", text: binding(\.message), axis: .vertical)
-            .textFieldStyle(.plain)
-            .padding(8)
-            .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-            .lineLimit(2...5)
-            .accessibilityLabel("Reminder message")
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Title").foregroundStyle(.secondary)
+            TextField("Reminder title", text: binding(\.title))
+              .textFieldStyle(.plain)
+              .padding(8)
+              .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+              .accessibilityLabel("Reminder title")
+          }
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Message").foregroundStyle(.secondary)
+            TextField("Optional message", text: binding(\.message), axis: .vertical)
+              .textFieldStyle(.plain)
+              .padding(8)
+              .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+              .lineLimit(2...5)
+              .accessibilityLabel("Reminder message")
+          }
           HStack {
             Text("Emoji")
             Spacer()
@@ -282,7 +300,7 @@ private struct ReminderEditor: View {
 
         editorSection("Schedule") {
           HStack {
-            Text("Repeat")
+            Text("Every")
             Spacer()
             Text("\(Int(binding(\.intervalSeconds).wrappedValue / 60)) min").monospacedDigit()
             Stepper(
@@ -305,8 +323,8 @@ private struct ReminderEditor: View {
             .accessibilityLabel("Interval presets")
             .help("Choose an interval preset")
           }
-          toggleRow("Hide during focus", value: binding(\.suppressDuringFocus))
-          toggleRow("Hide during calendar events", value: binding(\.suppressDuringCalendar))
+          toggleRow("Delay during focus", value: binding(\.suppressDuringFocus))
+          toggleRow("Delay during calendar events", value: binding(\.suppressDuringCalendar))
             .help("Uses selected calendars")
           toggleRow("Pause when idle", value: binding(\.pauseWhenIdle))
             .help("Pause the repeat interval when there is no mouse or keyboard activity.")
@@ -350,23 +368,26 @@ private struct ReminderEditor: View {
             Picker("Sound", selection: binding(\.sound)) {
               ForEach(ReminderSound.allCases, id: \.self) { Text($0.title).tag($0) }
             }.labelsHidden().frame(width: 140)
-            Button {
-              previewSound?.stop()
-              // Named sounds are cached. Keep previews independent of a live reminder cue.
-              let sound =
-                NSSound(named: NSSound.Name(binding(\.sound).wrappedValue.title))?.copy()
-                as? NSSound
-              previewSound = sound
-              sound?.play()
-            } label: {
-              Label("Preview sound", systemImage: "speaker.wave.2")
-            }.buttonStyle(IntervalIconButton())
-              .disabled(binding(\.sound).wrappedValue == .none)
-              .help("Preview reminder sound")
+            if binding(\.sound).wrappedValue != .none {
+              Button {
+                previewSound?.stop()
+                // Named sounds are cached. Keep previews independent of a live reminder cue.
+                let sound =
+                  NSSound(named: NSSound.Name(binding(\.sound).wrappedValue.title))?.copy()
+                  as? NSSound
+                previewSound = sound
+                sound?.play()
+              } label: {
+                Label("Preview sound", systemImage: "speaker.wave.2")
+              }.buttonStyle(IntervalIconButton())
+                .help("Preview reminder sound")
+            }
           }
         }
       }
-      .padding(18).frame(maxWidth: .infinity, alignment: .leading)
+      .padding(18)
+      .frame(maxWidth: 520, alignment: .leading)
+      .frame(maxWidth: .infinity, alignment: .center)
     }
     .font(.system(size: 14))
     .background(GlassBackground())
@@ -447,6 +468,7 @@ struct ReminderTakeoverView: View {
   let extend: (TimeInterval) -> Void
   var wallpaper: NSImage? = nil
   var animatesEntrance = true
+  var isPreview = false
 
   static func remainingSeconds(reminder: Reminder, shownAt: Date, now: Date) -> Int {
     max(0, Int(ceil(reminder.displaySeconds - now.timeIntervalSince(shownAt))))
@@ -495,6 +517,14 @@ struct ReminderTakeoverView: View {
     GeometryReader { geometry in
       let spacious = geometry.size.height >= 900
       VStack(spacing: 24) {
+        if isPreview {
+          Text("Preview")
+            .font(.system(size: 14, weight: .semibold))
+            .textCase(.uppercase)
+            .tracking(1.2)
+            .foregroundStyle(.white.opacity(0.8))
+            .intervalEntrance(delay: 0.12, enabled: animatesEntrance)
+        }
         TimelineView(
           .periodic(
             from: Calendar.current.dateInterval(of: .minute, for: Date())?.start ?? Date(), by: 60)
@@ -510,9 +540,7 @@ struct ReminderTakeoverView: View {
             liveCountdown(size: spacious ? 80 : 64)
           }.fixedSize(horizontal: false, vertical: true)
           VStack(spacing: 28) {
-            ScrollView {
-              fullscreenReminderContent(spacious: spacious).frame(maxWidth: .infinity)
-            }.defaultScrollAnchor(.center, for: .alignment)
+            fullscreenReminderContent(spacious: spacious, scrollsMessage: true)
             liveCountdown(size: spacious ? 80 : 64)
           }
         }
@@ -530,18 +558,31 @@ struct ReminderTakeoverView: View {
     .environment(\.colorScheme, .dark)
   }
 
-  private func fullscreenReminderContent(spacious: Bool) -> some View {
+  private func fullscreenReminderContent(spacious: Bool, scrollsMessage: Bool = false) -> some View
+  {
     VStack(spacing: 20) {
       Text(reminder.emoji)
-        .font(.system(size: min(180, max(32, reminder.emojiSize))))
+        .font(.system(size: min(scrollsMessage ? 80 : 180, max(32, reminder.emojiSize))))
         .lineLimit(1)
       Text(reminder.title)
         .font(.system(size: spacious ? 48 : 36, weight: .semibold))
+        .lineLimit(3).minimumScaleFactor(0.7).fixedSize(horizontal: false, vertical: true)
       if !reminder.message.isEmpty {
-        Text(reminder.message)
-          .font(.system(size: spacious ? 22 : 18))
-          .lineSpacing(4)
-          .foregroundStyle(.white)
+        Group {
+          if scrollsMessage {
+            ScrollView {
+              Text(reminder.message).fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+            }
+            .scrollIndicators(.visible)
+            .accessibilityLabel("Reminder message")
+          } else {
+            Text(reminder.message)
+          }
+        }
+        .font(.system(size: spacious ? 22 : 18))
+        .lineSpacing(4)
+        .foregroundStyle(.white)
       }
     }
     .foregroundStyle(.white)
@@ -576,34 +617,41 @@ struct ReminderTakeoverView: View {
   private func fullscreenActions(now: Date) -> some View {
     let skipRemaining = max(0, Int(ceil(5 - now.timeIntervalSince(shownAt))))
     return VStack(spacing: 12) {
-      HStack(spacing: 12) {
-        Button {
-          extend(60)
-        } label: {
-          Label("+1 min", systemImage: "clock.arrow.circlepath")
-        }.help("Remind me again in 1 minute")
-          .accessibilityLabel("Remind me in 1 minute")
-        Button {
-          extend(5 * 60)
-        } label: {
-          Label("+5 min", systemImage: "clock.arrow.circlepath")
-        }.help("Remind me again in 5 minutes")
-          .accessibilityLabel("Remind me in 5 minutes")
+      if isPreview {
         Button(action: skip) {
-          Label(
-            skipRemaining > 0 ? "Skip in \(skipRemaining)s" : "Skip",
-            systemImage: "forward.end"
-          )
+          Label("Close preview", systemImage: "xmark")
         }
-        .disabled(skipRemaining > 0)
-      }
-      .buttonStyle(ReminderGlassButtonStyle())
+        .buttonStyle(ReminderGlassButtonStyle())
+      } else {
+        HStack(spacing: 12) {
+          Button {
+            extend(60)
+          } label: {
+            Label("+1 min", systemImage: "clock.arrow.circlepath")
+          }.help("Remind me again in 1 minute")
+            .accessibilityLabel("Remind me in 1 minute")
+          Button {
+            extend(5 * 60)
+          } label: {
+            Label("+5 min", systemImage: "clock.arrow.circlepath")
+          }.help("Remind me again in 5 minutes")
+            .accessibilityLabel("Remind me in 5 minutes")
+          Button(action: skip) {
+            Label(
+              skipRemaining > 0 ? "Skip available in \(skipRemaining)s" : "Skip",
+              systemImage: "forward.end"
+            )
+          }
+          .disabled(skipRemaining > 0)
+        }
+        .buttonStyle(ReminderGlassButtonStyle())
 
-      Text("Press Esc twice to skip")
-        .font(.system(size: 14))
-        .foregroundStyle(.white)
-        .opacity(skipRemaining == 0 ? 1 : 0)
-        .accessibilityHidden(skipRemaining > 0)
+        Text("Press Esc twice to skip")
+          .font(.system(size: 14))
+          .foregroundStyle(.white)
+          .opacity(skipRemaining == 0 ? 1 : 0)
+          .accessibilityHidden(skipRemaining > 0)
+      }
     }
     .foregroundStyle(.white)
   }

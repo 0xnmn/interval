@@ -122,6 +122,50 @@ struct SettingsReminderUITests {
     #expect(abs(restored.timeIntervalSince(expected)) < 0.000001)
   }
 
+  @Test(arguments: ["stats", "editor", "long-message"])
+  func compactSurfacesCanScrollToTheirLastContent(surface: String) async throws {
+    let store = try makeStore()
+    defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }
+    store.data = SnapshotRenderer.fixture(scene: "reminder-fullscreen-long")
+    store.now = SnapshotRenderer.fixtureNow
+    store.selection = .history
+    let view: AnyView
+    let size: NSSize
+    switch surface {
+    case "stats":
+      view = AnyView(MainView(store: store))
+      size = NSSize(width: 780, height: 620)
+    case "editor":
+      view = AnyView(RemindersView(store: store, selection: store.data.reminders[0].id))
+      size = NSSize(width: 420, height: 474)
+    default:
+      view = AnyView(
+        ReminderTakeoverView(
+          reminder: store.data.reminders[1], shownAt: Date(), skip: {}, extend: { _ in },
+          animatesEntrance: false))
+      size = NSSize(width: 900, height: 650)
+    }
+    let harness = try await NativeViewHarness(rootView: view)
+    defer { harness.close() }
+    harness.window.setContentSize(size)
+    await harness.pump()
+    let scrollViews = harness.descendants.compactMap { $0 as? NSScrollView }.filter {
+      ($0.documentView?.bounds.height ?? 0) > $0.contentView.bounds.height
+    }
+    #expect(scrollViews.count >= (surface == "stats" ? 2 : 1))
+    for scrollView in scrollViews {
+      let document = try #require(scrollView.documentView)
+      let clip = scrollView.contentView
+      #expect(clip.bounds.height > 40)
+      let bottom =
+        document.isFlipped ? document.bounds.maxY - clip.bounds.height : document.bounds.minY
+      clip.scroll(to: NSPoint(x: clip.bounds.minX, y: bottom))
+      scrollView.reflectScrolledClipView(clip)
+      await harness.pump()
+      #expect(abs(clip.bounds.minY - bottom) < 2)
+    }
+  }
+
   private func makeStore(reminders: [Reminder] = []) throws -> AppStore {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

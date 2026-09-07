@@ -141,11 +141,6 @@ struct ReminderOverlayTests {
         charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53))
     panel.sendEvent(escape)
 
-    #expect(store.reminderOverlay != nil)
-    if case .reminder(let id, let shownAt) = store.reminderOverlay {
-      store.dismissReminder(id, at: shownAt.addingTimeInterval(5))
-    }
-
     #expect(store.reminderOverlay == nil)
     #expect(store.data.reminders == before)
     controller.close()

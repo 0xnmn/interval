@@ -62,10 +62,18 @@ struct SnapshotRequest {
     var timer = TimerState(
       id: timerID, kind: .focus, duration: 1_500, status: .ready,
       title: "Polish launch narrative", categoryID: deepWork.id, categoryName: deepWork.name)
-    if scene.hasPrefix("reflection") {
+    if scene.hasPrefix("reflection") || scene.hasPrefix("menu-review")
+      || scene.hasPrefix("notch-reflection") || scene == "history-review"
+    {
       timer = TimerState(
-        id: timerID, kind: .shortBreak, duration: 300, status: .ready,
+        id: timerID, kind: .shortBreak, duration: 300, status: .running,
+        startedAt: fixtureNow, deadline: fixtureNow.addingTimeInterval(300),
         title: "Polish launch narrative", categoryID: deepWork.id, categoryName: deepWork.name)
+      if scene.hasSuffix("ended") {
+        timer.status = .completed
+        timer.startedAt = fixtureNow.addingTimeInterval(-385)
+        timer.deadline = fixtureNow.addingTimeInterval(-85)
+      }
     }
     if scene == "dashboard-running" || scene == "menu" || scene == "time-options"
       || scene == "notch-running"
@@ -239,13 +247,13 @@ struct SnapshotRequest {
           store: store, expanded: true, geometry: geometry,
           collapse: {}, headsUp: candidate))
     case "notch-compact", "notch-expanded", "notch-fallback", "notch-todos", "notch-reminders",
-      "notch-reflection", "notch-running", "notch-overtime":
+      "notch-reflection", "notch-reflection-ended", "notch-running", "notch-overtime":
       let geometry =
         request.scene == "notch-fallback"
         ? NotchGeometry.fallback
         : NotchGeometry(hasHardwareNotch: true, cutoutWidth: 180, topInset: 32)
       let expanded = request.scene != "notch-compact" && request.scene != "notch-fallback"
-      if request.scene == "notch-reflection" {
+      if request.scene.hasPrefix("notch-reflection") {
         store.completionSessionID = store.data.sessions.first?.id
       }
       size =
@@ -258,8 +266,9 @@ struct SnapshotRequest {
           store: store, expanded: expanded, geometry: geometry, collapse: {},
           page: request.scene == "notch-todos" ? 1 : request.scene == "notch-reminders" ? 2 : 0))
     case "history", "history-disabled", "history-no-selection", "history-running", "history-break",
-      "history-compact", "history-review":
+      "history-compact", "history-review", "history-empty":
       store.selection = .history
+      if request.scene == "history-empty" { store.data.sessions = [] }
       if request.scene == "history-review" {
         store.completionSessionID = store.data.sessions.first?.id
       }
@@ -323,7 +332,7 @@ struct SnapshotRequest {
         ReminderTakeoverView(
           reminder: store.data.reminders[0], shownAt: Date(), skip: {}, extend: { _ in }))
     case "reminder-fullscreen", "reminder-fullscreen-long", "reminder-fullscreen-wait",
-      "reminder-fullscreen-fallback", "reminder-fullscreen-large":
+      "reminder-fullscreen-fallback", "reminder-fullscreen-large", "reminder-preview":
       size =
         request.scene == "reminder-fullscreen-large"
         ? NSSize(width: 1440, height: 960) : NSSize(width: 900, height: 650)
@@ -337,7 +346,7 @@ struct SnapshotRequest {
           reminder: store.data.reminders[1],
           shownAt: Date().addingTimeInterval(request.scene == "reminder-fullscreen-wait" ? 0 : -6),
           skip: {},
-          extend: { _ in }, wallpaper: wallpaper))
+          extend: { _ in }, wallpaper: wallpaper, isPreview: request.scene == "reminder-preview"))
     case "settings":
       size = NSSize(width: 560, height: 450)
       view = AnyView(SettingsView(store: store))
@@ -356,7 +365,7 @@ struct SnapshotRequest {
     case "updates-settings":
       size = NSSize(width: 560, height: 450)
       view = AnyView(SettingsView(store: store, selectedTab: 4))
-    case "reflection", "reflection-selected":
+    case "reflection", "reflection-selected", "reflection-ended":
       store.completionSessionID = store.data.sessions.first?.id
       size = NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))
@@ -365,8 +374,8 @@ struct SnapshotRequest {
       view = AnyView(
         FocusControls(store: store))
     case "menu", "menu-ready", "menu-break", "menu-review", "menu-overtime", "menu-overtime-hours",
-      "menu-overtime-days":
-      if request.scene == "menu-review" {
+      "menu-overtime-days", "menu-review-ended":
+      if request.scene.hasPrefix("menu-review") {
         store.completionSessionID = store.data.sessions.first?.id
       }
       size = NSSize(width: 600, height: 480)

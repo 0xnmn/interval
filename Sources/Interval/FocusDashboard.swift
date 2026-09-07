@@ -19,7 +19,7 @@ struct FocusControls: View {
     GeometryReader { geometry in
       ScrollView {
         VStack(spacing: isNotch ? 8 : 12) {
-          if !compact { SessionIdentity(store: store) }
+          if !compact && store.timer.kind == .focus { SessionIdentity(store: store) }
           if !isNotch { Spacer(minLength: 8) }
           if store.timer.kind == .focus && showsDial {
             FocusDial(
