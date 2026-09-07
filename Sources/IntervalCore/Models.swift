@@ -319,19 +319,16 @@ extension Comparable {
 }
 
 public enum ReminderPresentation: String, Codable, CaseIterable, Sendable {
-  case fullscreen, floating
-  public var title: String { self == .fullscreen ? "Full screen" : "Floating" }
-}
+  case fullscreen
+  public var title: String { "Full screen" }
 
-public enum ReminderPosition: String, Codable, CaseIterable, Sendable {
-  case topLeft, topRight, bottomLeft, bottomRight, center
-  public var title: String {
-    switch self {
-    case .topLeft: "Top left"
-    case .topRight: "Top right"
-    case .bottomLeft: "Bottom left"
-    case .bottomRight: "Bottom right"
-    case .center: "Center"
+  public init(from decoder: Decoder) throws {
+    let value = try decoder.singleValueContainer().decode(String.self)
+    switch value {
+    case Self.fullscreen.rawValue, "floating": self = .fullscreen
+    default:
+      throw DecodingError.dataCorrupted(
+        .init(codingPath: decoder.codingPath, debugDescription: "Invalid reminder presentation"))
     }
   }
 }
@@ -350,7 +347,6 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
   public var intervalSeconds: TimeInterval
   public var displaySeconds: TimeInterval
   public var presentation: ReminderPresentation
-  public var position: ReminderPosition
   public var sound: ReminderSound
   public var suppressDuringFocus: Bool
   public var suppressDuringCalendar: Bool
@@ -366,9 +362,9 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
     emoji: String = "⏱️",
     emojiSize: Double = 72, intervalSeconds: TimeInterval = 1_200,
     displaySeconds: TimeInterval = 10,
-    presentation: ReminderPresentation = .floating, suppressDuringFocus: Bool = true,
+    presentation: ReminderPresentation = .fullscreen, suppressDuringFocus: Bool = true,
     suppressDuringCalendar: Bool = true, dueAt: Date? = nil, snoozedUntil: Date? = nil,
-    isEnabled: Bool = true, position: ReminderPosition = .center, sound: ReminderSound = .none,
+    isEnabled: Bool = true, sound: ReminderSound = .none,
     pauseWhenIdle: Bool = false, idleDelaySeconds: TimeInterval = 10
   ) {
     self.id = id
@@ -379,7 +375,6 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
     self.intervalSeconds = intervalSeconds
     self.displaySeconds = displaySeconds
     self.presentation = presentation
-    self.position = position
     self.sound = sound
     self.suppressDuringFocus = suppressDuringFocus
     self.suppressDuringCalendar = suppressDuringCalendar
@@ -403,14 +398,13 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
     value.idleDelaySeconds =
       idleDelaySeconds.isFinite ? idleDelaySeconds.clamped(to: 1...3_600) : 10
     value.displaySeconds =
-      displaySeconds.isFinite
-      ? displaySeconds.clamped(to: (presentation == .fullscreen ? 5 : 2)...600) : 10
+      displaySeconds.isFinite ? displaySeconds.clamped(to: 5...600) : 10
     return value
   }
 
   private enum CodingKeys: String, CodingKey {
     case id, title, message, emoji, emojiSize, intervalSeconds, displaySeconds, presentation,
-      suppressDuringFocus, suppressDuringCalendar, dueAt, snoozedUntil, isEnabled, position, sound,
+      suppressDuringFocus, suppressDuringCalendar, dueAt, snoozedUntil, isEnabled, sound,
       pauseWhenIdle, idleDelaySeconds
   }
   public init(from decoder: Decoder) throws {
@@ -423,8 +417,7 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
     intervalSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .intervalSeconds) ?? 1_200
     displaySeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .displaySeconds) ?? 10
     presentation =
-      try c.decodeIfPresent(ReminderPresentation.self, forKey: .presentation) ?? .floating
-    position = try c.decodeIfPresent(ReminderPosition.self, forKey: .position) ?? .center
+      try c.decodeIfPresent(ReminderPresentation.self, forKey: .presentation) ?? .fullscreen
     sound = try c.decodeIfPresent(ReminderSound.self, forKey: .sound) ?? .none
     suppressDuringFocus = try c.decodeIfPresent(Bool.self, forKey: .suppressDuringFocus) ?? true
     suppressDuringCalendar =

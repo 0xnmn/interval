@@ -295,8 +295,8 @@ struct SnapshotRequest {
           overlay: .warning(
             reminderID: reminder.id, remaining: 7,
             isPaused: request.scene == "reminder-countdown-paused")))
-    case "reminder-floating", "reminder-max-emoji":
-      size = ReminderOverlayController.floatingSize(for: store.data.reminders[0])
+    case "reminder-max-emoji":
+      size = NSSize(width: 900, height: 650)
       view = AnyView(
         ReminderTakeoverView(
           reminder: store.data.reminders[0], shownAt: Date(), skip: {}, extend: { _ in }))

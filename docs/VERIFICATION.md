@@ -33,7 +33,7 @@ Example: `.build/Interval.app/Contents/MacOS/Interval --snapshot .build/focus.pn
 1. Grant Calendar and Notifications access explicitly, then revoke each while running; confirm clear degraded states and no stale suppression.
 2. Complete a focus from the menu bar, confirm the break waits, then select feedback and optionally add a thought. Continue or Enter must start the break exactly once. Confirm break completion automatically starts focus; Pause and Abandon must stop progression.
 3. Type, scroll, and drag through a reminder deadline; the warning pauses and no takeover appears until idle. Postpone and confirm future recurrence is unchanged.
-4. Preview/dismiss every template, edit emoji size/message/duration, and verify both floating and full-screen controls remain reachable.
+4. Preview/dismiss every template, edit emoji size/message/duration, and verify full-screen controls remain reachable. Verify legacy floating reminders migrate to full screen with a minimum five-second duration.
 5. Test sleep, lock/unlock, fast user switching, full-screen apps, display removal, and mixed-DPI/notched displays. Verify no reminder storm or keyboard trap.
 6. Test VoiceOver, keyboard-only navigation, increased contrast, reduced transparency, and reduced motion.
 7. Validate signed version N → N+1 updates with real Sparkle archives; installation must defer during running/paused timers or visible reminders and preserve all local data.

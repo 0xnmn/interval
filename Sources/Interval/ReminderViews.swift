@@ -326,20 +326,12 @@ private struct ReminderEditor: View {
 
         editorSection("Display") {
           HStack {
-            Text("Show as")
-            Spacer()
-            Picker("Presentation", selection: binding(\.presentation)) {
-              ForEach(ReminderPresentation.allCases, id: \.self) { Text($0.title).tag($0) }
-            }.pickerStyle(.segmented).labelsHidden().fixedSize().frame(
-              width: 190, alignment: .trailing)
-          }
-          HStack {
             Text("Display for")
             Spacer()
             Text("\(Int(binding(\.displaySeconds).wrappedValue)) sec").monospacedDigit()
             Stepper(
               "Display duration in seconds", value: binding(\.displaySeconds),
-              in: binding(\.presentation).wrappedValue == .fullscreen ? 5...600 : 2...600
+              in: 5...600
             )
             .labelsHidden()
           }
@@ -350,15 +342,6 @@ private struct ReminderEditor: View {
               .accessibilityLabel("Emoji size")
             Text("\(Int(binding(\.emojiSize).wrappedValue)) pt").monospacedDigit().frame(
               width: 48, alignment: .trailing)
-          }
-          if binding(\.presentation).wrappedValue == .floating {
-            HStack {
-              Text("Position")
-              Spacer()
-              Picker("Position", selection: binding(\.position)) {
-                ForEach(ReminderPosition.allCases, id: \.self) { Text($0.title).tag($0) }
-              }.labelsHidden().fixedSize().frame(width: 190, alignment: .trailing)
-            }
           }
           HStack {
             Text("Sound")
@@ -468,12 +451,8 @@ struct ReminderTakeoverView: View {
   var body: some View {
     TimelineView(.periodic(from: .now, by: 0.25)) { context in
       ZStack {
-        if reminder.presentation == .fullscreen {
-          fullscreenBackground
-          fullscreenContent(now: context.date)
-        } else {
-          floatingContent(now: context.date)
-        }
+        fullscreenBackground
+        fullscreenContent(now: context.date)
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -542,17 +521,6 @@ struct ReminderTakeoverView: View {
     .environment(\.colorScheme, .dark)
   }
 
-  private func floatingContent(now: Date) -> some View {
-    VStack(spacing: 16) {
-      Text(reminder.emoji).font(.system(size: reminder.clamped().emojiSize)).lineLimit(1)
-      messageContent.frame(minHeight: 100, maxHeight: 260)
-      countdown(size: 36, now: now)
-      actions(now: now)
-    }
-    .padding(28)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-  }
-
   private func fullscreenReminderContent(spacious: Bool) -> some View {
     VStack(spacing: 20) {
       Text(reminder.emoji)
@@ -572,17 +540,6 @@ struct ReminderTakeoverView: View {
     .frame(maxWidth: 720)
   }
 
-  private var messageContent: some View {
-    ScrollView {
-      VStack(spacing: 10) {
-        Text(reminder.title).font(.system(size: 34, weight: .semibold))
-        Text(reminder.message).font(.system(size: 18)).foregroundStyle(.secondary)
-      }.multilineTextAlignment(.center).frame(maxWidth: .infinity)
-    }
-    .frame(maxWidth: 640)
-    .defaultScrollAnchor(.center, for: .alignment)
-  }
-
   private func countdown(size: CGFloat, now: Date) -> some View {
     Text(
       duration(
@@ -598,22 +555,6 @@ struct ReminderTakeoverView: View {
         TimeInterval(
           Self.remainingSeconds(
             reminder: reminder, shownAt: shownAt, now: now))))
-  }
-
-  private func actions(now: Date) -> some View {
-    let skipRemaining = max(0, Int(ceil(5 - now.timeIntervalSince(shownAt))))
-    return HStack(spacing: 14) {
-      Menu("Extend") {
-        ForEach([5, 10, 15], id: \.self) { minutes in
-          Button("\(minutes) minutes") { extend(TimeInterval(minutes * 60)) }
-        }
-      }
-      .buttonStyle(.bordered)
-      Button(skipRemaining > 0 ? "Skip in \(skipRemaining)s" : "Skip", action: skip)
-        .buttonStyle(.borderedProminent)
-        .disabled(skipRemaining > 0)
-    }
-    .font(.system(size: 14, weight: .semibold))
   }
 
   private func fullscreenActions(now: Date) -> some View {

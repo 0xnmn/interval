@@ -115,38 +115,28 @@ enum UserIdleMonitor {
       cursorDisplayLink = link
     case .reminder(_, let shownAt):
       playCueOnce(reminder.sound, reminderID: reminder.id, shownAt: shownAt)
-      if reminder.presentation == .fullscreen {
-        // Foreground apps cannot join another app's native fullscreen Space.
-        // Act as an overlay utility only for the takeover, then restore the Dock presence.
-        let policy = NSApp.activationPolicy()
-        if policy == .regular, NSApp.setActivationPolicy(.accessory) {
-          previousActivationPolicy = policy
-        }
+      // Foreground apps cannot join another app's native fullscreen Space.
+      // Act as an overlay utility only for the takeover, then restore the Dock presence.
+      let policy = NSApp.activationPolicy()
+      if policy == .regular, NSApp.setActivationPolicy(.accessory) {
+        previousActivationPolicy = policy
       }
       let cursor = cursorLocation()
       let cursorScreen =
         NSScreen.screens.first(where: { $0.frame.contains(cursor) }) ?? NSScreen.main
-      let screens =
-        reminder.presentation == .fullscreen ? NSScreen.screens : [cursorScreen].compactMap { $0 }
-      panels = screens.map { screen in
-        let rect =
-          reminder.presentation == .fullscreen
-          ? screen.frame
-          : Self.floatingFrame(
-            size: Self.floatingSize(for: reminder), in: screen.visibleFrame,
-            position: reminder.position)
+      panels = NSScreen.screens.map { screen in
+        let rect = screen.frame
         let panel = EscapePanel(
           contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered,
           defer: false)
         configure(panel)
-        let fullscreen = reminder.presentation == .fullscreen
-        panel.hasShadow = !fullscreen
+        panel.hasShadow = false
         panel.hidesOnDeactivate = false
         panel.isFloatingPanel = true
         // isFloatingPanel resets the level; apply the overlay level afterward.
-        panel.level = fullscreen ? .screenSaver : .floating
-        panel.isMovable = !fullscreen
-        panel.isMovableByWindowBackground = !fullscreen
+        panel.level = .screenSaver
+        panel.isMovable = false
+        panel.isMovableByWindowBackground = false
         panel.animationBehavior = .none
         panel.collectionBehavior = [
           .canJoinAllSpaces, .canJoinAllApplications, .fullScreenAuxiliary, .stationary,
@@ -161,19 +151,19 @@ enum UserIdleMonitor {
             shownAt: shownAt,
             skip: { store.dismissReminder(reminder.id) },
             extend: { store.snoozeReminder(reminder.id, seconds: $0) },
-            wallpaper: fullscreen ? wallpaperForScreen(screen) : nil))
-        if fullscreen { host.safeAreaRegions = [] }
+            wallpaper: wallpaperForScreen(screen)))
+        host.safeAreaRegions = []
         panel.contentView = host
         var shortcut = ReminderSkipShortcut()
         panel.onEscape = {
-          if fullscreen, let event = NSApp.currentEvent, event.type == .keyDown, event.isARepeat {
+          if let event = NSApp.currentEvent, event.type == .keyDown, event.isARepeat {
             return
           }
-          if !fullscreen || shortcut.press(at: Date(), shownAt: shownAt) {
+          if shortcut.press(at: Date(), shownAt: shownAt) {
             store.dismissReminder(reminder.id)
           }
         }
-        panel.sharingType = fullscreen ? .readOnly : .none
+        panel.sharingType = .readOnly
         IntervalMotion.reveal(panel)
         if screen == cursorScreen {
           panel.makeKeyAndOrderFront(nil)
@@ -235,35 +225,6 @@ enum UserIdleMonitor {
     if panel.frame.origin != origin {
       panel.setFrameOrigin(origin)
     }
-  }
-
-  static func floatingSize(for reminder: Reminder) -> NSSize {
-    NSSize(width: 480, height: max(320, reminder.clamped().emojiSize + 240))
-  }
-
-  static func floatingFrame(
-    size: NSSize, in visibleFrame: NSRect, position: ReminderPosition, margin: CGFloat = 24
-  ) -> NSRect {
-    let x: CGFloat
-    let y: CGFloat
-    switch position {
-    case .topLeft:
-      x = visibleFrame.minX + margin
-      y = visibleFrame.maxY - size.height - margin
-    case .topRight:
-      x = visibleFrame.maxX - size.width - margin
-      y = visibleFrame.maxY - size.height - margin
-    case .bottomLeft:
-      x = visibleFrame.minX + margin
-      y = visibleFrame.minY + margin
-    case .bottomRight:
-      x = visibleFrame.maxX - size.width - margin
-      y = visibleFrame.minY + margin
-    case .center:
-      x = visibleFrame.midX - size.width / 2
-      y = visibleFrame.midY - size.height / 2
-    }
-    return NSRect(origin: NSPoint(x: x, y: y), size: size)
   }
 
   private func playCueOnce(_ sound: ReminderSound, reminderID: UUID, shownAt: Date) {

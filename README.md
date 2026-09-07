@@ -28,8 +28,8 @@ The default build targets the build Mac's architecture. It is a local developmen
 - **Sound:** Silence, Brown Noise, Rain, or Ocean, generated locally with separate focus/break choices and volume.
 - **Calendar:** opt in under Settings → Calendar and choose calendars. Interval never creates, edits, or deletes events. macOS calls the required reading permission “Full Access.”
 - **Reminders:** use the + menu for a New Reminder or a template: Look Away (20 seconds / 10 minutes), Posture (10 seconds / 20 minutes), Stretch (60 seconds / 30 minutes), or Water (60 seconds / 60 minutes). Templates create normal editable reminders. The list stays visible beside the editor in the main window. Interval presets offer 10, 20, 30, and 60 minutes alongside custom adjustment; none are enabled without being added.
-- **Customize:** always-visible Content, Schedule, and Display sections configure the message, emoji and size, interval, trigger sound, presentation, and suppression during focus or selected calendar events. Floating reminders support five screen positions and can be dragged; their minimum duration is two seconds. Fullscreen reminders last at least five seconds. Preview does not alter the schedule.
-- **Considerate interruptions:** a cursor-adjacent warning counts down ten seconds of idle time. Typing, moving, dragging, and scrolling pause it. Fullscreen reminders show a large live remaining-time counter below the instruction, with actions at the bottom. Extend the current occurrence by 5, 10, or 15 minutes through the menu bar or reminder controls. Skip (including Escape) becomes available after five seconds; short floating reminders finish naturally. The warning itself is click-through.
+- **Customize:** always-visible Content, Schedule, and Display sections configure the message, emoji and size, interval, trigger sound, and suppression during focus or selected calendar events. All reminders are full-screen and last at least five seconds. Previously saved floating reminders migrate automatically. Preview does not alter the schedule.
+- **Considerate interruptions:** a cursor-adjacent warning counts down ten seconds of idle time. Typing, moving, dragging, and scrolling pause it. Fullscreen reminders show a large live remaining-time counter below the instruction, with actions at the bottom. Extend the current occurrence by 5, 10, or 15 minutes through the menu bar or reminder controls. Skip (including Escape) becomes available after five seconds. The warning itself is click-through.
 - **Settings:** a native sidebar groups Timer, Sound, Calendar, General, and Updates; use arrow keys when the sidebar is focused. Includes launch at login, notification permission, local JSON export, and update preferences. Automatic checks/downloads require a configured signed distribution; local builds explain why updates are unavailable.
 
 ### Deliberate behavior
@@ -40,7 +40,7 @@ The default build targets the build Mac's architecture. It is a local developmen
 - Settings changes affect the next timer, not a running timer.
 - Calendar suppression covers overlapping selected-calendar events, including all-day events, except canceled/declined events. Denied/disabled Calendar access cannot provide suppression.
 - Missed reminders are skipped while the session is unavailable and on relaunch; there is no replay of every missed recurrence. Visible reminders are serialized. Postponement affects only the current occurrence, not the saved interval.
-- Full-screen reminders use edge-to-edge, nonactivating overlays on every display, including above other apps’ fullscreen Spaces. They cover the menu bar and Dock; Escape skips after five seconds, and they do not lock the system. Interval temporarily acts as a menu-bar utility during a fullscreen reminder, restoring its normal Dock presence afterward. Floating reminders have no outer backdrop.
+- Full-screen reminders use edge-to-edge, nonactivating overlays on every display, including above other apps’ fullscreen Spaces. They cover the menu bar and Dock; Escape skips after five seconds, and they do not lock the system. Interval temporarily acts as a menu-bar utility during a fullscreen reminder, restoring its normal Dock presence afterward.
 
 ## Keyboard and accessibility
 
@@ -75,6 +75,6 @@ See [implementation decisions and review record](docs/IMPLEMENTATION.md) and [ve
   --snapshot .build/focus.png --snapshot-scene focus
 ```
 
-Other scenes include `dashboard-running`, `dashboard-break`, `time-options`, `time-options-minus`, `reflection`, `history`, `history-disabled`, `history-no-selection`, `reminders`, `reminder-editor-expanded`, `reminder-countdown-paused`, `reminder-floating`, `reminder-fullscreen`, `menu`, `settings`, `sound-settings`, `calendar-settings`, `general-settings`, and `updates-settings`.
+Other scenes include `dashboard-running`, `dashboard-break`, `time-options`, `time-options-minus`, `reflection`, `history`, `history-disabled`, `history-no-selection`, `reminders`, `reminder-editor-expanded`, `reminder-countdown-paused`, `reminder-fullscreen`, `menu`, `settings`, `sound-settings`, `calendar-settings`, `general-settings`, and `updates-settings`.
 
 Fixtures use ephemeral local data, no permission prompts, and no active updater/timer/reminder services. They render the actual native views. AppKit off-screen caching does not fully capture every composited sidebar/glass layer; these captures are not a replacement for testing on-screen multi-display behavior.

@@ -116,9 +116,10 @@ struct SettingsReminderUITests {
     store.data.activeTimer = nil
     store.data.reminders[0].dueAt = reminder.dueAt?.addingTimeInterval(123)
     store.checkpointForInactivity(at: Date())
-    #expect(
-      try JSONStore(fileURL: store.storageURL).load().reminders[0].dueAt
-        == store.data.reminders[0].dueAt)
+    let restored = try #require(JSONStore(fileURL: store.storageURL).load().reminders[0].dueAt)
+    let expected = try #require(store.data.reminders[0].dueAt)
+    // JSON epoch conversion can lose sub-microsecond Date precision.
+    #expect(abs(restored.timeIntervalSince(expected)) < 0.000001)
   }
 
   private func makeStore(reminders: [Reminder] = []) throws -> AppStore {

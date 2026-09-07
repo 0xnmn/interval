@@ -109,64 +109,14 @@ struct ReminderOverlayTests {
     #expect(rebuilt.allSatisfy { !$0.isVisible })
   }
 
-  @Test func floatingReminderUsesCursorDisplayAndCloseRemovesItsPanel() throws {
-    _ = NSApplication.shared
-    let screen = try #require(NSScreen.screens.last)
-    let cursor = NSPoint(x: screen.frame.midX, y: screen.frame.midY)
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let store = AppStore(
-      persistence: JSONStore(fileURL: directory.appendingPathComponent("data.json")),
-      runtimeEnabled: false)
-    let reminder = Reminder(title: "Look away", presentation: .floating)
-    let existing = Set(NSApp.windows.map(\.windowNumber))
-    let controller = ReminderOverlayController(cursorLocation: { cursor })
-    controller.update(
-      .reminder(reminderID: reminder.id, shownAt: Date()), reminder: reminder, store: store)
-    let panel = try #require(
-      NSApp.windows.first { !existing.contains($0.windowNumber) } as? NSPanel)
-    let expected = ReminderOverlayController.floatingFrame(
-      size: ReminderOverlayController.floatingSize(for: reminder), in: screen.visibleFrame,
-      position: .center)
-
-    #expect(panel.frame == expected)
-    #expect(panel.level == .floating)
-    #expect(panel.styleMask == [.borderless, .nonactivatingPanel])
-    #expect(!panel.styleMask.contains(.fullScreen))
-    #expect(panel.hasShadow)
-    #expect(panel.isMovable)
-    #expect(panel.isMovableByWindowBackground)
-    controller.close()
-    #expect(!panel.isVisible)
-  }
-
-  @Test(arguments: ReminderPosition.allCases)
-  func floatingGeometryUsesVisibleFrameAndSelectedPosition(position: ReminderPosition) {
-    let visible = NSRect(x: -1440, y: 25, width: 1400, height: 875)
-    let size = NSSize(width: 480, height: 300)
-    let frame = ReminderOverlayController.floatingFrame(
-      size: size, in: visible, position: position)
-    let expectedOrigins: [ReminderPosition: NSPoint] = [
-      .topLeft: NSPoint(x: -1416, y: 576),
-      .topRight: NSPoint(x: -544, y: 576),
-      .bottomLeft: NSPoint(x: -1416, y: 49),
-      .bottomRight: NSPoint(x: -544, y: 49),
-      .center: NSPoint(x: -980, y: 312.5),
-    ]
-    #expect(frame == NSRect(origin: expectedOrigins[position]!, size: size))
-  }
-
-  @Test(arguments: [ReminderPresentation.floating, .fullscreen])
-  func escapeDismissesPreviewWithoutChangingReminderSchedule(presentation: ReminderPresentation)
-    throws
-  {
+  @Test func fullscreenEscapeDismissesPreviewWithoutChangingReminderSchedule() throws {
     _ = NSApplication.shared
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
     let store = AppStore(
       persistence: JSONStore(fileURL: directory.appendingPathComponent("data.json")),
       runtimeEnabled: false)
-    var reminder = Reminder(title: "Look away", presentation: presentation)
+    var reminder = Reminder(title: "Look away", presentation: .fullscreen)
     reminder.dueAt = Date(timeIntervalSince1970: 12_345)
     store.data.reminders = [reminder]
     let before = store.data.reminders
