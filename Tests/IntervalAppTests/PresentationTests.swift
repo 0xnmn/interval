@@ -129,6 +129,50 @@ import Testing
     #expect(NSApplication.shared.appearance == nil)
   }
 
+  @Test func notchMenuAndPopupGlassFollowLiveAppearanceChanges() async throws {
+    let original = NSApplication.shared.appearance
+    defer { NSApplication.shared.appearance = original }
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = AppStore(
+      persistence: JSONStore(fileURL: directory.appendingPathComponent("state.json")),
+      runtimeEnabled: false)
+    let views = [
+      AnyView(NotchRootView(store: store, expanded: true, geometry: .fallback, collapse: {})),
+      AnyView(NotchRootView(store: store, expanded: false, geometry: .fallback, collapse: {})),
+      AnyView(MenuBarView(store: store)),
+      AnyView(SessionCompletionToast(later: {}, reflect: {})),
+    ]
+    let panels = views.map { view in
+      let panel = NSPanel(
+        contentRect: NSRect(x: 100, y: 100, width: 600, height: 480),
+        styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+      panel.isReleasedWhenClosed = false
+      panel.contentView = NSHostingView(rootView: view)
+      panel.orderFrontRegardless()
+      return panel
+    }
+    defer { panels.forEach { $0.close() } }
+    func glassViews(in view: NSView) -> [NSVisualEffectView] {
+      let own = (view as? NSVisualEffectView).map { [$0] } ?? []
+      return own + view.subviews.flatMap { glassViews(in: $0) }
+    }
+    for appearance in [AppAppearance.light, .dark, .system] {
+      appearance.apply()
+      try await Task.sleep(for: .milliseconds(150))
+      let expected = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua])
+      for panel in panels {
+        let content = try #require(panel.contentView)
+        let glass = glassViews(in: content).filter { $0.material == .hudWindow }
+        #expect(!glass.isEmpty)
+        #expect(panel.appearance == nil)
+        for surface in glass {
+          #expect(surface.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == expected)
+        }
+      }
+    }
+  }
+
   @Test func nativeAppearanceAndSurfaceAdapt() {
     #expect(AppAppearance.system.nativeAppearance == nil)
     #expect(AppAppearance.light.nativeAppearance?.name == .aqua)

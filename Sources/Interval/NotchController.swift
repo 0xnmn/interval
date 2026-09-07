@@ -278,7 +278,7 @@ struct NotchRootView: View {
   var body: some View {
     if expanded {
       VStack(spacing: 0) {
-        Color.black.frame(height: geometry.topInset)
+        Color.clear.frame(height: geometry.topInset)
         VStack(spacing: 8) {
           HStack {
             Image(systemName: store.timer.kind == .focus ? "timer" : "cup.and.saucer")
@@ -297,9 +297,9 @@ struct NotchRootView: View {
               } label: {
                 Image(systemName: ["timer", "checklist", "bell"][index])
                   .font(IntervalTheme.icon).frame(width: 32, height: 32)
-                  .foregroundStyle(page == index ? .white : .gray)
+                  .foregroundStyle(page == index ? .primary : .secondary)
                   .background(
-                    page == index ? Color.white.opacity(0.12) : .clear,
+                    page == index ? Color.primary.opacity(0.12) : .clear,
                     in: RoundedRectangle(cornerRadius: 7))
               }.buttonStyle(.plain).help(["Timer", "To-dos", "Reminders"][index])
                 .accessibilityLabel(["Timer", "To-dos", "Reminders"][index])
@@ -327,8 +327,7 @@ struct NotchRootView: View {
             height: store.completionSessionID != nil
               ? NotchGeometry.reflectionHeight : NotchGeometry.expandedSize.height)
       }
-      .background(.black)
-      .environment(\.colorScheme, .dark)
+      .background(GlassBackground())
       .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 24, bottomTrailingRadius: 24))
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
       .onChange(of: store.breakEnded) { _, ended in
@@ -349,20 +348,18 @@ struct NotchRootView: View {
         Text(store.completionSessionID == nil ? store.timerText : "Reflect")
           .font(.system(size: 13, weight: .medium)).monospacedDigit()
           .lineLimit(1).minimumScaleFactor(0.65)
-          .foregroundStyle(.white.opacity(0.9)).frame(width: 88)
+          .foregroundStyle(.primary.opacity(0.9)).frame(width: 88)
       } else {
         Text(store.completionSessionID == nil ? store.timerText : "Reflect")
           .font(.system(size: 12, weight: .semibold)).monospacedDigit()
           .lineLimit(1).minimumScaleFactor(0.65)
           .padding(.horizontal, 18).frame(maxWidth: .infinity, maxHeight: .infinity)
-          .foregroundStyle(.white)
+          .foregroundStyle(.primary)
       }
     }
     .frame(width: geometry.compactSize.width, height: geometry.compactSize.height)
-    .background(
-      Color.black,
-      in: UnevenRoundedRectangle(bottomLeadingRadius: 10, bottomTrailingRadius: 10)
-    )
+    .background(GlassBackground())
+    .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 10, bottomTrailingRadius: 10))
     .contentShape(Rectangle())
     .accessibilityLabel(
       "\(store.breakEnded ? "Break ended" : store.timer.kind.title), \(spokenDuration(store.displayedTime)) \(store.breakEnded ? "overtime" : "remaining"). Click or hover to expand."
