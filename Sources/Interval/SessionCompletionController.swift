@@ -269,7 +269,7 @@ struct AlmostTimeToast: View {
           Text(suggestedBreakText).font(IntervalTheme.body).foregroundStyle(.secondary)
         }
         Spacer()
-      }
+      }.intervalEntrance(delay: 0.08)
       HStack(spacing: 8) {
         Button(action: startBreak) {
           Label("Start break now", systemImage: "cup.and.saucer")
@@ -279,7 +279,7 @@ struct AlmostTimeToast: View {
             .buttonStyle(CompletionPillButtonStyle(prominent: false))
             .disabled(store.timer.duration + TimeInterval(minutes * 60) > 3_600)
         }
-      }
+      }.intervalEntrance(delay: 0.16)
     }
     .padding(18)
     .frame(
@@ -315,9 +315,10 @@ struct SessionCompletionToast: View {
           Spacer()
           Button("Later", action: later).buttonStyle(CompletionPillButtonStyle(prominent: false))
           Button("Reflect", action: reflect).buttonStyle(CompletionPillButtonStyle(prominent: true))
-        }.padding(.top, 8)
+        }.padding(.top, 8).intervalEntrance(delay: 0.16)
       }
     }
+    .intervalEntrance(delay: 0.08)
     .padding(18)
     .frame(
       width: SessionCompletionController.toastSize.width,

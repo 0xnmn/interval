@@ -17,6 +17,7 @@ enum IntervalTheme {
 
 enum IntervalMotion {
   static let selection = Animation.easeInOut(duration: 0.16)
+  static let entrance = Animation.easeOut(duration: 0.28)
 
   // Only fade on entry. Dismissal stays immediate so an invisible overlay can never block work.
   @MainActor static func reveal(_ window: NSWindow, reduceMotion: Bool? = nil) {
@@ -30,6 +31,49 @@ enum IntervalMotion {
       context.duration = 0.24
       window.animator().alphaValue = 1
     }
+  }
+}
+
+/// One-shot, compositor-only motion. State survives countdown updates, and SwiftUI
+/// cancels the delay if the surface closes before its entrance has begun.
+private struct IntervalEntrance: ViewModifier {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.intervalMotionDisabled) private var motionDisabled
+  @State private var revealed = false
+  let delay: TimeInterval
+  let enabled: Bool
+
+  private var visible: Bool { revealed || reduceMotion || motionDisabled || !enabled }
+
+  func body(content: Content) -> some View {
+    content
+      .opacity(visible ? 1 : 0)
+      .offset(y: visible ? 0 : 6)
+      .disabled(!visible)
+      .allowsHitTesting(visible)
+      .accessibilityHidden(!visible)
+      .task(id: reduceMotion || motionDisabled) {
+        guard !visible else {
+          revealed = true
+          return
+        }
+        do {
+          try await Task.sleep(for: .seconds(delay))
+          try Task.checkCancellation()
+          withAnimation(IntervalMotion.entrance) { revealed = true }
+        } catch { /* Closing a surface cancels its pending entrance. */  }
+      }
+  }
+}
+
+extension EnvironmentValues {
+  // Also supports deterministic reduced-motion captures without changing macOS preferences.
+  @Entry var intervalMotionDisabled = false
+}
+
+extension View {
+  func intervalEntrance(delay: TimeInterval = 0, enabled: Bool = true) -> some View {
+    modifier(IntervalEntrance(delay: delay, enabled: enabled))
   }
 }
 

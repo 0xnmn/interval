@@ -129,6 +129,7 @@ struct RemindersView: View {
       }
       .padding(.horizontal, 18).padding(.vertical, 8)
       ReminderEditor(reminder: reminder, store: store)
+        .intervalEntrance()
         .id(reminder.id)
     }
   }
@@ -443,17 +444,16 @@ struct ReminderTakeoverView: View {
   let skip: () -> Void
   let extend: (TimeInterval) -> Void
   var wallpaper: NSImage? = nil
+  var animatesEntrance = true
 
   static func remainingSeconds(reminder: Reminder, shownAt: Date, now: Date) -> Int {
     max(0, Int(ceil(reminder.displaySeconds - now.timeIntervalSince(shownAt))))
   }
 
   var body: some View {
-    TimelineView(.periodic(from: .now, by: 1)) { context in
-      ZStack {
-        fullscreenBackground
-        fullscreenContent(now: context.date)
-      }
+    ZStack {
+      fullscreenBackground
+      fullscreenContent
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
@@ -489,30 +489,37 @@ struct ReminderTakeoverView: View {
     .ignoresSafeArea()
   }
 
-  private func fullscreenContent(now: Date) -> some View {
+  private var fullscreenContent: some View {
     GeometryReader { geometry in
       let spacious = geometry.size.height >= 900
       VStack(spacing: 24) {
-        Label(now.formatted(date: .omitted, time: .shortened), systemImage: "clock")
-          .font(.system(size: 17, weight: .medium))
-          .foregroundStyle(.white).monospacedDigit()
+        TimelineView(
+          .periodic(
+            from: Calendar.current.dateInterval(of: .minute, for: Date())?.start ?? Date(), by: 60)
+        ) { context in
+          Label(context.date.formatted(date: .omitted, time: .shortened), systemImage: "clock")
+            .font(.system(size: 17, weight: .medium))
+            .foregroundStyle(.white).monospacedDigit()
+        }.intervalEntrance(delay: 0.30, enabled: animatesEntrance)
 
         ViewThatFits(in: .vertical) {
           VStack(spacing: 28) {
             fullscreenReminderContent(spacious: spacious)
-            countdown(size: spacious ? 80 : 64, now: now)
+            liveCountdown(size: spacious ? 80 : 64)
           }.fixedSize(horizontal: false, vertical: true)
           VStack(spacing: 28) {
             ScrollView {
               fullscreenReminderContent(spacious: spacious).frame(maxWidth: .infinity)
             }.defaultScrollAnchor(.center, for: .alignment)
-            countdown(size: spacious ? 80 : 64, now: now)
+            liveCountdown(size: spacious ? 80 : 64)
           }
         }
         .foregroundStyle(.white)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-        fullscreenActions(now: now)
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+          fullscreenActions(now: context.date)
+        }.intervalEntrance(delay: 0.42, enabled: animatesEntrance)
       }
       .padding(.horizontal, 32)
       .padding(.top, spacious ? 64 : 40)
@@ -538,6 +545,13 @@ struct ReminderTakeoverView: View {
     .foregroundStyle(.white)
     .multilineTextAlignment(.center)
     .frame(maxWidth: 720)
+    .intervalEntrance(delay: 0.18, enabled: animatesEntrance)
+  }
+
+  private func liveCountdown(size: CGFloat) -> some View {
+    TimelineView(.periodic(from: .now, by: 1)) { context in
+      countdown(size: size, now: context.date)
+    }.intervalEntrance(delay: 0.30, enabled: animatesEntrance)
   }
 
   private func countdown(size: CGFloat, now: Date) -> some View {

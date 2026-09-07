@@ -81,6 +81,7 @@ struct ReminderOverlayTests {
       let panel = try #require(panels.first { $0.frame == screen.frame })
       let host = try #require(panel.contentView as? NSHostingView<ReminderTakeoverView>)
       #expect(host.rootView.wallpaper === wallpapers[screens.firstIndex(of: screen)!])
+      #expect(host.rootView.animatesEntrance)
       #expect(host.safeAreaRegions.isEmpty)
       #expect(panel.level == .screenSaver)
       #expect(panel.styleMask == [.borderless, .nonactivatingPanel])
@@ -103,6 +104,11 @@ struct ReminderOverlayTests {
     let rebuilt = NSApp.windows.filter { $0.isVisible && $0.level == .screenSaver }
     #expect(rebuilt.count == screens.count)
     #expect(screens.allSatisfy { screen in rebuilt.contains { $0.frame == screen.frame } })
+    for panel in rebuilt {
+      let host = try #require(panel.contentView as? NSHostingView<ReminderTakeoverView>)
+      #expect(!host.rootView.animatesEntrance)
+      #expect(panel.alphaValue == 1)
+    }
     #expect(NSApp.activationPolicy() == .accessory)
     controller.close()
     #expect(NSApp.activationPolicy() == .regular)

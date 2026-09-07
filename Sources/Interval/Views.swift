@@ -61,7 +61,8 @@ struct MainView: View {
             case .reminders: RemindersView(store: store)
             }
           }.frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
-            .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.selection)
+            .intervalEntrance()
+            .id(store.selection ?? .focus)
             .animation(
               reduceMotion ? nil : IntervalMotion.selection, value: store.completionSessionID)
           if store.selection == .history || store.selection == .reminders {
@@ -524,6 +525,7 @@ struct ReflectionView: View {
       Spacer(minLength: 0)
       Text("How did that session feel?").font(.title2.weight(.semibold))
         .multilineTextAlignment(.center)
+        .intervalEntrance()
       HStack(spacing: 8) {
         ForEach(SessionFeedback.allCases, id: \.self) { value in
           let selected = feedback.wrappedValue == value
@@ -548,12 +550,14 @@ struct ReflectionView: View {
           .accessibilityAddTraits(feedback.wrappedValue == value ? .isSelected : [])
           .animation(reduceMotion ? nil : IntervalMotion.selection, value: feedback.wrappedValue)
         }
-      }
+      }.intervalEntrance(delay: 0.08)
       WritingArea(text: journal, placeholder: "Add a thought…", label: "Journal")
         .frame(height: 112)
+        .intervalEntrance(delay: 0.14)
       Button("Continue") { store.continueAfterReflection() }
         .buttonStyle(IntervalPrimaryButton()).keyboardShortcut(.return, modifiers: .command)
         .help("Continue · ⌘Return")
+        .intervalEntrance(delay: 0.20)
       Spacer(minLength: 0)
     }
   }
@@ -665,6 +669,7 @@ struct MenuBarView: View {
           } else {
             FocusControls(store: store, compact: true)
               .frame(width: 300).frame(maxHeight: .infinity)
+              .intervalEntrance()
           }
           Rectangle().fill(IntervalTheme.border).frame(width: 1).padding(.vertical, 18)
           ScrollView {
@@ -675,6 +680,7 @@ struct MenuBarView: View {
               UpcomingReminders(store: store)
             }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
           }.frame(width: 299).frame(maxHeight: .infinity)
+            .intervalEntrance(delay: 0.08)
         }
         if showsAppActions {
           Rectangle().fill(IntervalTheme.border).frame(height: 1)

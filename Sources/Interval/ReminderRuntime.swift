@@ -124,7 +124,9 @@ enum UserIdleMonitor {
       let cursor = cursorLocation()
       let cursorScreen =
         NSScreen.screens.first(where: { $0.frame.contains(cursor) }) ?? NSScreen.main
-      panels = NSScreen.screens.map { screen in
+      // Finish wallpaper processing before any panel starts its entrance.
+      let backgrounds = NSScreen.screens.map { ($0, wallpaperForScreen($0)) }
+      panels = backgrounds.map { screen, wallpaper in
         let rect = screen.frame
         let panel = EscapePanel(
           contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered,
@@ -151,7 +153,7 @@ enum UserIdleMonitor {
             shownAt: shownAt,
             skip: { store.dismissReminder(reminder.id) },
             extend: { store.snoozeReminder(reminder.id, seconds: $0) },
-            wallpaper: wallpaperForScreen(screen)))
+            wallpaper: wallpaper, animatesEntrance: !preservesCue))
         host.safeAreaRegions = []
         panel.contentView = host
         var shortcut = ReminderSkipShortcut()
@@ -164,7 +166,8 @@ enum UserIdleMonitor {
           }
         }
         panel.sharingType = .readOnly
-        IntervalMotion.reveal(panel)
+        // A display configuration change rebuilds the same occurrence, not a new entrance.
+        if !preservesCue { IntervalMotion.reveal(panel) }
         if screen == cursorScreen {
           panel.makeKeyAndOrderFront(nil)
         } else {

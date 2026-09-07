@@ -8,6 +8,35 @@ import Testing
 
 @MainActor @Suite("Motion and sound", .serialized)
 struct MotionSoundTests {
+  @Test(arguments: [false, true])
+  func stagedControlsWaitOnceAndReducedMotionBypassesDelay(reduced: Bool) async throws {
+    _ = NSApplication.shared
+    var enabledStates: [Bool] = []
+    let content = AnyView(
+      EntranceControlProbe { enabledStates.append($0) }
+        .frame(width: 200, height: 80)
+        .intervalEntrance(delay: 0.35)
+        .environment(\.intervalMotionDisabled, reduced))
+    let host = NSHostingView(rootView: content)
+    let panel = NSPanel(
+      contentRect: NSRect(x: 100, y: 100, width: 200, height: 80),
+      styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+    panel.isReleasedWhenClosed = false
+    defer { panel.close() }
+    panel.contentView = host
+    panel.orderFrontRegardless()
+    try await Task.sleep(for: .milliseconds(80))
+    #expect(
+      enabledStates.last == (reduced || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
+    try await Task.sleep(for: .milliseconds(700))
+    #expect(enabledStates.last == true)
+    enabledStates.removeAll()
+    // Root updates such as timer ticks must not restart the entrance or disable controls.
+    host.rootView = content
+    try await Task.sleep(for: .milliseconds(80))
+    #expect(!enabledStates.contains(false))
+  }
+
   @Test func panelEntranceSettlesAndReducedMotionIsImmediate() async throws {
     _ = NSApplication.shared
     let panel = NSPanel(
@@ -118,4 +147,11 @@ struct MotionSoundTests {
     #expect(NotificationService.completionTitle(for: .shortBreak) == "Ready to focus?")
     #expect(NotificationService.completionTitle(for: .longBreak) == "Ready to focus?")
   }
+}
+
+private struct EntranceControlProbe: NSViewRepresentable {
+  @Environment(\.isEnabled) private var isEnabled
+  let record: (Bool) -> Void
+  func makeNSView(context: Context) -> NSView { NSView() }
+  func updateNSView(_ view: NSView, context: Context) { record(isEnabled) }
 }

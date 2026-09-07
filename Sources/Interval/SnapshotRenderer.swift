@@ -7,12 +7,16 @@ struct SnapshotRequest {
   let scene: String
   let composited: Bool
   let appearance: AppAppearance
+  let motion: Bool
+  let reduceMotion: Bool
 
   init?(arguments: [String]) {
     guard let index = arguments.firstIndex(of: "--snapshot"), arguments.indices.contains(index + 1)
     else { return nil }
     path = arguments[index + 1]
     composited = arguments.contains("--snapshot-composited")
+    motion = arguments.contains("--snapshot-motion")
+    reduceMotion = arguments.contains("--snapshot-reduce-motion")
     if let appearanceIndex = arguments.firstIndex(of: "--snapshot-appearance"),
       arguments.indices.contains(appearanceIndex + 1)
     {
@@ -400,6 +404,7 @@ struct SnapshotRequest {
     let hostingView = NSHostingView(
       rootView:
         view
+        .environment(\.intervalMotionDisabled, request.reduceMotion || accessibilityFixture)
         .transaction { transaction in
           if accessibilityFixture { transaction.disablesAnimations = true }
         }
@@ -413,10 +418,39 @@ struct SnapshotRequest {
     window.backgroundColor = request.composited ? .clear : NSColor(IntervalTheme.surface)
     window.isOpaque = !request.composited
     window.hasShadow = false
-    window.contentView = hostingView
+    if request.motion {
+      let stagingView = NSView(frame: hostingView.frame)
+      stagingView.wantsLayer = true
+      stagingView.layer?.backgroundColor = NSColor.black.cgColor
+      window.contentView = stagingView
+    } else {
+      window.contentView = hostingView
+    }
     NSApp.activate(ignoringOtherApps: true)
     window.makeKeyAndOrderFront(nil)
-    try await Task.sleep(for: .milliseconds(350))
+    if request.motion {
+      defer { window.close() }
+      try FileManager.default.createDirectory(
+        at: URL(fileURLWithPath: request.path).deletingLastPathComponent(),
+        withIntermediateDirectories: true)
+      let capture = Process()
+      capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+      capture.arguments = ["-x", "-v", "-V", "3", "-l", String(window.windowNumber), request.path]
+      try capture.run()
+      defer { if capture.isRunning { capture.terminate() } }
+      // Allow recording to start before mounting the content and starting its entrance.
+      try await Task.sleep(for: .milliseconds(600))
+      window.contentView = hostingView
+      IntervalMotion.reveal(window, reduceMotion: request.reduceMotion)
+      let timeout = Date().addingTimeInterval(10)
+      while capture.isRunning {
+        guard Date() < timeout else { throw CocoaError(.fileWriteUnknown) }
+        try await Task.sleep(for: .milliseconds(100))
+      }
+      guard capture.terminationStatus == 0 else { throw CocoaError(.fileWriteUnknown) }
+      return
+    }
+    try await Task.sleep(for: .milliseconds(800))
     hostingView.layoutSubtreeIfNeeded()
     if request.scene == "dashboard-todo-focused",
       let field = descendants(of: hostingView).compactMap({ $0 as? NSTextField }).first(where: {

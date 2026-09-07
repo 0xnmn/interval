@@ -20,7 +20,6 @@ struct SettingsView: View {
   ]
 
   @Bindable var store: AppStore
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
   @State private var selectedTab: Int
   @State private var loginEnabled = SMAppService.mainApp.status == .enabled
@@ -66,7 +65,8 @@ struct SettingsView: View {
           selectedContent
             .font(.system(size: 14))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(reduceMotion ? nil : IntervalMotion.selection, value: selectedTab)
+            .intervalEntrance()
+            .id(selectedTab)
         }
         .padding(20)
       }
