@@ -293,15 +293,20 @@ struct SnapshotRequest {
         RemindersView(
           store: store, selection: store.data.reminders[0].id,
           advanced: request.scene != "reminder-editor"))
-    case "reminder-countdown", "reminder-countdown-paused", "reminder-countdown-light":
+    case "reminder-countdown", "reminder-countdown-paused", "reminder-countdown-light",
+      "reminder-countdown-microphone":
       let reminder = store.data.reminders[0]
       size = NSSize(width: 250, height: 64)
+      store.audioInputActivity.update(
+        isActive: request.scene == "reminder-countdown-microphone", at: Date())
       view = AnyView(
         ReminderWarningView(
           reminder: reminder,
           overlay: .warning(
             reminderID: reminder.id, remaining: 7,
-            isPaused: request.scene == "reminder-countdown-paused")))
+            isPaused: request.scene == "reminder-countdown-paused"
+              || store.audioInputActivity.isActive),
+          audioInputActivity: store.audioInputActivity))
     case "reminder-max-emoji":
       size = NSSize(width: 900, height: 650)
       view = AnyView(

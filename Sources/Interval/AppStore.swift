@@ -27,6 +27,7 @@ final class AppStore {
   let notifications: NotificationService
   let calendarService: CalendarService
   let updates: UpdateService
+  let audioInputActivity = AudioInputActivity()
   private let audio = AmbientAudio()
   private let persistence: JSONStore
   private var persistenceLocked = false
@@ -92,6 +93,7 @@ final class AppStore {
     }
     reconcile(at: now, autoStart: false)
     guard runtimeEnabled else { return }
+    audioInputActivity.start()
     data.settings.appearance.apply()
     updates.shouldDeferInstall = { [weak self] in
       guard let self else { return false }
@@ -665,7 +667,7 @@ final class AppStore {
     let focusBusy =
       data.activeTimer.map { $0.kind == .focus && $0.status == .running }
       ?? false
-    let idleSeconds = UserIdleMonitor.idleSeconds
+    let idleSeconds = audioInputActivity.effectiveIdleSeconds(UserIdleMonitor.idleSeconds, at: date)
     let environment = ReminderEnvironment(
       isSessionActive: sessionIsActive, isUserIdle: idleSeconds >= 1,
       focusIsRunningOrPaused: focusBusy, calendarHasEvent: calendarService.hasEvent(at: date),

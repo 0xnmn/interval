@@ -75,7 +75,8 @@ enum UserIdleMonitor {
       if reminder != shownReminder || ceil(remaining) != ceil(previousRemaining)
         || paused != previousPaused
       {
-        warningHost?.rootView = ReminderWarningView(reminder: reminder, overlay: overlay)
+        warningHost?.rootView = ReminderWarningView(
+          reminder: reminder, overlay: overlay, audioInputActivity: store.audioInputActivity)
       }
       shown = overlay
       shownReminder = reminder
@@ -101,7 +102,8 @@ enum UserIdleMonitor {
       panel.hasShadow = false
       panel.level = .floating
       let host = NSHostingView(
-        rootView: ReminderWarningView(reminder: reminder, overlay: overlay))
+        rootView: ReminderWarningView(
+          reminder: reminder, overlay: overlay, audioInputActivity: store.audioInputActivity))
       warningHost = host
       panel.contentView = host
       panel.ignoresMouseEvents = true

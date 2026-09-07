@@ -397,6 +397,7 @@ private struct ReminderEditor: View {
 struct ReminderWarningView: View {
   let reminder: Reminder
   let overlay: ReminderOverlay
+  var audioInputActivity: AudioInputActivity? = nil
   private var warning: (remaining: Int, paused: Bool) {
     if case .warning(_, let value, let paused) = overlay { return (Int(ceil(value)), paused) }
     return (0, false)
@@ -423,7 +424,8 @@ struct ReminderWarningView: View {
     .accessibilityLabel("\(reminder.title). \(warningStatus)")
   }
 
-  private var warningStatus: String {
+  var warningStatus: String {
+    if audioInputActivity?.isActive == true { return "Microphone in use" }
     if warning.paused { return keyboardRecentlyActive ? "Typing" : "Waiting" }
     return "In \(warning.remaining)s"
   }
