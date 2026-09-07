@@ -35,6 +35,13 @@ struct FocusControls: View {
               .font(.system(size: 36, weight: .regular)).monospacedDigit()
               .lineLimit(1).minimumScaleFactor(0.65)
               .frame(maxWidth: isNotch ? .infinity : nil)
+              .accessibilityLabel(
+                store.breakEnded ? "Time beyond scheduled break" : "Time remaining"
+              )
+              .accessibilityValue(spokenDuration(store.displayedTime))
+              .help(
+                store.breakEnded
+                  ? "Extra break time. Resume focus when you’re ready." : "Time remaining")
             if isNotch && !store.breakEnded { adjustmentButton(direction: 1) }
           }
           if !store.breakEnded && !isNotch { timeControls }
@@ -59,26 +66,29 @@ struct FocusControls: View {
         Button(action: store.startSession) {
           Text("Start session")
             .font(IntervalTheme.heading).frame(maxWidth: .infinity).padding(.vertical, 9)
-        }.buttonStyle(.borderedProminent).tint(accent).controlSize(.large)
-          .clipShape(Capsule()).padding(.horizontal, isNotch ? 0 : 24).padding(
+        }.buttonStyle(IntervalPrimaryButton())
+          .help(
+            "Start focusing. A break starts automatically when focus ends; reflection is optional. · ⌘⇧S"
+          )
+          .padding(.horizontal, isNotch ? 0 : 24).padding(
             .bottom, isNotch ? 0 : 20)
       } else if store.timer.status == .ready {
         Button(action: store.startSession) {
-          Label("Start break", systemImage: "cup.and.saucer")
-        }.buttonStyle(IntervalIconButton()).help("Start break")
+          Text("Start break")
+        }.buttonStyle(IntervalPrimaryButton()).help("Start break · ⌘⇧S")
       }
     }
     .alert("Start a break now?", isPresented: $confirmingBreak) {
-      Button("Keep Focusing", role: .cancel) {}
-      Button("Start Break") { store.startBreakNow() }
+      Button("Keep focusing", role: .cancel) {}
+      Button("Start break") { store.startBreakNow() }
     } message: {
       Text("This unfinished focus session will be saved as abandoned. Your focus time is kept.")
     }
-    .alert("Abandon this interval?", isPresented: $confirmingAbandon) {
-      Button("Keep Going", role: .cancel) {}
+    .alert(store.abandonTitle, isPresented: $confirmingAbandon) {
+      Button("Keep going", role: .cancel) {}
       Button("Abandon", role: .destructive, action: store.abandon)
     } message: {
-      Text("Elapsed active time will be kept in Stats.")
+      Text("Elapsed time will remain in Stats.")
     }
   }
 
@@ -90,20 +100,22 @@ struct FocusControls: View {
         } label: {
           Label("Take a break", systemImage: "cup.and.saucer")
         }.buttonStyle(IntervalIconButton()).help("Start a break now")
-          .foregroundStyle(store.data.settings.breakColor.color)
+          .foregroundStyle(store.data.settings.breakColor.foregroundColor)
       } else if active || store.breakEnded {
         Button {
           store.endBreak()
         } label: {
           Text("Resume focus")
         }.buttonStyle(IntervalPrimaryButton()).help("Resume focus")
-          .foregroundStyle(store.data.settings.focusColor.color)
+          .foregroundStyle(store.data.settings.focusColor.foregroundColor)
       }
-      Button {
-        confirmingAbandon = true
-      } label: {
-        Label("Abandon", systemImage: "stop")
-      }.disabled(!active && !store.breakEnded).help("Abandon interval")
+      if active || store.breakEnded {
+        Button {
+          confirmingAbandon = true
+        } label: {
+          Label("Abandon", systemImage: "stop")
+        }.help(store.timer.kind == .focus ? "Abandon focus session · ⌘⇧X" : "Abandon break · ⌘⇧X")
+      }
     }.buttonStyle(IntervalIconButton()).foregroundStyle(.primary)
   }
 
@@ -111,17 +123,19 @@ struct FocusControls: View {
     HStack(spacing: 12) {
       adjustmentButton(direction: -1)
       Group {
-        let start = store.timer.startedAt ?? store.now
-        let end = store.timer.deadline ?? store.now.addingTimeInterval(store.remaining)
-        Text(
-          "\(start.formatted(date: .omitted, time: .shortened)) → \(end.formatted(date: .omitted, time: .shortened))"
-        )
-        .font(IntervalTheme.body).monospacedDigit().foregroundStyle(.secondary)
-        .lineLimit(1).minimumScaleFactor(0.85)
-        .help("Started \(start.formatted()) · Ends \(end.formatted())")
-        .accessibilityLabel(
-          "Started \(start.formatted(date: .omitted, time: .shortened)), ends \(end.formatted(date: .omitted, time: .shortened))"
-        )
+        if let start = store.timer.startedAt, let end = store.timer.deadline {
+          Text(
+            "\(start.formatted(date: .omitted, time: .shortened)) → \(end.formatted(date: .omitted, time: .shortened))"
+          )
+          .font(IntervalTheme.body).monospacedDigit().foregroundStyle(.secondary)
+          .lineLimit(1).minimumScaleFactor(0.85)
+          .help("Started \(start.formatted()) · Ends \(end.formatted())")
+          .accessibilityLabel(
+            "Started \(start.formatted(date: .omitted, time: .shortened)), ends \(end.formatted(date: .omitted, time: .shortened))"
+          )
+        } else {
+          Text("Duration").font(IntervalTheme.body).foregroundStyle(.secondary)
+        }
       }.frame(maxWidth: .infinity)
       adjustmentButton(direction: 1)
     }
@@ -169,13 +183,14 @@ struct UpcomingReminders: View {
           Text(reminder.title).font(IntervalTheme.body).lineLimit(1)
           Spacer(minLength: 8)
           Text(reminderStatus(reminder)).font(IntervalTheme.body).monospacedDigit().foregroundStyle(
-            .secondary)
+            .primary)
         }
       }
     }
   }
 
   func reminderStatus(_ reminder: Reminder) -> String {
+    if store.audioInputActivity.isActive { return "Microphone in use" }
     let due = reminder.effectiveDueAt ?? store.now
     let checkAt = max(store.now, due)
     let focusEnd =
@@ -186,8 +201,8 @@ struct UpcomingReminders: View {
       ? store.calendarService.todayEvents.filter {
         $0.isEligibleForReminderSuppression && $0.start <= checkAt && $0.end > checkAt
       }.map(\.end).max() : nil
-    if let eventEnd, eventEnd >= (focusEnd ?? checkAt) { return "After event" }
-    if let focusEnd, focusEnd > checkAt { return "After focus" }
+    if let eventEnd, eventEnd >= (focusEnd ?? checkAt) { return "Skipped during event" }
+    if let focusEnd, focusEnd > checkAt { return "Skipped during focus" }
     let remaining = due.timeIntervalSince(store.now)
     return remaining <= 0 ? "When idle" : "In \(durationString(remaining))"
   }

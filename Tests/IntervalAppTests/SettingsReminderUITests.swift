@@ -103,6 +103,29 @@ struct SettingsReminderUITests {
     #expect(saved.reminders.first(where: { $0.id == reminder.id })?.title == "Persisted title")
   }
 
+  @Test func requestedSettingsDestinationWorksForOpenWindow() async throws {
+    let store = try makeStore()
+    defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }
+    store.requestedSettingsTab = 2
+    let harness = try await NativeViewHarness(rootView: AnyView(SettingsView(store: store)))
+    defer { harness.close() }
+    let sidebar = try #require(harness.descendants.compactMap { $0 as? NSTableView }.first)
+    #expect(sidebar.selectedRow == 2)
+    #expect(store.requestedSettingsTab == nil)
+    store.requestedSettingsTab = 1
+    await harness.pump()
+    #expect(sidebar.selectedRow == 1)
+    #expect(store.requestedSettingsTab == nil)
+    #expect(harness.descendants.contains { $0 is NSSlider })
+    store.requestedSettingsTab = 3
+    await harness.pump()
+    let contentScroll = try #require(
+      harness.descendants.compactMap { $0 as? NSScrollView }.first {
+        $0.scrollerStyle == .legacy && !$0.autohidesScrollers
+      })
+    #expect(contentScroll.hasVerticalScroller)
+  }
+
   @Test func idlePreferencesPersistAndInactiveCheckpointFlushesShiftedDeadline() throws {
     let reminder = Reminder.templates()[0]
     let store = try makeStore(reminders: [reminder])

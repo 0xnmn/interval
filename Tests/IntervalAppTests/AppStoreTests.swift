@@ -357,6 +357,22 @@ struct AppStoreTests {
     }
   }
 
+  @Test func reflectionAllowsAdjustingRunningBreak() throws {
+    try withStore { store, _ in
+      let deadline = Date()
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 1500, status: .running,
+        startedAt: deadline.addingTimeInterval(-1500), deadline: deadline)
+      store.reconcile(at: deadline)
+      let reflectionID = try #require(store.completionSessionID)
+      store.adjustCurrentTime(by: 300, at: deadline.addingTimeInterval(10))
+      #expect(store.timer.kind == .shortBreak)
+      #expect(store.timer.deadline == deadline.addingTimeInterval(600))
+      #expect(store.completionSessionID == reflectionID)
+      #expect(store.data.sessions.first?.feedback == nil)
+    }
+  }
+
   @Test(arguments: [false, true])
   func leavingBreakClearsUnfilledReflection(resume: Bool) throws {
     try withStore { store, _ in

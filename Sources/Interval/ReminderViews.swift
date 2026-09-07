@@ -72,7 +72,7 @@ struct RemindersView: View {
   private func reminderList(showsEmptyTemplates: Bool) -> some View {
     VStack(spacing: 0) {
       HStack {
-        Text("Reminders").font(.system(size: 14, weight: .semibold)).foregroundStyle(.secondary)
+        Text("Reminders").font(.title3.weight(.semibold))
         Spacer()
         addMenu
       }
@@ -82,9 +82,6 @@ struct RemindersView: View {
         if showsEmptyTemplates {
           emptyTemplates
         } else {
-          Text("No reminders yet")
-            .font(IntervalTheme.body).foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading).padding(16)
           Spacer()
         }
       } else {
@@ -111,7 +108,7 @@ struct RemindersView: View {
           }
           .buttonStyle(IntervalIconButton()).help("Back to reminders")
         }
-        Text("Reminder").font(.system(size: 14, weight: .semibold))
+        Text("Reminder").font(.title3.weight(.semibold))
         Spacer()
         Button {
           store.previewReminder(reminder.id)
@@ -119,7 +116,7 @@ struct RemindersView: View {
           Label("Preview reminder", systemImage: "eye")
         }.buttonStyle(IntervalIconButton()).help("Preview reminder")
         Menu {
-          Button("Delete Reminder…", role: .destructive) { deleting = reminder }
+          Button("Delete reminder…", role: .destructive) { deleting = reminder }
         } label: {
           Image(systemName: "ellipsis").font(IntervalTheme.icon).frame(
             width: 36, height: 36)
@@ -141,7 +138,8 @@ struct RemindersView: View {
   }
 
   private func reminderRow(_ reminder: Reminder) -> some View {
-    HStack(spacing: 11) {
+    let reminderName = meaningfulTitle(reminder.title)
+    return HStack(spacing: 11) {
       Button {
         selection = reminder.id
       } label: {
@@ -149,19 +147,19 @@ struct RemindersView: View {
           Text(reminder.emoji).font(.title2).frame(width: 34, height: 34)
             .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 9))
           VStack(alignment: .leading, spacing: 3) {
-            Text(reminder.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+            Text(reminderName).font(.system(size: 14, weight: .semibold)).lineLimit(1)
             Text(status(reminder)).font(.system(size: 14)).foregroundStyle(.secondary).lineLimit(1)
           }
           Spacer(minLength: 4)
         }
         .contentShape(Rectangle())
       }
-      .buttonStyle(.plain)
-      .accessibilityLabel("\(reminder.title), \(status(reminder))")
+      .buttonStyle(IntervalSelectionButton(selected: selection == reminder.id))
+      .accessibilityLabel("\(reminderName), \(status(reminder))")
       .accessibilityAddTraits(selection == reminder.id ? .isSelected : [])
 
       Toggle(
-        "",
+        reminderName,
         isOn: Binding(
           get: { reminder.isEnabled },
           set: { enabled in
@@ -174,19 +172,16 @@ struct RemindersView: View {
           })
       )
       .labelsHidden().toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
-      .accessibilityLabel("Enable \(reminder.title) reminder")
+      .accessibilityLabel(reminderName)
+      .accessibilityValue(reminder.isEnabled ? "On" : "Off")
     }
     .padding(.vertical, 9).padding(.horizontal, 10)
-    .background(
-      selection == reminder.id ? IntervalTheme.accent.opacity(0.11) : Color.primary.opacity(0.025),
-      in: RoundedRectangle(cornerRadius: 11)
-    )
     .animation(reduceMotion ? nil : IntervalMotion.selection, value: selection)
   }
 
   private var addMenu: some View {
     Menu {
-      Button("New Reminder") { selection = store.addReminder() }
+      Button("New reminder") { selection = store.addReminder() }
       Divider()
       ForEach(Reminder.templates(startingAt: store.now)) { template in
         Button("\(template.emoji) \(template.title)") {
@@ -227,9 +222,8 @@ struct RemindersView: View {
               .foregroundStyle(.secondary)
           }
           .padding(12).contentShape(Rectangle())
-          .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(IntervalSelectionButton())
       }
     }
     .padding(14).frame(maxHeight: .infinity, alignment: .top)
@@ -244,12 +238,24 @@ struct RemindersView: View {
       ? "" : due.formatted(.dateTime.month(.abbreviated).day()) + " · "
     return (reminder.snoozedUntil == nil ? "" : "Extended · ") + day + time
   }
+
+  private func meaningfulTitle(_ title: String) -> String {
+    title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "New reminder" : title
+  }
 }
 
 private struct ReminderEditor: View {
   let reminder: Reminder
   @Bindable var store: AppStore
   @State private var previewSound: NSSound?
+  @State private var titleDraft: String
+  @FocusState private var titleIsFocused: Bool
+
+  init(reminder: Reminder, store: AppStore) {
+    self.reminder = reminder
+    self.store = store
+    _titleDraft = State(initialValue: reminder.title)
+  }
 
   private func binding<T>(_ keyPath: WritableKeyPath<Reminder, T>) -> Binding<T> {
     Binding(
@@ -270,11 +276,28 @@ private struct ReminderEditor: View {
         editorSection("Content") {
           VStack(alignment: .leading, spacing: 6) {
             Text("Title").foregroundStyle(.secondary)
-            TextField("Reminder title", text: binding(\.title))
+            TextField("Reminder title", text: $titleDraft)
               .textFieldStyle(.plain)
               .padding(8)
               .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
               .accessibilityLabel("Reminder title")
+              .focused($titleIsFocused)
+              .onChange(of: titleDraft) { _, draft in
+                guard !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+                binding(\.title).wrappedValue = draft
+              }
+              .onChange(of: titleIsFocused) { _, focused in
+                guard !focused else { return }
+                if titleDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                  titleDraft = "New reminder"
+                  binding(\.title).wrappedValue = titleDraft
+                }
+              }
+            if titleDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+              Text("Enter a reminder title.")
+                .font(.caption)
+                .foregroundStyle(.red)
+            }
           }
           VStack(alignment: .leading, spacing: 6) {
             Text("Message").foregroundStyle(.secondary)
@@ -323,9 +346,10 @@ private struct ReminderEditor: View {
             .accessibilityLabel("Interval presets")
             .help("Choose an interval preset")
           }
-          toggleRow("Delay during focus", value: binding(\.suppressDuringFocus))
-          toggleRow("Delay during calendar events", value: binding(\.suppressDuringCalendar))
-            .help("Uses selected calendars")
+          toggleRow("Skip during focus", value: binding(\.suppressDuringFocus))
+            .help("Missed occurrences are not queued.")
+          toggleRow("Skip during calendar events", value: binding(\.suppressDuringCalendar))
+            .help("Uses selected calendars. Missed occurrences are not queued.")
           toggleRow("Pause when idle", value: binding(\.pauseWhenIdle))
             .help("Pause the repeat interval when there is no mouse or keyboard activity.")
           if binding(\.pauseWhenIdle).wrappedValue {
@@ -447,8 +471,8 @@ struct ReminderWarningView: View {
 
   var warningStatus: String {
     if audioInputActivity?.isActive == true { return "Microphone in use" }
-    if warning.paused { return keyboardRecentlyActive ? "Typing" : "Waiting" }
-    return "In \(warning.remaining)s"
+    if warning.paused { return keyboardRecentlyActive ? "Typing" : "Waiting for idle" }
+    return "In \(warning.remaining) sec"
   }
 
   private var keyboardRecentlyActive: Bool {
@@ -469,6 +493,7 @@ struct ReminderTakeoverView: View {
   var wallpaper: NSImage? = nil
   var animatesEntrance = true
   var isPreview = false
+  @State private var messageContentHeight: CGFloat = 0
 
   static func remainingSeconds(reminder: Reminder, shownAt: Date, now: Date) -> Int {
     max(0, Int(ceil(reminder.displaySeconds - now.timeIntervalSince(shownAt))))
@@ -534,15 +559,12 @@ struct ReminderTakeoverView: View {
             .foregroundStyle(.white).monospacedDigit()
         }.intervalEntrance(delay: 0.30, enabled: animatesEntrance)
 
-        ViewThatFits(in: .vertical) {
-          VStack(spacing: 28) {
-            fullscreenReminderContent(spacious: spacious)
-            liveCountdown(size: spacious ? 80 : 64)
-          }.fixedSize(horizontal: false, vertical: true)
-          VStack(spacing: 28) {
-            fullscreenReminderContent(spacious: spacious, scrollsMessage: true)
-            liveCountdown(size: spacious ? 80 : 64)
-          }
+        VStack(spacing: 28) {
+          fullscreenReminderContent(
+            spacious: spacious,
+            availableHeight: max(260, geometry.size.height - (isPreview ? 350 : 310))
+          )
+          liveCountdown(size: spacious ? 80 : 64)
         }
         .foregroundStyle(.white)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -558,31 +580,44 @@ struct ReminderTakeoverView: View {
     .environment(\.colorScheme, .dark)
   }
 
-  private func fullscreenReminderContent(spacious: Bool, scrollsMessage: Bool = false) -> some View
-  {
-    VStack(spacing: 20) {
+  private func fullscreenReminderContent(spacious: Bool, availableHeight: CGFloat) -> some View {
+    let emojiSize = min(spacious ? 180 : 80, max(32, reminder.emojiSize))
+    let messageViewportHeight = max(
+      70,
+      min(spacious ? 260 : 120, availableHeight - emojiSize - (spacious ? 290 : 210))
+    )
+    return VStack(spacing: 20) {
       Text(reminder.emoji)
-        .font(.system(size: min(scrollsMessage ? 80 : 180, max(32, reminder.emojiSize))))
+        .font(.system(size: emojiSize))
         .lineLimit(1)
       Text(reminder.title)
         .font(.system(size: spacious ? 48 : 36, weight: .semibold))
         .lineLimit(3).minimumScaleFactor(0.7).fixedSize(horizontal: false, vertical: true)
       if !reminder.message.isEmpty {
-        Group {
-          if scrollsMessage {
-            ScrollView {
-              Text(reminder.message).fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity)
+        ScrollView {
+          Text(reminder.message)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity)
+            .background {
+              GeometryReader { messageGeometry in
+                Color.clear.preference(
+                  key: ReminderMessageHeightKey.self, value: messageGeometry.size.height)
+              }
             }
-            .scrollIndicators(.visible)
-            .accessibilityLabel("Reminder message")
-          } else {
-            Text(reminder.message)
-          }
         }
+        .frame(height: messageViewportHeight)
+        .clipped()
+        .scrollIndicators(.visible)
+        .accessibilityLabel("Reminder message")
         .font(.system(size: spacious ? 22 : 18))
         .lineSpacing(4)
         .foregroundStyle(.white)
+        .onPreferenceChange(ReminderMessageHeightKey.self) { messageContentHeight = $0 }
+        if messageContentHeight > messageViewportHeight + 1 {
+          Text("Scroll to read")
+            .font(.system(size: 12, weight: .medium))
+            .accessibilityHidden(true)
+        }
       }
     }
     .foregroundStyle(.white)
@@ -627,15 +662,15 @@ struct ReminderTakeoverView: View {
           Button {
             extend(60)
           } label: {
-            Label("+1 min", systemImage: "clock.arrow.circlepath")
-          }.help("Remind me again in 1 minute")
-            .accessibilityLabel("Remind me in 1 minute")
+            Label("Extend 1 min", systemImage: "clock.arrow.circlepath")
+          }.help("Extend reminder by 1 minute")
+            .accessibilityLabel("Extend reminder by 1 minute")
           Button {
             extend(5 * 60)
           } label: {
-            Label("+5 min", systemImage: "clock.arrow.circlepath")
-          }.help("Remind me again in 5 minutes")
-            .accessibilityLabel("Remind me in 5 minutes")
+            Label("Extend 5 min", systemImage: "clock.arrow.circlepath")
+          }.help("Extend reminder by 5 minutes")
+            .accessibilityLabel("Extend reminder by 5 minutes")
           Button(action: skip) {
             Label(
               skipRemaining > 0 ? "Skip available in \(skipRemaining)s" : "Skip",
@@ -658,6 +693,13 @@ struct ReminderTakeoverView: View {
 
   private func duration(_ seconds: Int) -> String {
     String(format: "%02d:%02d", seconds / 60, seconds % 60)
+  }
+}
+
+private struct ReminderMessageHeightKey: PreferenceKey {
+  static let defaultValue: CGFloat = 0
+  static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+    value = max(value, nextValue())
   }
 }
 

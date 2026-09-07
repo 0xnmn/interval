@@ -13,7 +13,9 @@ struct TodoList: View {
             "", isOn: Binding(get: { todo.isCompleted }, set: { _ in store.toggleTodo(todo.id) })
           )
           .toggleStyle(.checkbox).labelsHidden().tint(.accentColor)
-          .accessibilityLabel("Mark \(todo.title) \(todo.isCompleted ? "incomplete" : "complete")")
+          .accessibilityLabel(
+            todo.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+              ? "Untitled to-do" : todo.title)
           TodoTextField(
             text: Binding(
               get: { store.data.todos.first { $0.id == todo.id }?.title ?? "" },

@@ -5,6 +5,9 @@ import Observation
 
 @MainActor @Observable
 final class AppStore {
+  enum TimerConfirmation { case takeBreak, abandon }
+  var pendingTimerConfirmation: TimerConfirmation?
+  var requestedSettingsTab: Int?
   var data: PersistedData
   var now = Date() {
     didSet {
@@ -49,6 +52,19 @@ final class AppStore {
   var selection: Destination? = .focus
   var storageURL: URL { persistence.fileURL }
 
+  var abandonTitle: String {
+    timer.kind == .focus ? "Abandon this focus session?" : "Abandon this break?"
+  }
+
+  var canOpenNotch: Bool {
+    data.settings.notchEnabled && sessionIsActive && reminderOverlay == nil
+  }
+
+  func openNotchFromKeyboard() {
+    guard canOpenNotch else { return }
+    notchController.openFromKeyboard(store: self)
+  }
+
   init(
     persistence: JSONStore = JSONStore(), calendarService: CalendarService? = nil,
     runtimeEnabled: Bool = true
@@ -71,7 +87,7 @@ final class AppStore {
         restored, outcome: .abandoned, endedAt: endedAt,
         activeDuration: restored.elapsedBeforePause)
       data.activeTimer = timer(for: .focus)
-      recoveryMessage = "A legacy paused cycle was moved to history."
+      recoveryMessage = "A paused session from an earlier version was saved to Stats as abandoned."
       save()
     }
     if data.activeTimer == nil { data.activeTimer = timer(for: .focus) }
@@ -343,7 +359,7 @@ final class AppStore {
   func adjustCurrentTime(by seconds: TimeInterval, at date: Date = Date()) {
     now = date
     if reconcile(at: date) { return }
-    guard completionSessionID == nil, var value = data.activeTimer,
+    guard var value = data.activeTimer,
       value.status == .ready || value.status == .running
     else { return }
     TimerEngine.adjustRemaining(&value, by: seconds, now: date)

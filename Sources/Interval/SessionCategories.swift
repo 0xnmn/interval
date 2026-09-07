@@ -24,7 +24,7 @@ struct SessionIdentity: View {
             }
           }
           Divider()
-          Button("Manage Categories…") { managingCategories = true }
+          Button("Manage categories…") { managingCategories = true }
         } label: {
           HStack(spacing: 8) {
             Circle().fill(store.data.settings.focusColor.color).frame(width: 6, height: 6)

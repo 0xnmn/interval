@@ -14,6 +14,8 @@ final class NotchController: NSObject {
   private var headsUpState = NotchHeadsUpState()
   private var automaticExpansion = false
   private var hovering = false
+  private var keyboardActivated = false
+  private weak var previousKeyWindow: NSWindow?
   private var collapseTask: Task<Void, Never>?
   private var targetFrame: NSRect?
   private var transitionID = UUID()
@@ -26,6 +28,16 @@ final class NotchController: NSObject {
   }
 
   deinit { collapseTask?.cancel() }
+
+  func openFromKeyboard(store: AppStore) {
+    update(store: store)
+    guard let panel else { return }
+    if NSApp.keyWindow !== panel { previousKeyWindow = NSApp.keyWindow }
+    keyboardActivated = true
+    expand()
+    panel.makeKeyAndOrderFront(nil)
+    panel.selectNextKeyView(nil)
+  }
 
   func update(store: AppStore) {
     guard store.data.settings.notchEnabled else {
@@ -44,7 +56,7 @@ final class NotchController: NSObject {
     let previous = headsUpState.active
     headsUpState.update(
       store.notchHeadsUpCandidates, at: store.now,
-      holding: hovering || panel?.firstResponder is NSTextView)
+      holding: hovering || keyboardActivated || panel?.firstResponder is NSTextView)
     if headsUpState.active != previous {
       if headsUpState.active != nil {
         if !expanded { automaticExpansion = true }
@@ -66,6 +78,7 @@ final class NotchController: NSObject {
   func close() {
     collapseTask?.cancel()
     collapseTask = nil
+    releaseKeyboardFocus()
     panel?.orderOut(nil)
     panel?.close()
     panel = nil
@@ -154,13 +167,16 @@ final class NotchController: NSObject {
   private func collapseUnlessEditing() {
     guard let panel else { return }
     // A field editor is an NSTextView even when the SwiftUI control is a TextField.
-    if panel.firstResponder is NSTextView || headsUpState.active != nil { return }
+    if keyboardActivated || panel.firstResponder is NSTextView || headsUpState.active != nil {
+      return
+    }
     collapse()
   }
 
   private func collapse() {
     collapseTask?.cancel()
     collapseTask = nil
+    releaseKeyboardFocus()
     guard expanded, store?.breakEnded != true else { return }
     headsUpState.dismiss()
     automaticExpansion = false
@@ -168,6 +184,15 @@ final class NotchController: NSObject {
     panel?.resignKey()
     // Keep expanded content in place until the shrinking panel has finished clipping it.
     reposition(animated: true)
+  }
+
+  private func releaseKeyboardFocus() {
+    if keyboardActivated, panel?.isKeyWindow == true {
+      panel?.resignKey()
+      if previousKeyWindow?.isVisible == true { previousKeyWindow?.makeKey() }
+    }
+    keyboardActivated = false
+    previousKeyWindow = nil
   }
 
   private func refreshRoot() {
@@ -306,7 +331,7 @@ struct NotchRootView: View {
 
   private var accent: Color {
     (store.timer.kind == .focus ? store.data.settings.focusColor : store.data.settings.breakColor)
-      .color
+      .foregroundColor
   }
 
   var body: some View {
@@ -328,7 +353,7 @@ struct NotchRootView: View {
                   : store.breakEnded
                     ? "Break ended" : store.timer.kind == .focus ? "Focus" : "Taking a break"
             )
-            .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+            .font(.system(size: 13, weight: .medium)).foregroundStyle(.primary)
             Spacer()
             ForEach(store.completionSessionID == nil && headsUp == nil ? 0..<3 : 0..<0, id: \.self)
             { index in
@@ -338,17 +363,18 @@ struct NotchRootView: View {
                 Image(systemName: ["timer", "checklist", "bell"][index])
                   .font(IntervalTheme.icon).frame(width: 32, height: 32)
                   .foregroundStyle(page == index ? .primary : .secondary)
-                  .background(
-                    page == index ? Color.primary.opacity(0.12) : .clear,
-                    in: RoundedRectangle(cornerRadius: 7))
-              }.buttonStyle(.plain).help(["Timer", "To-dos", "Reminders"][index])
-                .accessibilityLabel(["Timer", "To-dos", "Reminders"][index])
-                .accessibilityAddTraits(page == index ? .isSelected : [])
+              }.buttonStyle(IntervalSelectionButton(selected: page == index)).help(
+                ["Timer", "To-dos", "Reminders"][index]
+              )
+              .accessibilityLabel(["Timer", "To-dos", "Reminders"][index])
+              .accessibilityAddTraits(page == index ? .isSelected : [])
             }
             Button(action: collapse) {
               Image(systemName: "chevron.up").font(IntervalTheme.icon).frame(width: 32, height: 32)
-            }.buttonStyle(.plain).foregroundStyle(.secondary).help("Collapse").accessibilityLabel(
-              "Collapse"
+            }.buttonStyle(IntervalSelectionButton()).foregroundStyle(.secondary).help(
+              "Collapse notch panel · Esc"
+            ).accessibilityLabel(
+              "Collapse notch panel"
             ).disabled(store.breakEnded)
           }
           if let id = store.completionSessionID {

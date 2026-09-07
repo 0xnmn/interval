@@ -30,11 +30,8 @@ struct MainView: View {
             } label: {
               Image(systemName: item.icon)
                 .font(IntervalTheme.icon).frame(width: 36, height: 36)
-                .background(
-                  (store.selection ?? .focus) == item ? Color.primary.opacity(0.10) : .clear,
-                  in: RoundedRectangle(cornerRadius: 10))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(IntervalSelectionButton(selected: (store.selection ?? .focus) == item))
             .foregroundStyle((store.selection ?? .focus) == item ? .primary : .secondary)
             .help(item.rawValue).accessibilityLabel(item.rawValue)
             .accessibilityAddTraits((store.selection ?? .focus) == item ? .isSelected : [])
@@ -43,7 +40,8 @@ struct MainView: View {
           Spacer(minLength: 20)
           SettingsLink {
             Image(systemName: "gearshape").font(IntervalTheme.icon).frame(width: 36, height: 36)
-          }.buttonStyle(.plain).help("Settings · ⌘,").accessibilityLabel("Settings")
+          }.buttonStyle(IntervalSelectionButton()).help("Settings · ⌘,").accessibilityLabel(
+            "Settings")
         }.padding(.vertical, 20).frame(width: 60).foregroundStyle(.secondary)
         Rectangle().fill(IntervalTheme.border).frame(width: 1)
         VStack(spacing: 0) {
@@ -77,6 +75,25 @@ struct MainView: View {
       minHeight: 620, maxHeight: .infinity
     )
     .tint(IntervalTheme.accent)
+    .alert(
+      store.pendingTimerConfirmation == .takeBreak ? "Start a break now?" : store.abandonTitle,
+      isPresented: Binding(
+        get: { store.pendingTimerConfirmation != nil },
+        set: { if !$0 { store.pendingTimerConfirmation = nil } }),
+      presenting: store.pendingTimerConfirmation
+    ) { action in
+      Button("Cancel", role: .cancel) {}
+      if action == .takeBreak {
+        Button("Start break") { store.startBreakNow() }
+      } else {
+        Button("Abandon", role: .destructive) { store.abandon() }
+      }
+    } message: { action in
+      Text(
+        action == .takeBreak
+          ? "This unfinished focus session will be saved as abandoned. Your focus time is kept."
+          : "Elapsed time will remain in Stats.")
+    }
     .safeAreaInset(edge: .bottom) {
       if let error = store.persistenceError {
         Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -102,6 +119,7 @@ struct FocusView: View {
 
 struct HistoryView: View {
   @Bindable var store: AppStore
+  @Environment(\.openSettings) private var openSettings
   @State private var selectedDay = Date()
   @State private var selectedSession: UUID?
   @State private var categoryFilter: CategoryFilter = .all
@@ -116,7 +134,7 @@ struct HistoryView: View {
     VStack(spacing: 0) {
       VStack(spacing: 8) {
         HStack(spacing: 8) {
-          Text("Stats").font(IntervalTheme.heading)
+          Text("Stats").font(.title3.weight(.semibold))
           Spacer()
           Button {
             selectDay(calendar.date(byAdding: .day, value: -1, to: selectedDay) ?? selectedDay)
@@ -143,6 +161,7 @@ struct HistoryView: View {
           }
           .buttonStyle(IntervalIconButton()).help("Next day").accessibilityLabel("Next day")
           Button("Today") { selectDay(store.now) }.buttonStyle(.bordered)
+            .disabled(calendar.isDate(selectedDay, inSameDayAs: store.now))
         }
         HStack(spacing: 6) {
           ForEach(weekDates, id: \.self) { date in
@@ -153,12 +172,10 @@ struct HistoryView: View {
                 Text(date.formatted(.dateTime.weekday(.abbreviated))).font(IntervalTheme.body)
                 Text(date.formatted(.dateTime.day())).font(IntervalTheme.heading)
               }.frame(maxWidth: .infinity).padding(.vertical, 5)
-                .background(
-                  calendar.isDate(date, inSameDayAs: selectedDay)
-                    ? IntervalTheme.accent.opacity(0.22) : .clear,
-                  in: RoundedRectangle(cornerRadius: 8))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(
+              IntervalSelectionButton(selected: calendar.isDate(date, inSameDayAs: selectedDay))
+            )
             .accessibilityLabel(
               dayAccessibilityLabel(date, sessionCount(on: date), calendarEventCount(on: date))
             )
@@ -175,10 +192,10 @@ struct HistoryView: View {
           ScrollView {
             VStack(alignment: .leading, spacing: 24) {
               daySummary
-              if focusSessions.isEmpty {
+              if focusSessions.isEmpty && !dayCalendarEvents.isEmpty {
                 Text("No focus sessions on this day.")
                   .font(IntervalTheme.body).foregroundStyle(.secondary)
-              } else {
+              } else if !focusSessions.isEmpty {
                 categoryBreakdown
                 feedbackBreakdown
               }
@@ -186,6 +203,10 @@ struct HistoryView: View {
                 Label(calendarStatus, systemImage: "calendar.badge.exclamationmark")
                   .font(IntervalTheme.body).foregroundStyle(.secondary).frame(
                     maxWidth: .infinity, alignment: .leading)
+                Button("Calendar settings…") {
+                  store.requestedSettingsTab = 2
+                  openSettings()
+                }.buttonStyle(.link)
               }
             }.frame(maxWidth: .infinity, alignment: .leading)
           }
@@ -227,8 +248,10 @@ struct HistoryView: View {
     VStack(alignment: .leading, spacing: 8) {
       Text("Focus time").font(IntervalTheme.heading).foregroundStyle(.secondary)
       Text(durationString(focusDuration)).font(.largeTitle.weight(.regular)).monospacedDigit()
-      Text("\(completedFocusCount) completed").font(IntervalTheme.body).foregroundStyle(
-        .secondary)
+      if !focusSessions.isEmpty {
+        Text("\(completedFocusCount) completed").font(IntervalTheme.body).foregroundStyle(
+          .secondary)
+      }
     }.frame(maxWidth: .infinity, alignment: .leading)
   }
   private var timeline: some View {
@@ -238,6 +261,10 @@ struct HistoryView: View {
         Spacer()
         Text(summaryText).font(IntervalTheme.body).foregroundStyle(.secondary)
       }.padding(.horizontal, 20).frame(height: 44)
+      if daySessions.isEmpty && dayCalendarEvents.isEmpty {
+        Text("No activity on this day").font(IntervalTheme.body).foregroundStyle(.secondary)
+          .padding(.horizontal, 20).padding(.bottom, 12)
+      }
       DayTimeline(
         store: store, selectedSessionID: $selectedSession, date: selectedDay,
         sessionFilter: includesSession
@@ -357,7 +384,7 @@ struct HistoryView: View {
       return "Apple Calendar is disabled."
     }
     if store.calendarService.authorizationState != .fullAccess {
-      return "Calendar permission is unavailable."
+      return "Interval doesn’t have Calendar access."
     }
     if store.data.settings.selectedCalendarIDs.isEmpty {
       return "No calendars are selected."
@@ -448,22 +475,14 @@ struct ReflectionView: View {
                 .system(size: compact ? 22 : 28))
               Text(value.title).font(IntervalTheme.body)
             }.frame(maxWidth: .infinity).padding(.vertical, compact ? 8 : 14)
-              .background(
-                selected ? Color.accentColor.opacity(0.22) : Color.primary.opacity(0.05),
-                in: RoundedRectangle(cornerRadius: 12)
-              )
-              .overlay {
-                RoundedRectangle(cornerRadius: 12)
-                  .strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 1.5)
-              }
           }
-          .buttonStyle(.plain).accessibilityLabel(value.title)
+          .buttonStyle(IntervalSelectionButton(selected: selected)).accessibilityLabel(value.title)
           .accessibilityAddTraits(feedback.wrappedValue == value ? .isSelected : [])
           .animation(reduceMotion ? nil : IntervalMotion.selection, value: feedback.wrappedValue)
         }
       }.intervalEntrance(delay: 0.08)
       if !compact {
-        WritingArea(text: journal, placeholder: "Add a thought…", label: "Journal")
+        WritingArea(text: journal, placeholder: "Add a thought…", label: "Reflection")
           .frame(height: 112)
           .intervalEntrance(delay: 0.14)
       } else {
@@ -488,7 +507,7 @@ struct ReflectionView: View {
   @ViewBuilder private var breakStatus: some View {
     if store.timer.kind != .focus && store.timer.status != .ready {
       Text("\(store.breakEnded ? "Break ended" : "Taking a break") · \(store.timerText)")
-        .font(IntervalTheme.body).monospacedDigit().foregroundStyle(.secondary)
+        .font(IntervalTheme.body).monospacedDigit().foregroundStyle(.primary)
         .fixedSize(horizontal: false, vertical: true)
     }
   }
@@ -500,7 +519,8 @@ struct ReflectionView: View {
       store.continueAfterReflection()
     }
     .buttonStyle(IntervalPrimaryButton()).keyboardShortcut(.return, modifiers: .command)
-    .help("Reflection is optional · ⌘Return")
+    .help("Reflection saves automatically and is optional · ⌘Return")
+    .accessibilityHint("Feedback and thoughts save automatically. You can leave both empty.")
     .intervalEntrance(delay: 0.20)
   }
   private func setFeedback(_ value: SessionFeedback) { feedback.wrappedValue = value }
@@ -550,7 +570,7 @@ struct SessionInspector: View {
           session.isDurationEstimated ? "Estimated active" : "Active",
           value: (session.isDurationEstimated ? "≈ " : "") + durationString(session.activeDuration))
         if session.isDurationEstimated {
-          Text("Estimated from the recorded time range; this early version did not record pauses.")
+          Text("Estimated from the session’s recorded start and end times.")
             .font(IntervalTheme.body).foregroundStyle(.secondary)
         }
         LabeledContent("Outcome", value: session.outcome.rawValue.capitalized)

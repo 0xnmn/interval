@@ -71,10 +71,10 @@ import Testing
     let view = ReminderWarningView(
       reminder: reminder, overlay: .warning(reminderID: reminder.id, remaining: 7, isPaused: false),
       audioInputActivity: input)
-    #expect(view.warningStatus == "In 7s")
+    #expect(view.warningStatus == "In 7 sec")
     input.update(isActive: true, at: Date())
     #expect(view.warningStatus == "Microphone in use")
     input.update(isActive: false, at: Date())
-    #expect(view.warningStatus == "In 7s")
+    #expect(view.warningStatus == "In 7 sec")
   }
 }

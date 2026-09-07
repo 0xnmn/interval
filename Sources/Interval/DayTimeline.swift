@@ -152,7 +152,7 @@ struct DayTimeline: View {
   }
 
   private func currentTimeLine(width: CGFloat) -> some View {
-    let color = store.data.settings.focusColor.color
+    let color = Color.accentColor
     let y = yPosition(for: store.calendarNow)
     let crossesEvent = positionedItems.contains {
       let start = yPosition(for: $0.start)
@@ -163,6 +163,12 @@ struct DayTimeline: View {
       Rectangle().fill(color).frame(width: crossesEvent ? 0 : max(width - 3, 0), height: 1)
     }
     .frame(width: width + 4, alignment: .leading)
+    .overlay(alignment: .leading) {
+      Text("Now").font(.caption.weight(.semibold))
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 3).background(IntervalTheme.surface)
+        .offset(x: -32)
+    }
     .offset(x: labelWidth - 4, y: y - 3)
     .accessibilityLabel("Current time, \(timeText(store.calendarNow))")
   }

@@ -121,6 +121,10 @@ import Testing
     #expect(restored.sound == .glass)
   }
 
+  @Test func whitespaceOnlyTitleClampsToMeaningfulFallback() {
+    #expect(Reminder(title: "  \n ").clamped().title == "New reminder")
+  }
+
   @Test func legacyFloatingPositionAndShortDurationMigrateToFullscreen() throws {
     let json = """
       {"title":"Legacy","presentation":"floating","position":"bottomRight","displaySeconds":2}

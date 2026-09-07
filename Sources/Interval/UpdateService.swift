@@ -6,7 +6,7 @@ import Sparkle
 final class UpdateService: NSObject, SPUUpdaterDelegate {
   private(set) var isConfigured = false
   private(set) var configurationMessage =
-    "Updates are unavailable in this local build because no HTTPS feed and Sparkle public key were configured."
+    "Automatic updates aren’t configured for this build."
   private var controller: SPUStandardUpdaterController?
   private var deferredInstall: (() -> Void)?
   private var deferredWaiter: Task<Void, Never>?
@@ -27,7 +27,7 @@ final class UpdateService: NSObject, SPUUpdaterDelegate {
       Data(base64Encoded: key)?.count == 32
     else { return }
     isConfigured = true
-    configurationMessage = "Updates are securely delivered by Sparkle."
+    configurationMessage = "Choose whether Interval checks for and downloads available updates."
     let controller = SPUStandardUpdaterController(
       startingUpdater: false, updaterDelegate: self, userDriverDelegate: nil)
     self.controller = controller
@@ -64,7 +64,7 @@ final class UpdateService: NSObject, SPUUpdaterDelegate {
     guard shouldDeferInstall() else { return false }
     deferredInstall = installHandler
     configurationMessage =
-      "Update ready. Installation is deferred until the active timer and reminder finish."
+      "Update ready. Installation will wait for any unfinished timer, reminder, or reflection."
     deferredWaiter?.cancel()
     deferredWaiter = Task { [weak self] in
       while let self, self.shouldDeferInstall(), !Task.isCancelled {

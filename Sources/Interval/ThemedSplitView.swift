@@ -41,7 +41,7 @@ struct ThemedSplitView<First: View, Second: View>: NSViewControllerRepresentable
 }
 
 final class ThemeSplitView: NSSplitView {
-  override var dividerColor: NSColor { NSColor.labelColor.withAlphaComponent(0.07) }
+  override var dividerColor: NSColor { IntervalTheme.borderNSColor(for: effectiveAppearance) }
 
   override func drawDivider(in rect: NSRect) {
     dividerColor.setFill()

@@ -24,7 +24,7 @@ struct NotchHeadsUp: Equatable {
   var actionTitle: String {
     switch target {
     case .focus: "Extend focus"
-    case .reminder: "Delay this reminder"
+    case .reminder: "Extend reminder"
     }
   }
 }
@@ -91,7 +91,7 @@ struct NotchHeadsUpView: View {
       Text(headsUp.title).font(IntervalTheme.heading).lineLimit(1)
       Text(durationString(max(0, headsUp.deadline.timeIntervalSince(store.now))))
         .font(.system(size: 28, weight: .medium, design: .rounded)).monospacedDigit()
-        .foregroundStyle(.secondary)
+        .foregroundStyle(.primary)
       HStack(spacing: 10) {
         TimeAdjustmentChoices(
           actionTitle: headsUp.actionTitle,

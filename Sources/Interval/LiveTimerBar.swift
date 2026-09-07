@@ -8,7 +8,7 @@ struct LiveTimerBar: View {
 
   private var accent: Color {
     (store.timer.kind == .focus
-      ? store.data.settings.focusColor : store.data.settings.breakColor).color
+      ? store.data.settings.focusColor : store.data.settings.breakColor).foregroundColor
   }
 
   private var title: String {
@@ -55,7 +55,10 @@ struct LiveTimerBar: View {
       Group {
         Text(store.timerText).font(.title2.weight(.medium)).monospacedDigit()
           .foregroundStyle(accent).fixedSize()
-          .accessibilityLabel("Live \(store.timer.kind.title) timer")
+          .accessibilityLabel(
+            store.breakEnded
+              ? "Time beyond scheduled break" : "Live \(store.timer.kind.title) timer"
+          )
           .accessibilityValue(spokenDuration(store.displayedTime))
         if store.timer.status == .ready {
           if store.timer.kind == .focus {
@@ -64,8 +67,8 @@ struct LiveTimerBar: View {
               .foregroundStyle(accent).help("Start session")
           } else {
             Button(action: store.startSession) {
-              Label("Start break", systemImage: "cup.and.saucer")
-            }.buttonStyle(IntervalIconButton()).help("Start break")
+              Text("Start break")
+            }.buttonStyle(IntervalPrimaryButton()).help("Start break · ⌘⇧S")
           }
         } else if store.timer.status == .running || store.breakEnded {
           if store.timer.kind == .focus {
@@ -75,7 +78,8 @@ struct LiveTimerBar: View {
               Label("Take a break", systemImage: "cup.and.saucer")
             }
             .buttonStyle(IntervalIconButton())
-            .foregroundStyle(store.data.settings.breakColor.color).help("Start a break")
+            .foregroundStyle(store.data.settings.breakColor.foregroundColor).help(
+              "Start a break · ⌘⇧B")
           } else {
             Button {
               store.endBreak()
@@ -83,7 +87,7 @@ struct LiveTimerBar: View {
               Text("Resume focus")
             }
             .buttonStyle(IntervalPrimaryButton())
-            .foregroundStyle(store.data.settings.focusColor.color).help(
+            .foregroundStyle(store.data.settings.focusColor.foregroundColor).help(
               "Resume focus")
           }
           Button {
@@ -91,23 +95,23 @@ struct LiveTimerBar: View {
           } label: {
             Label("Abandon", systemImage: "stop")
           }
-          .help("Abandon interval")
+          .help(store.timer.kind == .focus ? "Abandon focus session · ⌘⇧X" : "Abandon break · ⌘⇧X")
         }
       }
     }.buttonStyle(IntervalIconButton())
       .padding(.horizontal, 20).padding(.vertical, 8)
       .background(accent.opacity(0.07))
       .alert("Start a break now?", isPresented: $confirmingBreak) {
-        Button("Keep Focusing", role: .cancel) {}
-        Button("Start Break") { store.startBreakNow() }
+        Button("Keep focusing", role: .cancel) {}
+        Button("Start break") { store.startBreakNow() }
       } message: {
         Text("This unfinished focus session will be saved as abandoned. Your focus time is kept.")
       }
-      .alert("Abandon this interval?", isPresented: $confirmingAbandon) {
-        Button("Keep Going", role: .cancel) {}
+      .alert(store.abandonTitle, isPresented: $confirmingAbandon) {
+        Button("Keep going", role: .cancel) {}
         Button("Abandon", role: .destructive, action: store.abandon)
       } message: {
-        Text("Elapsed active time will be kept in Stats.")
+        Text("Elapsed time will remain in Stats.")
       }
   }
 }

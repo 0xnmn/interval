@@ -392,7 +392,10 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
 
   public func clamped() -> Self {
     var value = self
-    value.title = String(title.prefix(120))
+    let clampedTitle = String(title.prefix(120))
+    value.title =
+      clampedTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      ? "New reminder" : clampedTitle
     value.message = String(message.prefix(2_000))
     value.emoji = String(emoji.prefix(8))
     value.emojiSize = emojiSize.isFinite ? emojiSize.clamped(to: 32...180) : 72

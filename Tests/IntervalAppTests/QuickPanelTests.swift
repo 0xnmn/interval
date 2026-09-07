@@ -166,4 +166,43 @@ struct QuickPanelTests {
         fileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
           .appendingPathComponent("state.json")), runtimeEnabled: false)
   }
+
+  @Test func keyboardExpansionHoldsHeadsUpAndRestoresFocusOnEscape() async throws {
+    let store = makeStore()
+    defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }
+    let now = Date()
+    store.now = now
+    store.data.reminders = []
+    store.data.settings.notchEnabled = true
+    store.data.activeTimer = TimerState(
+      kind: .focus, duration: 1500, status: .running,
+      startedAt: now.addingTimeInterval(-1440), deadline: now.addingTimeInterval(60))
+    let previous = NSPanel(
+      contentRect: NSRect(x: 100, y: 100, width: 400, height: 300),
+      styleMask: [.titled, .nonactivatingPanel], backing: .buffered, defer: false)
+    previous.isReleasedWhenClosed = false
+    NSApp.activate(ignoringOtherApps: true)
+    previous.makeKeyAndOrderFront(nil)
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(previous.isKeyWindow)
+    let controller = NotchController()
+    defer {
+      controller.close()
+      previous.close()
+    }
+    let original = Set(NSApp.windows.map(\.windowNumber))
+    controller.openFromKeyboard(store: store)
+    let panel = try #require(
+      NSApp.windows.first { !original.contains($0.windowNumber) && $0.isVisible })
+    let host = try #require(panel.contentView?.subviews.first as? NSHostingView<NotchRootView>)
+    #expect(panel.isKeyWindow)
+    store.now = now.addingTimeInterval(12)
+    controller.update(store: store)
+    #expect(host.rootView.headsUp != nil)
+    #expect(host.rootView.expanded)
+    panel.cancelOperation(nil)
+    try await Task.sleep(for: .milliseconds(400))
+    #expect(!host.rootView.expanded)
+    #expect(previous.isKeyWindow)
+  }
 }

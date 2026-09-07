@@ -40,15 +40,18 @@ struct SettingsView: View {
             get: { selectedTab }, set: { if let tab = $0 { selectedTab = tab } })
         ) {
           ForEach(destinations) { destination in
-            Label(destination.title, systemImage: destination.systemImage)
-              .font(.system(size: 14))
-              .frame(height: 28)
-              .tag(destination.id)
+            HStack {
+              Label(destination.title, systemImage: destination.systemImage)
+                .foregroundStyle(.primary)
+              Spacer(minLength: 4)
+            }
+            .font(.system(size: 14))
+            .frame(height: 28)
+            .tag(destination.id)
           }
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
-        .foregroundStyle(.primary.opacity(0.78))
         .accessibilityLabel("Settings pages")
         .frame(width: 140)
 
@@ -56,7 +59,7 @@ struct SettingsView: View {
           Text(destinations.first(where: { $0.id == selectedTab })?.title ?? "Settings")
             .font(.title2.weight(.semibold))
 
-          if let error = store.persistenceError ?? store.notificationError {
+          if let error = store.persistenceError {
             Label(error, systemImage: "exclamationmark.triangle.fill")
               .font(.system(size: 14))
               .foregroundStyle(.red)
@@ -73,6 +76,8 @@ struct SettingsView: View {
     }
     .frame(width: 560, height: 450)
     .tint(.accentColor)
+    .onAppear(perform: consumeRequestedTab)
+    .onChange(of: store.requestedSettingsTab) { _, _ in consumeRequestedTab() }
     .task {
       notificationStatus = await store.notifications.status()
     }
@@ -91,11 +96,11 @@ struct SettingsView: View {
           HStack(spacing: 12) {
             Text("Long break")
             Spacer(minLength: 12)
-            Text("Every \(store.data.settings.longBreakEvery) sessions")
+            Text(cadenceDescription)
               .monospacedDigit()
             Stepper("Long break cadence", value: setting(\.longBreakEvery), in: 1...12)
               .labelsHidden()
-              .accessibilityValue("Every \(store.data.settings.longBreakEvery) focus sessions")
+              .accessibilityValue(cadenceDescription)
           }
         }
         SettingsSection("Colors") {
@@ -132,32 +137,33 @@ struct SettingsView: View {
           }
         }
         SettingsSection("Notifications") {
-          if notificationStatus == .authorized {
-            Label("Notifications enabled", systemImage: "checkmark.circle.fill").foregroundStyle(
-              .green)
+          if let error = store.notificationError {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+              .foregroundStyle(.red)
+            Button("Retry") { requestNotificationAccess() }
+          } else if notificationStatus == .authorized {
+            Label("Notifications enabled", systemImage: "checkmark.circle.fill")
+              .foregroundStyle(.green)
+            Text(
+              "Interval uses notifications for timer endings, the optional one-minute heads-up, and overdue break reminders."
+            )
+            .font(.system(size: 13)).foregroundStyle(.secondary)
           } else if notificationStatus == .denied {
             Label(
-              "Notifications denied. Interval will show an in-app completion message.",
+              "Notifications are off for Interval. Timer endings will still appear in the app.",
               systemImage: "bell.slash")
-            Button("Open System Settings") {
+            Button("Open notification settings") {
               NSWorkspace.shared.open(
                 URL(
                   string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!
               )
             }
           } else {
-            Button("Enable Notifications") {
-              Task {
-                do {
-                  _ = try await store.notifications.request()
-                  store.notificationError = nil
-                } catch {
-                  store.notificationError =
-                    "Couldn’t request notification access: \(error.localizedDescription)"
-                }
-                notificationStatus = await store.notifications.status()
-              }
-            }
+            Text(
+              "Allow notifications for timer endings, the optional one-minute heads-up, and overdue break reminders."
+            )
+            .font(.system(size: 13)).foregroundStyle(.secondary)
+            Button("Allow notifications") { requestNotificationAccess() }
           }
         }
       }
@@ -171,6 +177,27 @@ struct SettingsView: View {
       UpdatesSettingsView(store: store)
     default:
       EmptyView()
+    }
+  }
+  private var cadenceDescription: String {
+    let cadence = store.data.settings.longBreakEvery
+    return cadence == 1 ? "Every session" : "Every \(cadence) sessions"
+  }
+  private func consumeRequestedTab() {
+    guard let requestedTab = store.requestedSettingsTab else { return }
+    if destinations.contains(where: { $0.id == requestedTab }) { selectedTab = requestedTab }
+    store.requestedSettingsTab = nil
+  }
+  private func requestNotificationAccess() {
+    Task {
+      do {
+        _ = try await store.notifications.request()
+        store.notificationError = nil
+      } catch {
+        store.notificationError =
+          "Couldn’t request notification access: \(error.localizedDescription)"
+      }
+      notificationStatus = await store.notifications.status()
     }
   }
   private func setting(_ keyPath: WritableKeyPath<IntervalSettings, Int>) -> Binding<Int> {
@@ -253,7 +280,31 @@ private struct SettingsPage<Content: View>: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 24) { content }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.trailing, 6)
+        .padding(.trailing, 24)
+        .background(SettingsScrollIndicator())
+    }
+    .scrollIndicators(.visible)
+  }
+}
+
+// A persistent native gutter makes below-fold settings discoverable without extra copy.
+private struct SettingsScrollIndicator: NSViewRepresentable {
+  func makeNSView(context: Context) -> NSView { IndicatorView() }
+  func updateNSView(_ nsView: NSView, context: Context) {}
+
+  private final class IndicatorView: NSView {
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      var ancestor = superview
+      while let view = ancestor {
+        if let scrollView = view as? NSScrollView {
+          scrollView.scrollerStyle = .legacy
+          scrollView.autohidesScrollers = false
+          scrollView.hasVerticalScroller = true
+          break
+        }
+        ancestor = view.superview
+      }
     }
   }
 }
@@ -355,12 +406,14 @@ private struct GeneralSettingsView: View {
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
         }
-        Button("Export Data…", action: exportData)
+        Button("Export data…", action: exportData)
         if let exportMessage {
           Text(exportMessage).font(.system(size: 13)).foregroundStyle(.secondary)
         }
-        Text("Exports local settings and activity; calendar event contents are excluded.")
-          .font(.system(size: 13)).foregroundStyle(.secondary)
+        Text(
+          "Exports settings, sessions, to-dos, reminders, and categories. Calendar events are excluded."
+        )
+        .font(.system(size: 13)).foregroundStyle(.secondary)
       }
       SettingsSection("Privacy") {
         Text("No analytics or cloud storage; network access is only for updates.")
@@ -408,7 +461,7 @@ private struct UpdatesSettingsView: View {
   @Bindable var store: AppStore
   var body: some View {
     SettingsPage {
-      SettingsSection(store.updates.isConfigured ? "Updates" : "Updates unavailable") {
+      SettingsSection("Software update") {
         LabeledContent(
           "Version",
           value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
@@ -416,25 +469,25 @@ private struct UpdatesSettingsView: View {
         Text(store.updates.configurationMessage)
           .font(.system(size: 13))
           .foregroundStyle(store.updates.isConfigured ? Color.secondary : Color.orange)
-        Toggle(
-          isOn: Binding(
-            get: { store.updates.automaticallyChecks },
-            set: { store.updates.automaticallyChecks = $0 })
-        ) {
-          Text("Check automatically").frame(maxWidth: .infinity, alignment: .leading)
+        if store.updates.isConfigured {
+          Toggle(
+            isOn: Binding(
+              get: { store.updates.automaticallyChecks },
+              set: { store.updates.automaticallyChecks = $0 })
+          ) {
+            Text("Check automatically").frame(maxWidth: .infinity, alignment: .leading)
+          }
+          .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
+          Toggle(
+            isOn: Binding(
+              get: { store.updates.automaticallyDownloads },
+              set: { store.updates.automaticallyDownloads = $0 })
+          ) {
+            Text("Download automatically").frame(maxWidth: .infinity, alignment: .leading)
+          }
+          .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
+          Button("Check now") { store.updates.checkNow() }
         }
-        .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
-        .disabled(!store.updates.isConfigured)
-        Toggle(
-          isOn: Binding(
-            get: { store.updates.automaticallyDownloads },
-            set: { store.updates.automaticallyDownloads = $0 })
-        ) {
-          Text("Download automatically").frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
-        .disabled(!store.updates.isConfigured)
-        Button("Check Now") { store.updates.checkNow() }.disabled(!store.updates.isConfigured)
       }
     }
   }
@@ -447,15 +500,17 @@ private struct CalendarSettingsView: View {
       SettingsSection("Apple Calendar") {
         switch store.calendarService.authorizationState {
         case .notDetermined:
-          Text("Connect Calendar to show events and suppress reminders during meetings.")
+          Text("Allow calendar access to skip reminders during timed calendar events.")
             .font(.system(size: 13)).foregroundStyle(.secondary)
-          Button("Enable Calendar Integration") { Task { await store.enableCalendarIntegration() } }
+          Button("Allow calendar access") { Task { await store.enableCalendarIntegration() } }
             .buttonStyle(.borderedProminent)
           Text(
             "macOS calls this Full Access. Interval only reads selected calendars and never changes events."
           )
           .font(.system(size: 13)).foregroundStyle(.secondary)
         case .fullAccess:
+          Text("Interval reads selected calendars and never changes events.")
+            .font(.system(size: 13)).foregroundStyle(.secondary)
           Toggle(
             isOn: Binding(
               get: { store.data.settings.calendarIntegrationEnabled },
@@ -487,8 +542,10 @@ private struct CalendarSettingsView: View {
                 .padding(.leading, 18)
               }
               if store.data.settings.selectedCalendarIDs.isEmpty {
-                Text("No calendars selected. No events will be displayed or suppress reminders.")
-                  .font(.system(size: 13)).foregroundStyle(.secondary)
+                Text(
+                  "Select a calendar to display events and skip reminders during timed calendar events."
+                )
+                .font(.system(size: 13)).foregroundStyle(.secondary)
               }
             }
           }
@@ -502,6 +559,7 @@ private struct CalendarSettingsView: View {
         case .error(let message):
           Label("Calendar access failed: \(message)", systemImage: "exclamationmark.triangle")
             .foregroundStyle(.orange)
+          Button("Retry") { Task { await store.enableCalendarIntegration() } }
         }
       }
     }
@@ -510,7 +568,7 @@ private struct CalendarSettingsView: View {
   @ViewBuilder private func accessUnavailable(_ message: String) -> some View {
     Label(message, systemImage: "calendar.badge.exclamationmark")
       .font(.system(size: 13)).foregroundStyle(.secondary)
-    Button("Open Privacy Settings") {
+    Button("Open Calendar privacy settings") {
       NSWorkspace.shared.open(
         URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!)
     }

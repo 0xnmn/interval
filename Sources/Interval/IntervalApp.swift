@@ -64,21 +64,66 @@ struct IntervalApp: App {
         systemImage: store.timer.status == .running ? "timer" : "timer.circle")
     }.menuBarExtraStyle(.window)
     Settings { SettingsView(store: store) }
-      .commands {
-        CommandGroup(after: .newItem) {
-          Button("Start Session") { store.startSession() }.keyboardShortcut(
-            "s", modifiers: [.command, .shift]
-          )
-          .disabled(store.timer.status != .ready || store.completionSessionID != nil)
-          Divider()
-          Button("Focus") { store.selection = .focus }.keyboardShortcut("1")
-          Button("Stats") { store.selection = .history }.keyboardShortcut("2")
-          Button("Reminders") { store.selection = .reminders }.keyboardShortcut("3")
+      .commands { IntervalCommands(store: store) }
+  }
+}
+
+struct IntervalCommands: Commands {
+  @Bindable var store: AppStore
+  @Environment(\.openWindow) private var openWindow
+
+  var body: some Commands {
+    CommandGroup(after: .newItem) {
+      Button(
+        store.timer.kind == .focus
+          ? "Start session" : store.timer.status == .ready ? "Start break" : "Resume focus"
+      ) {
+        if store.timer.status == .ready { store.startSession() } else { store.endBreak() }
+      }.keyboardShortcut("s", modifiers: [.command, .shift])
+        .disabled(store.timer.kind == .focus && store.timer.status != .ready)
+      Button("Take a break") {
+        if store.timer.status == .ready { store.startBreakNow() } else { confirm(.takeBreak) }
+      }.keyboardShortcut("b", modifiers: [.command, .shift])
+        .disabled(store.timer.kind != .focus)
+      Button("Abandon…") { confirm(.abandon) }
+        .keyboardShortcut("x", modifiers: [.command, .shift])
+        .disabled(store.timer.status != .running && !store.breakEnded)
+      Menu("Adjust time") {
+        Button("+5 min") { store.adjustCurrentTime(by: 300) }
+          .keyboardShortcut("=", modifiers: [.command, .option])
+          .disabled(store.timer.duration >= 3600)
+        Button("−5 min") { store.adjustCurrentTime(by: -300) }
+          .keyboardShortcut("-", modifiers: [.command, .option])
+          .disabled(store.remaining <= 60)
+        ForEach([10, 15], id: \.self) { minutes in
+          Button("+\(minutes) min") { store.adjustCurrentTime(by: Double(minutes * 60)) }
+            .disabled(store.timer.duration >= 3600)
+          Button("−\(minutes) min") { store.adjustCurrentTime(by: -Double(minutes * 60)) }
+            .disabled(store.remaining <= 60)
         }
-        CommandGroup(after: .appInfo) {
-          Button("Check for Updates…") { store.updates.checkNow() }.disabled(
-            !store.updates.isConfigured)
-        }
-      }
+      }.disabled(store.timer.status != .ready && store.timer.status != .running)
+      Divider()
+      Button("Focus") { show(.focus) }.keyboardShortcut("1")
+      Button("Stats") { show(.history) }.keyboardShortcut("2")
+      Button("Reminders") { show(.reminders) }.keyboardShortcut("3")
+      Button("Open notch panel") { store.openNotchFromKeyboard() }
+        .keyboardShortcut("n", modifiers: [.command, .shift])
+        .disabled(!store.canOpenNotch)
+    }
+    CommandGroup(after: .appInfo) {
+      Button("Check for updates…") { store.updates.checkNow() }.disabled(
+        !store.updates.isConfigured)
+    }
+  }
+
+  private func show(_ destination: Destination) {
+    store.selection = destination
+    openWindow(id: "main")
+    NSApp.activate(ignoringOtherApps: true)
+  }
+
+  private func confirm(_ action: AppStore.TimerConfirmation) {
+    show(store.selection ?? .focus)
+    store.pendingTimerConfirmation = action
   }
 }

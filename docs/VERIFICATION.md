@@ -1,39 +1,74 @@
 # Verification
 
-## Executed locally
+## Reproducible local checks
 
-Environment: Apple silicon, macOS 26.6.2, Xcode 26.6, Swift 6.3.3.
+Environment: Apple silicon, macOS 26, Xcode 26.6, Swift 6.3.3.
 
-- `swift test`: 47 tests pass across timer, reminder, calendar/persistence, AppStore, and cursor-warning workflows. Completion checks cover waiting for Continue, idempotency, saved-feedback recovery, and no stale feedback during active focus. Overlay checks verify stable hosting-view identity, click-through transparency, display-driven cursor movement between engine ticks, and callback shutdown after closing.
-- `scripts/build.sh`: builds the production executable and app bundle under macOS's bundled Bash.
-- `codesign --verify --deep --strict .build/Interval.app`: validates the local ad-hoc app and embedded Sparkle code.
-- `bash -n scripts/build.sh scripts/release.sh`: validates shell syntax.
-- Invalid build versions/feed configuration are rejected; the release script refuses missing production credentials.
-- Actual app-bundle launches produced native SwiftUI fixture captures for timer, paused timer, reflection, history, calendar settings, reminder editor, paused warning, floating/full-screen reminder, menu, and general/update settings.
-- Independent adversarial code and design reviews were performed for the initial plan and each implementation phase, with fixes before moving forward.
+Latest product-review verification: **157 tests in 18 suites pass**. Release build
+and ad-hoc signature verification pass. Light/dark native screenshots were
+reviewed and recaptured after fixes. Movie capture failed on this run; motion
+claims are limited to the executed native motion tests, not a reviewed recording.
 
-## What the automated checks cover
+- `swift test --no-parallel`: core state machines and native AppKit/SwiftUI tests.
+- `scripts/build.sh`: release bundle, embedded Sparkle, ad-hoc signature validation.
+- `git diff --check`: patch hygiene.
+- `Interval --snapshot <path> --snapshot-scene <scene> --snapshot-appearance light|dark --snapshot-composited`:
+  fixture data in native windows, captured by WindowServer. Never edits user data.
+- `--snapshot-motion --snapshot <path.mov>` captures the actual entrance. Add
+  `--snapshot-reduce-motion` to exercise the deterministic reduced-motion path.
 
-Tests execute real state transitions and storage, including pause/resume/abandon; idempotent completion; four-session cadence; active time excluding pauses; subsecond persistence; unreadable-file protection; scratchpad/reflection persistence; calendar leap/month/time-zone and half-open overlap boundaries; calendar selection; idle-paused countdowns; suppression; recurrence coalescing; serialization; same-occurrence postponement; independent reminder CRUD; preview isolation; local export; and navigation stability.
+Product-review captures/logs are under `.build/product-review/` and
+`.build/product-*.log`. They are local artifacts, not committed assets.
 
-## Limits, not implied passes
+## Current behavior covered by tests
 
-- Initial implementation had no screen-recording access and used off-screen rendering. During the redesign, targeted WindowServer capture succeeded with `--snapshot-composited`. Native bitmap captures remain the repeatable layout check; they do not prove desktop blur. Composited capture checks the real native window, but background-dependent material appearance still merits on-device acceptance.
-- The test suite does not claim to have driven every control using macOS Accessibility automation, exercised VoiceOver end to end, or covered every physical display/notch/Spaces arrangement.
-- Calendar tests use injected events; they do not imply access was granted to the user's real calendars. Calendar and notification permission prompts remain explicit user choices.
-- Audible playback quality, physical headphone disconnect behavior, and real macOS lock/unlock edge cases need on-device acceptance testing.
-- A production Sparkle upgrade was not executed: Developer ID, notarization credentials, and a published signed update feed are not available. Local signature validation is not Apple notarization.
+- Focus completion automatically starts a break; optional reflection cannot block
+  it. Saving or leaving reflection does not reset the break. Running-break time
+  adjustments work while reflection is open.
+- Break completion counts overtime; focus starts only on explicit Resume.
+- No pause action; legacy paused data is recovered without inventing active time.
+- One-hour planned-duration cap and hour/day formatting.
+- Reminder recurrence coalescing, per-reminder idle debounce, mouse/typing warning
+  suspension, microphone activity, and all-day-event exclusion.
+- Real overlay lifecycle, preview dismissal, five-second skip guard, field focus,
+  native scrolling, checklist keyboard editing, and persistence.
+- Settings keyboard navigation and deep links to already-open Settings.
+- Native notch hover/click/Escape, heads-up expiry, keyboard-held expansion,
+  previous key-window restoration, and overtime pinning.
+- Color math for seven phase hues: 4.5:1 normal / 7:1 increased contrast against
+  the specified opaque surface, both themes. These ratios are not a certification
+  of every translucent pixel over arbitrary wallpaper.
+- One-shot motion, reduced-motion bypass, stable countdown updates, sound routing,
+  native-notification request contents, and update deferral.
 
-## Acceptance checks for a signed distribution
+## Acceptance limits
 
-Redesign-specific layout checks cover focus/paused with visible notes, dedicated reflection (unselected and selected emoji states), Stats, reminder list/empty templates/editor, floating/full-screen/max-emoji reminders, paused warning, menu, and all five settings pages. Focus, reflection and Reminders use a constrained 420×520 portrait window, Stats 640×520, and Settings 560×450. `reminder-editor-bottom` scrolls the actual native editor within a 420×474 viewport and exposes both suppression switches. `focus-no-animation` disables transactions for a static fixture; it is not a claim of end-to-end Reduce Motion or Reduce Transparency testing.
+The tests do not claim every control was driven with VoiceOver or every physical
+display/Spaces configuration was exercised. Calendar tests inject events; real
+permission prompts and browser microphone activity still merit on-device checks.
+Playback tests are not a human evaluation of sound quality.
 
-Example: `.build/Interval.app/Contents/MacOS/Interval --snapshot .build/focus.png --snapshot-scene focus --snapshot-composited`. This creates isolated fixture data, never edits the user's stored sessions, and requires macOS screen-capture access. Omit the final flag for native bitmap layout rendering.
+On this macOS version, constructing an accessibility-high-contrast NSAppearance
+without changing the system setting resolves to the ordinary Aqua appearance.
+Color tests explicitly exercise increased contrast; a native visual acceptance
+check should enable Increase Contrast in System Settings. The agent does not
+silently change the user's accessibility preferences for screenshots.
 
-1. Grant Calendar and Notifications access explicitly, then revoke each while running; confirm clear degraded states and no stale suppression.
-2. Complete a focus from the menu bar, confirm the break waits, then select feedback and optionally add a thought. Continue or Enter must start the break exactly once. Confirm break completion automatically starts focus; Pause and Abandon must stop progression.
-3. Type, scroll, and drag through a reminder deadline; the warning pauses and no takeover appears until idle. Postpone and confirm future recurrence is unchanged.
-4. Preview/dismiss every template, edit emoji size/message/duration, and verify full-screen controls remain reachable. Verify legacy floating reminders migrate to full screen with a minimum five-second duration.
-5. Test sleep, lock/unlock, fast user switching, full-screen apps, display removal, and mixed-DPI/notched displays. Verify no reminder storm or keyboard trap.
-6. Test VoiceOver, keyboard-only navigation, increased contrast, reduced transparency, and reduced motion.
-7. Validate signed version N → N+1 updates with real Sparkle archives; installation must defer during running/paused timers or visible reminders and preserve all local data.
+No production Sparkle upgrade has been executed: Developer ID, notarization, and
+a published signed feed are not configured. Ad-hoc signature validation is not
+Apple notarization.
+
+## Release acceptance
+
+1. Grant/revoke Calendar and Notifications; confirm clear degraded states.
+2. Complete focus without reflection, adjust the running break, let it overrun,
+   and Resume from main/menu/notch/notification. Verify one transition and no reset.
+3. Type, move, and use a microphone through reminder deadlines; confirm suppression
+   and no catch-up storm. Confirm all-day events never suppress reminders.
+4. Preview templates and a maximum-length reminder; scroll to the last line,
+   extend/skip, and verify Escape behavior and controls on small displays.
+5. Test sleep, lock/unlock, multiple displays, full-screen apps, and display removal.
+6. Test VoiceOver, keyboard-only use, Increase Contrast, Reduce Transparency,
+   Reduce Motion, and live light/dark changes.
+7. Validate signed version N → N+1 updates with a real feed, preserving all data
+   and deferring installation during active timers/reminders/reflection.

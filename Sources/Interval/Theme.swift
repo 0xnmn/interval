@@ -6,13 +6,39 @@ enum IntervalTheme {
   static let accent = Color.accentColor
   static let surface = Color(
     nsColor: NSColor(name: nil) { appearance in
-      let dark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-      return NSColor(white: dark ? 0.12 : 0.97, alpha: 1)
+      surfaceNSColor(for: appearance)
     })
-  static let border = Color.primary.opacity(0.07)
+  static let border = Color(
+    nsColor: NSColor(name: nil) { appearance in
+      borderNSColor(for: appearance)
+    })
   static let body = Font.system(size: 14)
   static let heading = Font.system(size: 14, weight: .semibold)
   static let icon = Font.system(size: 16, weight: .medium)
+
+  static func surfaceNSColor(for appearance: NSAppearance) -> NSColor {
+    NSColor(white: appearance.isDark ? 0.12 : 0.97, alpha: 1)
+  }
+
+  static func borderNSColor(for appearance: NSAppearance, increasedContrast: Bool? = nil) -> NSColor
+  {
+    NSColor(
+      white: appearance.isDark ? 1 : 0,
+      alpha: (increasedContrast ?? appearance.isHighContrast) ? 0.35 : 0.07)
+  }
+}
+
+extension NSAppearance {
+  fileprivate var isDark: Bool {
+    bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+  }
+
+  fileprivate var isHighContrast: Bool {
+    name == .accessibilityHighContrastAqua || name == .accessibilityHighContrastDarkAqua
+      || name == .accessibilityHighContrastVibrantLight
+      || name == .accessibilityHighContrastVibrantDark
+      || NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+  }
 }
 
 enum IntervalMotion {
@@ -104,11 +130,113 @@ extension PhaseColor {
     case .purple: .purple
     }
   }
+
+  /// A text/icon variant of the phase hue. Keep `color` for decorative fills and rings.
+  var foregroundColor: Color {
+    Color(
+      nsColor: NSColor(name: nil) { appearance in
+        phaseForegroundNSColor(base: nsColor, appearance: appearance)
+      })
+  }
+
+  private var nsColor: NSColor {
+    switch self {
+    case .green: .systemGreen
+    case .blue: .systemBlue
+    case .teal: .systemTeal
+    case .orange: .systemOrange
+    case .red: .systemRed
+    case .pink: .systemPink
+    case .purple: .systemPurple
+    }
+  }
+}
+
+/// Resolves a semantic hue to the nearest sRGB color meeting text contrast against the surface.
+/// Internal visibility intentionally keeps the color math directly testable.
+func phaseForegroundNSColor(base: NSColor, appearance: NSAppearance, increasedContrast: Bool? = nil)
+  -> NSColor
+{
+  var resolved = base
+  appearance.performAsCurrentDrawingAppearance { resolved = base.usingColorSpace(.sRGB) ?? base }
+  let base = resolved
+  let surface = IntervalTheme.surfaceNSColor(for: appearance).usingColorSpace(.sRGB)!
+  let target: CGFloat = (increasedContrast ?? appearance.isHighContrast) ? 7 : 4.5
+  guard contrastRatio(base, surface) < target else { return base }
+
+  let destination = NSColor(white: appearance.isDark ? 1 : 0, alpha: 1)
+  var low: CGFloat = 0
+  var high: CGFloat = 1
+  for _ in 0..<16 {
+    let midpoint = (low + high) / 2
+    if contrastRatio(blend(base, toward: destination, amount: midpoint), surface) >= target {
+      high = midpoint
+    } else {
+      low = midpoint
+    }
+  }
+  return blend(base, toward: destination, amount: high)
+}
+
+private func blend(_ color: NSColor, toward destination: NSColor, amount: CGFloat) -> NSColor {
+  let color = color.usingColorSpace(.sRGB)!
+  let destination = destination.usingColorSpace(.sRGB)!
+  return NSColor(
+    srgbRed: color.redComponent + (destination.redComponent - color.redComponent) * amount,
+    green: color.greenComponent + (destination.greenComponent - color.greenComponent) * amount,
+    blue: color.blueComponent + (destination.blueComponent - color.blueComponent) * amount,
+    alpha: color.alphaComponent)
+}
+
+private func contrastRatio(_ lhs: NSColor, _ rhs: NSColor) -> CGFloat {
+  func luminance(_ color: NSColor) -> CGFloat {
+    let color = color.usingColorSpace(.sRGB)!
+    func linear(_ value: CGFloat) -> CGFloat {
+      value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+    }
+    return 0.2126 * linear(color.redComponent) + 0.7152 * linear(color.greenComponent)
+      + 0.0722 * linear(color.blueComponent)
+  }
+  let values = [luminance(lhs), luminance(rhs)].sorted()
+  return (values[1] + 0.05) / (values[0] + 0.05)
+}
+
+struct IntervalSelectionButton: ButtonStyle {
+  let selected: Bool
+  @Environment(\.isEnabled) private var isEnabled
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.colorSchemeContrast) private var contrast
+  private var increaseContrast: Bool { contrast == .increased }
+  @State private var hovering = false
+
+  init(selected: Bool = false) { self.selected = selected }
+
+  func makeBody(configuration: Configuration) -> some View {
+    let active = isEnabled && (hovering || configuration.isPressed || selected)
+    configuration.label
+      .background(
+        selected
+          ? Color.accentColor.opacity(increaseContrast ? 0.3 : 0.2)
+          : Color.primary.opacity(active ? (configuration.isPressed ? 0.14 : 0.08) : 0),
+        in: RoundedRectangle(cornerRadius: 8)
+      )
+      .overlay {
+        RoundedRectangle(cornerRadius: 8)
+          .strokeBorder(
+            selected ? Color.accentColor.opacity(increaseContrast ? 0.9 : 0.55) : .clear)
+      }
+      .contentShape(RoundedRectangle(cornerRadius: 8))
+      .opacity(isEnabled ? 1 : 0.45)
+      .animation(reduceMotion ? nil : IntervalMotion.selection, value: active)
+      .onHover { hovering = $0 }
+  }
 }
 
 struct IntervalIconButton: ButtonStyle {
   @Environment(\.isEnabled) private var isEnabled
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.colorSchemeContrast) private var contrast
+  private var increaseContrast: Bool { contrast == .increased }
   @State private var hovering = false
 
   func makeBody(configuration: Configuration) -> some View {
@@ -116,7 +244,10 @@ struct IntervalIconButton: ButtonStyle {
       .font(IntervalTheme.icon)
       .frame(width: 36, height: 36)
       .background(
-        Color.primary.opacity(configuration.isPressed ? 0.18 : hovering ? 0.12 : 0.06),
+        Color.primary.opacity(
+          configuration.isPressed
+            ? (increaseContrast ? 0.26 : 0.18)
+            : hovering ? (increaseContrast ? 0.18 : 0.12) : (increaseContrast ? 0.1 : 0.06)),
         in: RoundedRectangle(cornerRadius: 9)
       )
       .contentShape(RoundedRectangle(cornerRadius: 9))
@@ -129,16 +260,19 @@ struct IntervalIconButton: ButtonStyle {
 
 struct GlassBackground: View {
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+  @Environment(\.colorSchemeContrast) private var contrast
+  private var increaseContrast: Bool { contrast == .increased }
   var body: some View {
+    let opaque = reduceTransparency || increaseContrast
     ZStack {
-      NativeGlass(reduceTransparency: reduceTransparency)
-      IntervalTheme.surface.opacity(reduceTransparency ? 1 : 0.58)
+      NativeGlass(opaque: opaque)
+      IntervalTheme.surface.opacity(opaque ? 1 : 0.58)
     }.ignoresSafeArea()
   }
 }
 
 private struct NativeGlass: NSViewRepresentable {
-  let reduceTransparency: Bool
+  let opaque: Bool
   func makeNSView(context: Context) -> NSVisualEffectView {
     let view = NSVisualEffectView()
     view.material = .hudWindow
@@ -149,8 +283,8 @@ private struct NativeGlass: NSViewRepresentable {
   func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
     DispatchQueue.main.async {
       guard let window = nsView.window else { return }
-      window.isOpaque = reduceTransparency
-      window.backgroundColor = reduceTransparency ? NSColor(IntervalTheme.surface) : .clear
+      window.isOpaque = opaque
+      window.backgroundColor = opaque ? NSColor(IntervalTheme.surface) : .clear
       window.titlebarAppearsTransparent = true
     }
   }
@@ -159,14 +293,19 @@ private struct NativeGlass: NSViewRepresentable {
 struct IntervalPrimaryButton: ButtonStyle {
   @Environment(\.isEnabled) private var isEnabled
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.colorSchemeContrast) private var contrast
+  private var increaseContrast: Bool { contrast == .increased }
   @State private var hovering = false
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .font(.system(size: 14, weight: .semibold))
-      .foregroundStyle(Color.primary.opacity(isEnabled ? 0.9 : 0.45))
+      .foregroundStyle(Color.primary.opacity(isEnabled ? (increaseContrast ? 1 : 0.9) : 0.45))
       .padding(.horizontal, 14).padding(.vertical, 7)
       .background(
-        Color.accentColor.opacity(configuration.isPressed ? 0.4 : hovering ? 0.32 : 0.25),
+        Color.accentColor.opacity(
+          configuration.isPressed
+            ? (increaseContrast ? 0.5 : 0.4)
+            : hovering ? (increaseContrast ? 0.42 : 0.32) : (increaseContrast ? 0.34 : 0.25)),
         in: RoundedRectangle(cornerRadius: 8)
       )
       .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(IntervalTheme.border) }

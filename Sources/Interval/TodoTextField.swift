@@ -34,7 +34,7 @@ struct TodoTextField: NSViewRepresentable {
     let coordinator = context.coordinator
     coordinator.parent = self
     if field.stringValue != text { field.stringValue = text }
-    field.textColor = completed ? .secondaryLabelColor : .labelColor
+    field.textColor = .labelColor
     if field.currentEditor() == nil {
       field.attributedStringValue = NSAttributedString(
         string: text,
