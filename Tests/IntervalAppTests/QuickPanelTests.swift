@@ -104,7 +104,11 @@ struct QuickPanelTests {
     try await Task.sleep(for: .milliseconds(300))
     #expect(panel.frame.width == NotchGeometry.expandedSize.width)
     panel.cancelOperation(nil)
-    try await Task.sleep(for: .milliseconds(300))
+    // Animation completion can be deferred by the compositor under system load.
+    for _ in 0..<20 {
+      if panel.frame == initialFrame { break }
+      try await Task.sleep(for: .milliseconds(50))
+    }
     #expect(panel.frame == initialFrame)
     store.data.settings.notchEnabled = false
     controller.update(store: store)

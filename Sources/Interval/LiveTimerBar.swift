@@ -58,17 +58,23 @@ struct LiveTimerBar: View {
           .accessibilityLabel("Live \(store.timer.kind.title) timer")
           .accessibilityValue(spokenDuration(store.displayedTime))
         if store.timer.status == .ready {
-          Button(action: store.startSession) { Text("Start") }
-            .buttonStyle(IntervalPrimaryButton())
-            .foregroundStyle(accent).help("Start interval")
+          if store.timer.kind == .focus {
+            Button(action: store.startSession) { Text("Start") }
+              .buttonStyle(IntervalPrimaryButton())
+              .foregroundStyle(accent).help("Start session")
+          } else {
+            Button(action: store.startSession) {
+              Label("Start break", systemImage: "cup.and.saucer")
+            }.buttonStyle(IntervalIconButton()).help("Start break")
+          }
         } else if store.timer.status == .running || store.breakEnded {
           if store.timer.kind == .focus {
             Button {
               confirmingBreak = true
             } label: {
-              Text("Take a break")
+              Label("Take a break", systemImage: "cup.and.saucer")
             }
-            .buttonStyle(IntervalPrimaryButton())
+            .buttonStyle(IntervalIconButton())
             .foregroundStyle(store.data.settings.breakColor.color).help("Start a break")
           } else {
             Button {

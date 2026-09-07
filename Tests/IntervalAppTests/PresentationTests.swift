@@ -7,6 +7,35 @@ import Testing
 @testable import Interval
 
 @MainActor struct PresentationTests {
+  @Test func allDayEventsRemainVisibleWithoutSuppressingReminders() {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let now = SnapshotRenderer.fixtureNow
+    let calendar = Calendar.autoupdatingCurrent
+    let start = calendar.startOfDay(for: now)
+    let end = calendar.date(byAdding: .day, value: 1, to: start)!
+    let service = CalendarService(fixtureEvents: [
+      CalendarEventSnapshot(
+        id: "holiday", title: "Holiday", start: start, end: end, allDay: true,
+        calendarName: "Work")
+    ])
+    let store = AppStore(
+      persistence: JSONStore(fileURL: directory.appendingPathComponent("state.json")),
+      calendarService: service, runtimeEnabled: false)
+    store.now = now
+    service.configure(enabled: true, selectedCalendarIDs: ["Work"])
+    service.show(month: now)
+
+    #expect(!service.hasEvent(at: now))
+    #expect(service.events(on: now).map(\.id) == ["holiday"])
+    #expect(service.todayEvents.map(\.id) == ["holiday"])
+
+    var reminder = Reminder(title: "Water", dueAt: now.addingTimeInterval(600))
+    reminder.suppressDuringFocus = false
+    reminder.suppressDuringCalendar = true
+    #expect(UpcomingReminders(store: store).reminderStatus(reminder) == "In 10:00")
+  }
+
   @Test func upcomingSuppressionOnlyDescribesOverlappingDueTimes() {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }

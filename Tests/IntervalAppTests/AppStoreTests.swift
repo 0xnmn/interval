@@ -1,6 +1,8 @@
 import Foundation
 import IntervalCore
+import Observation
 import Testing
+import os
 
 @testable import Interval
 
@@ -14,6 +16,66 @@ struct AppStoreTests {
       persistence: persistence, calendarService: CalendarService(fixtureEvents: []),
       runtimeEnabled: false)
     try body(store, persistence)
+  }
+
+  @Test func calendarClockOnlyInvalidatesOnMinuteChanges() throws {
+    try withStore { store, _ in
+      let minute = Date(timeIntervalSinceReferenceDate: 60_000)
+      store.now = minute
+      let changes = OSAllocatedUnfairLock(initialState: 0)
+      withObservationTracking {
+        _ = store.calendarNow
+      } onChange: {
+        changes.withLock { $0 += 1 }
+      }
+      for second in 1..<60 { store.now = minute.addingTimeInterval(Double(second)) }
+      #expect(changes.withLock { $0 } == 0)
+      store.now = minute.addingTimeInterval(60)
+      #expect(changes.withLock { $0 } == 1)
+      #expect(store.calendarNow == store.now)
+      store.now = minute.addingTimeInterval(86_400)
+      #expect(store.calendarNow == store.now)
+      store.now = minute
+      #expect(store.calendarNow == minute)
+    }
+  }
+
+  @Test func unchangedReminderTicksDoNotInvalidatePersistedState() throws {
+    try withStore { store, _ in
+      let now = Date(timeIntervalSince1970: 1_800_000_000)
+      store.data.reminders = [Reminder(title: "Water", dueAt: now.addingTimeInterval(600))]
+      let changes = OSAllocatedUnfairLock(initialState: 0)
+      withObservationTracking {
+        _ = store.data
+        _ = store.reminderOverlay
+      } onChange: {
+        changes.withLock { $0 += 1 }
+      }
+      for second in 0..<30 {
+        store.reconcileReminders(
+          at: now.addingTimeInterval(Double(second)),
+          environment: .init(isUserIdle: false, idleSeconds: 0))
+      }
+      #expect(changes.withLock { $0 } == 0)
+    }
+  }
+
+  @Test func idleDeadlineChangesStillPersistWithBatchedWrites() throws {
+    try withStore { store, persistence in
+      let now = Date(timeIntervalSince1970: 1_800_000_000)
+      store.data.reminders = [
+        Reminder(title: "Eyes", dueAt: now.addingTimeInterval(600), pauseWhenIdle: true)
+      ]
+      try persistence.save(store.data)
+      for second in 0...5 {
+        store.reconcileReminders(
+          at: now.addingTimeInterval(Double(second)),
+          environment: .init(idleSeconds: Double(second + 20)))
+      }
+      #expect(try persistence.load().reminders[0].dueAt == now.addingTimeInterval(600))
+      store.reconcileReminders(at: now.addingTimeInterval(6), environment: .init(idleSeconds: 26))
+      #expect(try persistence.load().reminders[0].dueAt == now.addingTimeInterval(606))
+    }
   }
 
   @Test func fourCompletionsOfferLongBreakExactlyOnce() throws {

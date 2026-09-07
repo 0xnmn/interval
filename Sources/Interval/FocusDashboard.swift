@@ -55,13 +55,17 @@ struct FocusControls: View {
       }
     }
     .safeAreaInset(edge: .bottom, spacing: 0) {
-      if store.timer.status == .ready {
+      if store.timer.status == .ready && store.timer.kind == .focus {
         Button(action: store.startSession) {
-          Text(store.timer.kind == .focus ? "Start session" : "Start break")
+          Text("Start session")
             .font(IntervalTheme.heading).frame(maxWidth: .infinity).padding(.vertical, 9)
         }.buttonStyle(.borderedProminent).tint(accent).controlSize(.large)
           .clipShape(Capsule()).padding(.horizontal, isNotch ? 0 : 24).padding(
             .bottom, isNotch ? 0 : 20)
+      } else if store.timer.status == .ready {
+        Button(action: store.startSession) {
+          Label("Start break", systemImage: "cup.and.saucer")
+        }.buttonStyle(IntervalIconButton()).help("Start break")
       }
     }
     .alert("Start a break now?", isPresented: $confirmingBreak) {
@@ -84,8 +88,8 @@ struct FocusControls: View {
         Button {
           if active { confirmingBreak = true } else { store.startBreakNow() }
         } label: {
-          Text("Take a break")
-        }.buttonStyle(IntervalPrimaryButton()).help("Start a break now")
+          Label("Take a break", systemImage: "cup.and.saucer")
+        }.buttonStyle(IntervalIconButton()).help("Start a break now")
           .foregroundStyle(store.data.settings.breakColor.color)
       } else if active || store.breakEnded {
         Button {
@@ -239,7 +243,7 @@ struct FocusDayPanel: View {
 
   init(store: AppStore, selectedDate: Date? = nil) {
     self.store = store
-    _selectedDay = State(initialValue: selectedDate ?? store.now)
+    _selectedDay = State(initialValue: selectedDate ?? store.calendarNow)
   }
 
   var sessions: [SessionRecord] {
@@ -272,7 +276,7 @@ struct FocusDayPanel: View {
       }.frame(minHeight: 280, idealHeight: 360, maxHeight: .infinity)
     }
     .onAppear { store.calendarService.show(month: selectedDay) }
-    .onChange(of: calendar.startOfDay(for: store.now)) { old, new in
+    .onChange(of: calendar.startOfDay(for: store.calendarNow)) { old, new in
       if calendar.isDate(selectedDay, inSameDayAs: old) { selectDay(new) }
     }
     .sheet(
@@ -306,7 +310,7 @@ struct FocusDayPanel: View {
           showsDatePicker.toggle()
         } label: {
           Text(
-            calendar.isDate(selectedDay, inSameDayAs: store.now)
+            calendar.isDate(selectedDay, inSameDayAs: store.calendarNow)
               ? "Today" : selectedDay.formatted(.dateTime.month(.abbreviated).day())
           )
           .font(IntervalTheme.heading).frame(maxWidth: .infinity)

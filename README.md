@@ -38,7 +38,7 @@ The default build targets the build Mac's architecture. It is a local developmen
 - Running intervals retain their deadline through sleep, screen lock, screensaver, user switching, and quit. On recovery, an expired interval is recorded once; missed phases are never replayed. Focus still requires reflection before a break. A break that expires while unavailable leaves focus ready. Legacy paused intervals are preserved as abandoned history rather than resumed.
 - Only completed focus sessions advance the long-break cadence. Abandoned intervals remain in History but do not advance it.
 - Settings changes affect the next timer, not a running timer.
-- Calendar suppression covers overlapping selected-calendar events, including all-day events, except canceled/declined events. Denied/disabled Calendar access cannot provide suppression.
+- Calendar suppression covers overlapping timed events from selected calendars, except canceled/declined events. All-day events remain visible but never suppress reminders. Denied/disabled Calendar access cannot provide suppression.
 - Missed reminders are skipped while the session is unavailable and on relaunch; there is no replay of every missed recurrence. Visible reminders are serialized. Postponement affects only the current occurrence, not the saved interval.
 - Full-screen reminders use edge-to-edge, nonactivating overlays on every display, including above other apps’ fullscreen Spaces. They cover the menu bar and Dock; Escape skips after five seconds, and they do not lock the system. Interval temporarily acts as a menu-bar utility during a fullscreen reminder, restoring its normal Dock presence afterward.
 

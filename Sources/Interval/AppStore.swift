@@ -6,7 +6,16 @@ import Observation
 @MainActor @Observable
 final class AppStore {
   var data: PersistedData
-  var now = Date()
+  var now = Date() {
+    didSet {
+      if floor(now.timeIntervalSinceReferenceDate / 60)
+        != floor(calendarNow.timeIntervalSinceReferenceDate / 60)
+      {
+        calendarNow = now
+      }
+    }
+  }
+  private(set) var calendarNow = Date()
   var persistenceError: String?
   var recoveryMessage: String?
   var didSave = false
@@ -100,12 +109,19 @@ final class AppStore {
     updateQuickPanels()
     ticker = Task { [weak self] in
       while !Task.isCancelled {
-        try? await Task.sleep(for: .milliseconds(250))
-        guard let self else { return }
-        self.now = Date()
-        self.reconcile(at: self.now)
+        // Only the cursor warning needs sub-second activity feedback. Timer deadlines
+        // remain authoritative; ordinary displays show whole seconds.
+        let delay: Duration =
+          if case .warning = self?.reminderOverlay {
+            .milliseconds(250)
+          } else {
+            .seconds(1)
+          }
+        try? await Task.sleep(for: delay, tolerance: .milliseconds(50))
+        guard !Task.isCancelled, let self else { return }
+        self.reconcile(at: Date())
         self.tickReminders(at: self.now)
-        if Int(self.now.timeIntervalSince1970) % 5 == 0 { self.checkpoint() }
+        self.checkpoint()  // Its elapsed-time guard handles coalesced or delayed wakeups.
       }
     }
     let center = NSWorkspace.shared.notificationCenter
@@ -646,7 +662,6 @@ final class AppStore {
     } else if previewReminderID != nil {
       cancelCurrentOverlay()
     }
-    let before = data.reminders
     let focusBusy =
       data.activeTimer.map { $0.kind == .focus && $0.status == .running }
       ?? false
@@ -655,17 +670,25 @@ final class AppStore {
       isSessionActive: sessionIsActive, isUserIdle: idleSeconds >= 1,
       focusIsRunningOrPaused: focusBusy, calendarHasEvent: calendarService.hasEvent(at: date),
       idleSeconds: idleSeconds)
-    reminderOverlay = reminderEngine.tick(
-      reminders: &data.reminders, now: date, environment: environment)
-    // Idle intervals move deadlines every tick; coalesce persistence, not the visible counter.
-    if before != data.reminders, reminderSaveDueAt == nil {
-      reminderSaveDueAt = date.addingTimeInterval(5)
-    }
-    if let saveDue = reminderSaveDueAt, date >= saveDue { save() }
+    reconcileReminders(at: date, environment: environment)
     let reminder = reminderOverlay.flatMap { visible in
       data.reminders.first { $0.id == visible.reminderID }
     }
     overlayController.update(reminderOverlay, reminder: reminder, store: self)
+  }
+
+  func reconcileReminders(at date: Date, environment: ReminderEnvironment) {
+    var reminders = data.reminders
+    let overlay = reminderEngine.tick(
+      reminders: &reminders, now: date, environment: environment)
+    if overlay != reminderOverlay { reminderOverlay = overlay }
+    // Idle intervals move deadlines every tick; coalesce persistence, not the visible counter.
+    // Mutating through data.reminders even when unchanged invalidates the entire app's views.
+    if reminders != data.reminders {
+      data.reminders = reminders
+      if reminderSaveDueAt == nil { reminderSaveDueAt = date.addingTimeInterval(5) }
+    }
+    if let saveDue = reminderSaveDueAt, date >= saveDue { save() }
   }
 
   private func updateQuickPanels() {

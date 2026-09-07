@@ -449,7 +449,7 @@ struct ReminderTakeoverView: View {
   }
 
   var body: some View {
-    TimelineView(.periodic(from: .now, by: 0.25)) { context in
+    TimelineView(.periodic(from: .now, by: 1)) { context in
       ZStack {
         fullscreenBackground
         fullscreenContent(now: context.date)

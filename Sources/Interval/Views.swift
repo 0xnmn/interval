@@ -108,7 +108,7 @@ struct HistoryView: View {
   private var calendar: Calendar { .autoupdatingCurrent }
   init(store: AppStore, categoryID: UUID? = nil, selectedDate: Date? = nil) {
     self.store = store
-    _selectedDay = State(initialValue: selectedDate ?? store.now)
+    _selectedDay = State(initialValue: selectedDate ?? store.calendarNow)
     _categoryFilter = State(initialValue: categoryID.map(CategoryFilter.category) ?? .all)
   }
   var body: some View {

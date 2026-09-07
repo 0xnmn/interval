@@ -22,7 +22,7 @@ struct DayTimeline: View {
             ZStack(alignment: .topLeading) {
               scrollAnchors
               hourGrid(width: timelineWidth)
-              if dayInterval.contains(store.now) {
+              if dayInterval.contains(store.calendarNow) {
                 currentTimeLine(width: timelineWidth)
               }
               ForEach(positionedItems) { item in
@@ -152,7 +152,7 @@ struct DayTimeline: View {
 
   private func currentTimeLine(width: CGFloat) -> some View {
     let color = store.data.settings.focusColor.color
-    let y = yPosition(for: store.now)
+    let y = yPosition(for: store.calendarNow)
     let crossesEvent = positionedItems.contains {
       let start = yPosition(for: $0.start)
       return y >= start && y < max(yPosition(for: $0.end), start + 24)
@@ -163,7 +163,7 @@ struct DayTimeline: View {
     }
     .frame(width: width + 4, alignment: .leading)
     .offset(x: labelWidth - 4, y: y - 3)
-    .accessibilityLabel("Current time, \(timeText(store.now))")
+    .accessibilityLabel("Current time, \(timeText(store.calendarNow))")
   }
 
   private var dayInterval: DateInterval {
@@ -197,7 +197,7 @@ struct DayTimeline: View {
   var calendarEvents: [CalendarEventSnapshot] {
     guard store.calendarService.isEnabled, store.calendarService.authorizationState == .fullAccess
     else { return [] }
-    if calendar.isDate(date, inSameDayAs: store.now) {
+    if calendar.isDate(date, inSameDayAs: store.calendarNow) {
       return store.calendarService.todayEvents.filter { $0.overlaps(dayInterval) }
     }
     return store.calendarService.events(on: date, calendar: calendar)
@@ -261,8 +261,8 @@ struct DayTimeline: View {
 
   private func scrollToNow(_ proxy: ScrollViewProxy) {
     let targetTime =
-      calendar.isDate(date, inSameDayAs: store.now)
-      ? store.now
+      calendar.isDate(date, inSameDayAs: store.calendarNow)
+      ? store.calendarNow
       : positionedItems.first?.start ?? calendar.date(
         bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
     let currentIndex = hourMarks.lastIndex(where: { $0 <= targetTime }) ?? 0

@@ -208,7 +208,9 @@ public struct CalendarEventSnapshot: Identifiable, Equatable, Sendable {
     self.status = status
   }
 
-  public var isEligibleForReminderSuppression: Bool { status != .canceled && status != .declined }
+  public var isEligibleForReminderSuppression: Bool {
+    !allDay && status != .canceled && status != .declined
+  }
   public func overlaps(_ interval: DateInterval) -> Bool {
     start < interval.end && end > interval.start
   }

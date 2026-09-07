@@ -44,6 +44,9 @@ struct CalendarEventTests {
     let now = Date()
     #expect(event(start: now, end: now.addingTimeInterval(60)).isEligibleForReminderSuppression)
     #expect(
+      !event(start: now, end: now.addingTimeInterval(60), allDay: true)
+        .isEligibleForReminderSuppression)
+    #expect(
       !event(start: now, end: now.addingTimeInterval(60), status: .canceled)
         .isEligibleForReminderSuppression)
     #expect(

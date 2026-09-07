@@ -271,8 +271,9 @@ struct AlmostTimeToast: View {
         Spacer()
       }
       HStack(spacing: 8) {
-        Button("Start break now", action: startBreak)
-          .buttonStyle(CompletionPillButtonStyle(prominent: true))
+        Button(action: startBreak) {
+          Label("Start break now", systemImage: "cup.and.saucer")
+        }.buttonStyle(IntervalIconButton()).help("Start break now")
         ForEach([1, 5, 15], id: \.self) { minutes in
           Button("+\(minutes)m") { extend(TimeInterval(minutes * 60)) }
             .buttonStyle(CompletionPillButtonStyle(prominent: false))
