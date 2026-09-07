@@ -33,6 +33,42 @@ struct QuickPanelTests {
         == settings)
   }
 
+  @Test func nativeHeadsUpExpandsAndCollapsesWithoutReplay() async throws {
+    let store = makeStore()
+    defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }
+    let now = Date()
+    store.now = now
+    store.data.settings.notchEnabled = true
+    store.data.reminders = []
+    store.data.activeTimer = TimerState(
+      kind: .focus, duration: 1500, status: .running,
+      startedAt: now.addingTimeInterval(-1440), deadline: now.addingTimeInterval(60))
+    let controller = NotchController()
+    defer { controller.close() }
+    let original = Set(NSApp.windows.map(\.windowNumber))
+    controller.update(store: store)
+    let panel = try #require(
+      NSApp.windows.first { !original.contains($0.windowNumber) && $0.isVisible })
+    let host = try #require(panel.contentView?.subviews.first as? NSHostingView<NotchRootView>)
+    #expect(host.rootView.headsUp?.target == .focus(store.timer.id))
+    for _ in 0..<40 {
+      if panel.frame.width == NotchGeometry.expandedSize.width { break }
+      try await Task.sleep(for: .milliseconds(50))
+    }
+    #expect(panel.frame.width == NotchGeometry.expandedSize.width)
+    #expect(!panel.isKeyWindow)
+    store.now = now.addingTimeInterval(11)
+    controller.update(store: store)
+    for _ in 0..<40 {
+      if !host.rootView.expanded { break }
+      try await Task.sleep(for: .milliseconds(50))
+    }
+    #expect(!host.rootView.expanded)
+    #expect(host.rootView.headsUp == nil)
+    controller.update(store: store)
+    #expect(!host.rootView.expanded)
+  }
+
   @Test func nativeNotchHoverAndClickExpandAndEscapeCollapses() async throws {
     let store = makeStore()
     defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }

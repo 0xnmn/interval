@@ -35,6 +35,7 @@ final class AppStore {
   private var ticker: Task<Void, Never>?
   private var observers: [NSObjectProtocol] = []
   private var reminderEngine = ReminderEngine()
+  @ObservationIgnored private var reminderEnvironment = ReminderEnvironment()
   private let overlayController = ReminderOverlayController()
   private let notchController = NotchController()
   private var systemIsSleeping = false
@@ -690,6 +691,7 @@ final class AppStore {
   }
 
   func reconcileReminders(at date: Date, environment: ReminderEnvironment) {
+    reminderEnvironment = environment
     var reminders = data.reminders
     let overlay = reminderEngine.tick(
       reminders: &reminders, now: date, environment: environment)
@@ -701,6 +703,47 @@ final class AppStore {
       if reminderSaveDueAt == nil { reminderSaveDueAt = date.addingTimeInterval(5) }
     }
     if let saveDue = reminderSaveDueAt, date >= saveDue { save() }
+  }
+
+  var notchHeadsUpCandidates: [NotchHeadsUp] {
+    guard completionSessionID == nil, !breakEnded else { return [] }
+    var candidates: [NotchHeadsUp] = []
+    if timer.kind == .focus, timer.status == .running, let deadline = timer.deadline {
+      candidates.append(
+        NotchHeadsUp(
+          target: .focus(timer.id), deadline: deadline,
+          title: "Ready to wrap up?", symbol: "timer"))
+    }
+    candidates += data.reminders.compactMap { reminder in
+      guard reminder.isEnabled, let due = reminder.effectiveDueAt else { return nil }
+      return NotchHeadsUp(
+        target: .reminder(reminder.id), deadline: due,
+        title: reminder.title, symbol: "bell",
+        eligible: reminderEngine.canCountDown(reminder, environment: reminderEnvironment))
+    }
+    return candidates
+  }
+
+  func canAdjustHeadsUp(_ headsUp: NotchHeadsUp, minutes: Int) -> Bool {
+    guard [5, 10, 15].contains(minutes) else { return false }
+    switch headsUp.target {
+    case .focus(let id):
+      return timer.id == id && timer.kind == .focus && timer.status == .running
+        && (timer.deadline ?? .distantPast) > now && timer.duration + Double(minutes * 60) <= 3600
+    case .reminder(let id):
+      return data.reminders.contains {
+        $0.id == id && $0.effectiveDueAt == headsUp.deadline
+          && reminderEngine.canCountDown($0, environment: reminderEnvironment)
+      }
+    }
+  }
+
+  func adjustHeadsUp(_ headsUp: NotchHeadsUp, minutes: Int) {
+    guard canAdjustHeadsUp(headsUp, minutes: minutes) else { return }
+    switch headsUp.target {
+    case .focus: adjustCurrentTime(by: Double(minutes * 60))
+    case .reminder(let id): snoozeReminder(id, seconds: Double(minutes * 60))
+    }
   }
 
   private func updateQuickPanels() {

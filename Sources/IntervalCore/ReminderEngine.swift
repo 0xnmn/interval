@@ -116,8 +116,7 @@ public struct ReminderEngine: Equatable, Sendable {
     coalesceMissed(&reminders, now: now, environment: environment)
     guard
       let candidate = reminders.filter({
-        $0.isEnabled && $0.effectiveDueAt != nil && !isSuppressed($0, environment)
-          && !isIdlePaused($0, environment)
+        $0.effectiveDueAt != nil && canCountDown($0, environment: environment)
       })
       .sorted(by: {
         ($0.effectiveDueAt!, $0.id.uuidString) < ($1.effectiveDueAt!, $1.id.uuidString)
@@ -154,6 +153,11 @@ public struct ReminderEngine: Equatable, Sendable {
   public mutating func cancel(reminderID: UUID) {
     guard overlay?.reminderID == reminderID else { return }
     cancel()
+  }
+
+  public func canCountDown(_ reminder: Reminder, environment: ReminderEnvironment) -> Bool {
+    reminder.isEnabled && environment.isSessionActive
+      && !isSuppressed(reminder, environment) && !isIdlePaused(reminder, environment)
   }
 
   private func isSuppressed(_ reminder: Reminder, _ environment: ReminderEnvironment) -> Bool {

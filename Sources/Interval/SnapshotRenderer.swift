@@ -216,6 +216,27 @@ struct SnapshotRequest {
       _ = store.calendarService.hasEvent(at: fixtureNow)
     }
     switch request.scene {
+    case "notch-focus-heads-up", "notch-reminder-heads-up":
+      store.completionSessionID = nil
+      store.data.activeTimer = TimerState(
+        kind: .focus, duration: 1500, status: .running,
+        startedAt: fixtureNow.addingTimeInterval(-1440), deadline: fixtureNow.addingTimeInterval(60)
+      )
+      let reminder = Reminder(
+        title: "Look away", suppressDuringFocus: false,
+        dueAt: fixtureNow.addingTimeInterval(60))
+      store.data.reminders = [reminder]
+      let candidate = store.notchHeadsUpCandidates.first {
+        request.scene == "notch-focus-heads-up"
+          ? $0.target == .focus(store.timer.id)
+          : $0.target == .reminder(reminder.id)
+      }
+      let geometry = NotchGeometry(hasHardwareNotch: true, cutoutWidth: 180, topInset: 32)
+      size = geometry.frame(expanded: true, in: NSRect(x: 0, y: 0, width: 1440, height: 900)).size
+      view = AnyView(
+        NotchRootView(
+          store: store, expanded: true, geometry: geometry,
+          collapse: {}, headsUp: candidate))
     case "notch-compact", "notch-expanded", "notch-fallback", "notch-todos", "notch-reminders",
       "notch-reflection", "notch-running", "notch-overtime":
       let geometry =

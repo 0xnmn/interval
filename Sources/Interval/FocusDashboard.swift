@@ -140,10 +140,8 @@ struct FocusControls: View {
           ? "Add 5 minutes · Right-click for more" : "Remove 5 minutes · Right-click for more"
       )
       .contextMenu {
-        ForEach([5, 10, 15], id: \.self) { minutes in
-          Button("\(direction > 0 ? "+" : "−") \(minutes) minutes") {
-            store.adjustCurrentTime(by: Double(direction * minutes * 60))
-          }
+        TimeAdjustmentChoices(direction: direction) { minutes in
+          store.adjustCurrentTime(by: Double(direction * minutes * 60))
         }
       }
   }

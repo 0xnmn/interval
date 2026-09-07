@@ -11,6 +11,9 @@ final class NotchController: NSObject {
   private var trackingView: NotchTrackingView?
   private var host: NSHostingView<NotchRootView>?
   private var expanded = false
+  private var headsUpState = NotchHeadsUpState()
+  private var automaticExpansion = false
+  private var hovering = false
   private var collapseTask: Task<Void, Never>?
   private var targetFrame: NSRect?
   private var transitionID = UUID()
@@ -38,7 +41,26 @@ final class NotchController: NSObject {
     } else if expanded {
       reposition(animated: true)
     }
-    if store.breakEnded { expand() }
+    let previous = headsUpState.active
+    headsUpState.update(
+      store.notchHeadsUpCandidates, at: store.now,
+      holding: hovering || panel?.firstResponder is NSTextView)
+    if headsUpState.active != previous {
+      if headsUpState.active != nil {
+        if !expanded { automaticExpansion = true }
+        expand()
+        refreshRoot()
+      } else if automaticExpansion {
+        automaticExpansion = false
+        collapse()
+      } else {
+        refreshRoot()
+      }
+    }
+    if store.breakEnded {
+      expand()
+      if previous != nil { refreshRoot() }
+    }
   }
 
   func close() {
@@ -51,6 +73,9 @@ final class NotchController: NSObject {
     host = nil
     store = nil
     expanded = false
+    headsUpState.dismiss()
+    automaticExpansion = false
+    hovering = false
     targetFrame = nil
     transitionID = UUID()
   }
@@ -76,8 +101,14 @@ final class NotchController: NSObject {
     let trackingView = NotchTrackingView()
     trackingView.wantsLayer = true
     trackingView.layer?.masksToBounds = true
-    trackingView.onEnter = { [weak self] in self?.expand() }
-    trackingView.onExit = { [weak self] in self?.scheduleCollapse() }
+    trackingView.onEnter = { [weak self] in
+      self?.hovering = true
+      self?.expand()
+    }
+    trackingView.onExit = { [weak self] in
+      self?.hovering = false
+      self?.scheduleCollapse()
+    }
     trackingView.onActivate = { [weak self] in self?.expand() }
     let host = NSHostingView(
       rootView: NotchRootView(store: store, expanded: false, geometry: geometry(), collapse: {}))
@@ -123,7 +154,7 @@ final class NotchController: NSObject {
   private func collapseUnlessEditing() {
     guard let panel else { return }
     // A field editor is an NSTextView even when the SwiftUI control is a TextField.
-    if panel.firstResponder is NSTextView { return }
+    if panel.firstResponder is NSTextView || headsUpState.active != nil { return }
     collapse()
   }
 
@@ -131,6 +162,8 @@ final class NotchController: NSObject {
     collapseTask?.cancel()
     collapseTask = nil
     guard expanded, store?.breakEnded != true else { return }
+    headsUpState.dismiss()
+    automaticExpansion = false
     expanded = false
     panel?.resignKey()
     // Keep expanded content in place until the shrinking panel has finished clipping it.
@@ -142,7 +175,7 @@ final class NotchController: NSObject {
     host?.rootView = NotchRootView(
       store: store, expanded: expanded, geometry: geometry(),
       collapse: { [weak self] in self?.collapse() },
-      expand: { [weak self] in self?.expand() })
+      expand: { [weak self] in self?.expand() }, headsUp: headsUpState.active)
   }
 
   private func reposition(animated: Bool) {
@@ -268,6 +301,7 @@ struct NotchRootView: View {
   let geometry: NotchGeometry
   let collapse: () -> Void
   var expand: () -> Void = {}
+  var headsUp: NotchHeadsUp? = nil
   @State var page = 0
 
   private var accent: Color {
@@ -281,17 +315,23 @@ struct NotchRootView: View {
         Color.clear.frame(height: geometry.topInset)
         VStack(spacing: 8) {
           HStack {
-            Image(systemName: store.timer.kind == .focus ? "timer" : "cup.and.saucer")
-              .foregroundStyle(accent)
+            Image(
+              systemName: headsUp?.symbol
+                ?? (store.timer.kind == .focus ? "timer" : "cup.and.saucer")
+            )
+            .foregroundStyle(accent)
             Text(
-              store.completionSessionID != nil
-                ? "Reflect"
-                : store.breakEnded
-                  ? "Break ended" : store.timer.kind == .focus ? "Focus" : "Taking a break"
+              headsUp != nil
+                ? headsUp!.actionTitle
+                : store.completionSessionID != nil
+                  ? "Reflect"
+                  : store.breakEnded
+                    ? "Break ended" : store.timer.kind == .focus ? "Focus" : "Taking a break"
             )
             .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
             Spacer()
-            ForEach(store.completionSessionID == nil ? 0..<3 : 0..<0, id: \.self) { index in
+            ForEach(store.completionSessionID == nil && headsUp == nil ? 0..<3 : 0..<0, id: \.self)
+            { index in
               Button {
                 page = index
               } label: {
@@ -313,6 +353,8 @@ struct NotchRootView: View {
           }
           if let id = store.completionSessionID {
             ScrollView { ReflectionView(store: store, sessionID: id) }
+          } else if let headsUp {
+            NotchHeadsUpView(store: store, headsUp: headsUp, dismiss: collapse)
           } else if page == 1 {
             ScrollView { TodoList(store: store) }
           } else if page == 2 {
@@ -322,6 +364,7 @@ struct NotchRootView: View {
           }
         }.padding(.horizontal, 20).padding(.vertical, 12)
           .animation(reduceMotion ? nil : IntervalMotion.selection, value: page)
+          .animation(reduceMotion ? nil : IntervalMotion.selection, value: headsUp?.target)
           .frame(
             width: NotchGeometry.expandedSize.width,
             height: store.completionSessionID != nil
