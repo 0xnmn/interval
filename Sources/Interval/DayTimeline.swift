@@ -6,6 +6,7 @@ struct DayTimeline: View {
   @Bindable var store: AppStore
   @Binding var selectedSessionID: UUID?
   let date: Date
+  var sessionFilter: (SessionRecord) -> Bool = { _ in true }
 
   private let calendar = Calendar.autoupdatingCurrent
   private let hourHeight: CGFloat = 100
@@ -35,7 +36,7 @@ struct DayTimeline: View {
         .frame(minHeight: 200)
         .task(id: dayInterval.start) {
           await Task.yield()
-          scrollToNow(proxy)
+          scrollToActivity(proxy)
         }
       }
     }
@@ -203,13 +204,14 @@ struct DayTimeline: View {
     return store.calendarService.events(on: date, calendar: calendar)
   }
 
-  private var positionedItems: [PositionedTimelineItem] {
-    var items: [TimelineItem] = store.data.sessions.compactMap { session in
-      guard session.startedAt < dayInterval.end, session.endedAt > dayInterval.start else {
-        return nil
-      }
-      return .session(session)
+  var sessions: [SessionRecord] {
+    store.data.sessions.filter {
+      $0.startedAt < dayInterval.end && $0.endedAt >= dayInterval.start && sessionFilter($0)
     }
+  }
+
+  private var positionedItems: [PositionedTimelineItem] {
+    var items = sessions.map(TimelineItem.session)
     items +=
       calendarEvents
       .filter { !$0.allDay }
@@ -259,12 +261,12 @@ struct DayTimeline: View {
     max(item.end, max(item.start, dayInterval.start).addingTimeInterval(24 / hourHeight * 3_600))
   }
 
-  private func scrollToNow(_ proxy: ScrollViewProxy) {
+  private func scrollToActivity(_ proxy: ScrollViewProxy) {
     let targetTime =
-      calendar.isDate(date, inSameDayAs: store.calendarNow)
-      ? store.calendarNow
-      : positionedItems.first?.start ?? calendar.date(
-        bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
+      positionedItems.first?.start
+      ?? (calendar.isDate(date, inSameDayAs: store.calendarNow)
+        ? store.calendarNow
+        : calendar.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date)
     let currentIndex = hourMarks.lastIndex(where: { $0 <= targetTime }) ?? 0
     let target = "timeline-hour-\(currentIndex)"
     proxy.scrollTo(target, anchor: .top)

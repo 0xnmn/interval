@@ -18,7 +18,7 @@ struct DailyStatsTests {
     }
   }
 
-  @Test func dashboardSelectedDateScopesStatsAndCalendar() {
+  @Test func statsSelectedDateScopesTimelineWhileDashboardStaysOnToday() {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
     let now = SnapshotRenderer.fixtureNow
@@ -39,11 +39,17 @@ struct DailyStatsTests {
     service.show(month: yesterday)
     _ = service.hasEvent(at: now)
     let timer = store.timer
-    let previous = FocusDayPanel(store: store, selectedDate: yesterday)
-    #expect(previous.sessions.reduce(0) { $0 + $1.activeDuration } == 1_200)
+    let previous = HistoryView(store: store, selectedDate: yesterday)
+    #expect(previous.focusDuration == 1_200)
     #expect(FocusDayPanel(store: store).sessions.reduce(0) { $0 + $1.activeDuration } == 4_500)
     let timeline = DayTimeline(store: store, selectedSessionID: .constant(nil), date: yesterday)
     #expect(timeline.calendarEvents.map(\.id) == ["previous"])
+    #expect(timeline.sessions.reduce(0) { $0 + $1.activeDuration } == 1_200)
+    let filtered = DayTimeline(
+      store: store, selectedSessionID: .constant(nil), date: yesterday,
+      sessionFilter: { $0.categoryID == store.data.categories[0].id })
+    #expect(filtered.sessions.isEmpty)
+    #expect(filtered.calendarEvents.map(\.id) == ["previous"])
     #expect(
       DayTimeline(store: store, selectedSessionID: .constant(nil), date: now).calendarEvents.isEmpty
     )
@@ -80,6 +86,28 @@ struct DailyStatsTests {
     let empty = HistoryView(store: store, selectedDate: store.now.addingTimeInterval(7 * 86_400))
     #expect(empty.focusDuration == 0)
     #expect(empty.feedbackStats.allSatisfy { $0.count == 0 })
+  }
+
+  @Test func timelineAndStatsUseSameDayForOvernightSessions() {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = AppStore(
+      persistence: JSONStore(fileURL: directory.appendingPathComponent("state.json")),
+      runtimeEnabled: false)
+    let midnight = Calendar.current.startOfDay(for: SnapshotRenderer.fixtureNow)
+    let session = SessionRecord(
+      timerID: UUID(), kind: .focus,
+      startedAt: midnight.addingTimeInterval(-1500), endedAt: midnight,
+      plannedDuration: 1500, activeDuration: 1500, outcome: .completed)
+    store.data.sessions = [session]
+    for (day, expectedCount) in [(midnight.addingTimeInterval(-3600), 0), (midnight, 1)] {
+      let stats = HistoryView(store: store, selectedDate: day)
+      let timeline = DayTimeline(
+        store: store, selectedSessionID: .constant(nil), date: day,
+        sessionFilter: stats.includesSession)
+      #expect(stats.completedFocusCount == expectedCount)
+      #expect(timeline.sessions.count == expectedCount)
+    }
   }
 
   @Test func unratedIsExplicitAndBreaksNeverCountAsFocusFeedback() {

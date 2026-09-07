@@ -233,41 +233,23 @@ struct HistoryView: View {
         Spacer()
         Text(summaryText).font(IntervalTheme.body).foregroundStyle(.secondary)
       }.padding(.horizontal, 20).frame(height: 44)
-      if dayItems.isEmpty {
-        Text(emptyStatus).font(IntervalTheme.body).foregroundStyle(.secondary)
-          .padding(20).frame(maxWidth: .infinity, alignment: .leading)
-      } else {
-        ScrollView {
-          LazyVStack(alignment: .leading, spacing: 10) {
-            ForEach(dayItems) { item in
-              switch item {
-              case .calendar(let event): CalendarEventRow(event: event)
-              case .session(let session):
-                Button {
-                  selectedSession = session.id
-                } label: {
-                  SessionRow(session: session).frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 8)
-                }.buttonStyle(.plain)
-              }
-            }
-          }.padding(12)
-        }
-      }
+      DayTimeline(
+        store: store, selectedSessionID: $selectedSession, date: selectedDay,
+        sessionFilter: includesSession
+      )
+      .id(calendar.startOfDay(for: selectedDay))
+      .id(categoryFilter)
+      .padding(.horizontal, 20)
     }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
   }
   private var daySessions: [SessionRecord] {
-    store.data.sessions.filter {
-      calendar.isDate($0.endedAt, inSameDayAs: selectedDay) && categoryFilter.matches($0)
-    }.sorted { $0.endedAt < $1.endedAt }
+    store.data.sessions.filter(includesSession).sorted { $0.endedAt < $1.endedAt }
+  }
+  func includesSession(_ session: SessionRecord) -> Bool {
+    calendar.isDate(session.endedAt, inSameDayAs: selectedDay) && categoryFilter.matches(session)
   }
   private var dayCalendarEvents: [CalendarEventSnapshot] {
     store.calendarService.events(on: selectedDay, calendar: calendar)
-  }
-  private var dayItems: [HistoryItem] {
-    (daySessions.map(HistoryItem.session) + dayCalendarEvents.map(HistoryItem.calendar)).sorted {
-      $0.start < $1.start
-    }
   }
   private var summaryText: String {
     "\(daySessions.count) session\(daySessions.count == 1 ? "" : "s") · \(dayCalendarEvents.count) event\(dayCalendarEvents.count == 1 ? "" : "s")"
@@ -377,9 +359,6 @@ struct HistoryView: View {
     }
     return nil
   }
-  private var emptyStatus: String {
-    "No activity on this day."
-  }
   private func sessionCount(on date: Date) -> Int {
     store.data.sessions.count {
       calendar.isDate($0.endedAt, inSameDayAs: date) && categoryFilter.matches($0)
@@ -428,81 +407,6 @@ struct FeedbackStat: Identifiable {
   let id: String
   let label: String
   let count: Int
-}
-
-enum HistoryItem: Identifiable {
-  case session(SessionRecord)
-  case calendar(CalendarEventSnapshot)
-
-  var id: String {
-    switch self {
-    case .session(let value): "session-\(value.id)"
-    case .calendar(let value): "calendar-\(value.id)"
-    }
-  }
-  var start: Date {
-    switch self {
-    case .session(let value): value.startedAt
-    case .calendar(let value): value.start
-    }
-  }
-}
-
-struct CalendarEventRow: View {
-  let event: CalendarEventSnapshot
-  var body: some View {
-    HStack(alignment: .top) {
-      Image(systemName: "calendar").foregroundStyle(.blue)
-      VStack(alignment: .leading, spacing: 2) {
-        Text(event.title).font(IntervalTheme.heading)
-        Text("Apple Calendar · \(event.calendarName)").font(IntervalTheme.body.weight(.medium))
-          .foregroundStyle(.blue)
-        Text(timeDescription + statusDescription).font(IntervalTheme.body).foregroundStyle(
-          .secondary)
-      }
-    }.padding(.vertical, 5).padding(.horizontal, 8).frame(maxWidth: .infinity, alignment: .leading)
-  }
-  private var timeDescription: String {
-    if event.allDay { return "All day" }
-    return
-      "\(event.start.formatted(date: .omitted, time: .shortened))–\(event.end.formatted(date: .omitted, time: .shortened))"
-  }
-  private var statusDescription: String {
-    switch event.status {
-    case .confirmed: ""
-    case .tentative: " · Tentative"
-    case .canceled: " · Canceled — does not suppress reminders"
-    case .declined: " · Declined — does not suppress reminders"
-    }
-  }
-}
-
-struct SessionRow: View {
-  let session: SessionRecord
-  var showsReflection = true
-  var body: some View {
-    HStack {
-      Image(systemName: session.outcome == .completed ? "checkmark.circle.fill" : "xmark.circle")
-        .foregroundStyle(session.outcome == .completed ? .teal : .secondary)
-      VStack(alignment: .leading) {
-        Text(session.title?.nilIfBlank ?? session.kind.title).font(IntervalTheme.heading)
-        Text(session.categoryName?.nilIfBlank ?? "Others")
-          .font(IntervalTheme.body.weight(.medium)).foregroundStyle(.teal)
-        Text(
-          "\(session.kind.title) · \(session.outcome.rawValue.capitalized) · \(session.startedAt.formatted(date: .omitted, time: .shortened))–\(session.endedAt.formatted(date: .omitted, time: .shortened)) · \(session.isDurationEstimated ? "≈ " : "")\(durationString(session.activeDuration))"
-        ).font(IntervalTheme.body).foregroundStyle(.secondary)
-        if session.isDurationEstimated {
-          Text("Estimated duration").font(IntervalTheme.body).foregroundStyle(.secondary)
-        }
-        if showsReflection, let feedback = session.feedback {
-          Text(feedback.capitalized).font(IntervalTheme.body)
-        }
-        if showsReflection, let journal = session.journal?.nilIfBlank {
-          Text(journal).font(IntervalTheme.body).foregroundStyle(.secondary).lineLimit(2)
-        }
-      }
-    }.padding(.vertical, 3)
-  }
 }
 
 struct ReflectionView: View {

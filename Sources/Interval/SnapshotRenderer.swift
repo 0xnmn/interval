@@ -210,9 +210,10 @@ struct SnapshotRequest {
     let view: AnyView
     if request.scene == "focus-countdown" { store.now = fixtureNow.addingTimeInterval(67) }
     if request.scene == "focus-countdown-next" { store.now = fixtureNow.addingTimeInterval(68) }
-    if request.scene == "dashboard-calendar" {
+    if request.scene == "dashboard-calendar" || request.scene.hasPrefix("history") {
       store.calendarService.configure(
-        enabled: true, selectedCalendarIDs: store.data.settings.selectedCalendarIDs)
+        enabled: store.data.settings.calendarIntegrationEnabled,
+        selectedCalendarIDs: store.data.settings.selectedCalendarIDs)
       _ = store.calendarService.hasEvent(at: fixtureNow)
     }
     switch request.scene {
@@ -276,14 +277,12 @@ struct SnapshotRequest {
         .safeAreaInset(edge: .bottom, spacing: 0) { LiveTimerBar(store: store) })
     case "history-category":
       size = NSSize(width: 820, height: 680)
-      view = AnyView(HistoryView(store: store, categoryID: store.data.categories.first?.id))
+      view = AnyView(
+        HistoryView(store: store, categoryID: store.data.categories.first?.id)
+          .background(GlassBackground()))
     case "history-legacy":
       size = NSSize(width: 580, height: 650)
-      view = AnyView(
-        VStack {
-          SessionRow(session: store.data.sessions[0]).padding()
-          SessionInspector(store: store, session: store.data.sessions[0])
-        })
+      view = AnyView(SessionInspector(store: store, session: store.data.sessions[0]))
     case "reminders", "reminders-empty", "reminders-compact":
       store.selection = .reminders
       size =
@@ -404,12 +403,11 @@ struct SnapshotRequest {
       store.selection = .focus
       size = NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))
-    case "dashboard-previous":
-      size = NSSize(width: 420, height: 680)
-      view = AnyView(
-        FocusDayPanel(
-          store: store,
-          selectedDate: Calendar.current.date(byAdding: .day, value: -1, to: store.now)!))
+    case "dashboard-busy":
+      store.data.todos = (1...30).map { TodoItem(title: "Task \($0)") }
+      store.data.reminders = Reminder.templates(startingAt: store.now)
+      size = NSSize(width: 780, height: 620)
+      view = AnyView(MainView(store: store))
     default:
       store.selection = .focus
       size = NSSize(width: 880, height: 680)

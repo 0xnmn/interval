@@ -150,15 +150,20 @@ struct FocusControls: View {
 
 struct UpcomingReminders: View {
   @Bindable var store: AppStore
+  var showsHeading = true
+  var maximumCount: Int? = 3
   var body: some View {
     let reminders = store.data.reminders.filter { $0.isEnabled && $0.effectiveDueAt != nil }
       .sorted { $0.effectiveDueAt! < $1.effectiveDueAt! }
+    let visibleReminders = maximumCount.map { Array(reminders.prefix($0)) } ?? reminders
     return VStack(alignment: .leading, spacing: 14) {
-      Text("Upcoming reminders").font(IntervalTheme.heading).foregroundStyle(.secondary)
+      if showsHeading {
+        Text("Upcoming reminders").font(IntervalTheme.heading).foregroundStyle(.primary)
+      }
       if reminders.isEmpty {
         Text("No reminders scheduled").font(IntervalTheme.body).foregroundStyle(.secondary)
       }
-      ForEach(Array(reminders.prefix(3))) { reminder in
+      ForEach(visibleReminders) { reminder in
         HStack(spacing: 10) {
           Text(reminder.emoji).font(.system(size: 19)).frame(width: 24)
           Text(reminder.title).font(IntervalTheme.body).lineLimit(1)
@@ -234,142 +239,53 @@ private struct ClockSector: Shape {
 
 struct FocusDayPanel: View {
   @Bindable var store: AppStore
-  @State private var selectedSessionID: UUID?
-  @State private var selectedDay: Date
-  @State private var showsDatePicker = false
   private let calendar = Calendar.autoupdatingCurrent
 
-  init(store: AppStore, selectedDate: Date? = nil) {
+  init(store: AppStore) {
     self.store = store
-    _selectedDay = State(initialValue: selectedDate ?? store.calendarNow)
   }
 
   var sessions: [SessionRecord] {
     store.data.sessions.filter {
-      $0.kind == .focus && calendar.isDate($0.endedAt, inSameDayAs: selectedDay)
+      $0.kind == .focus && calendar.isDate($0.endedAt, inSameDayAs: store.calendarNow)
     }
   }
   var body: some View {
-    ThemedSplitView(isVertical: false, minimumFirst: 220, minimumSecond: 280) {
-      ScrollView {
-        VStack(alignment: .leading, spacing: 16) {
-          Text("To-dos").font(IntervalTheme.heading)
-          TodoList(store: store)
-          UpcomingReminders(store: store).padding(.top, 12)
-        }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
-      }.frame(minHeight: 220, idealHeight: 300, maxHeight: .infinity).clipped()
-    } second: {
-      VStack(spacing: 0) {
-        VStack(spacing: 12) {
-          dateNavigation
-          HStack {
-            Text("\(Int(sessions.reduce(0) { $0 + $1.activeDuration } / 60))m focus")
-            Spacer()
-            Text("\(sessions.filter { $0.outcome == .completed }.count) completed")
-          }.font(IntervalTheme.body).monospacedDigit().foregroundStyle(.secondary)
-        }.padding(16).frame(maxWidth: .infinity)
-        DayTimeline(store: store, selectedSessionID: $selectedSessionID, date: selectedDay)
-          .id(calendar.startOfDay(for: selectedDay))
-          .padding(.horizontal, 16)
-      }.frame(minHeight: 280, idealHeight: 360, maxHeight: .infinity)
-    }
-    .onAppear { store.calendarService.show(month: selectedDay) }
-    .onChange(of: calendar.startOfDay(for: store.calendarNow)) { old, new in
-      if calendar.isDate(selectedDay, inSameDayAs: old) { selectDay(new) }
-    }
-    .sheet(
-      isPresented: Binding(
-        get: { selectedSessionID != nil }, set: { if !$0 { selectedSessionID = nil } }
-      )
-    ) {
-      if let session = store.data.sessions.first(where: { $0.id == selectedSessionID }) {
-        VStack(spacing: 0) {
-          HStack {
-            Text("Session").font(IntervalTheme.heading)
-            Spacer()
-            Button("Done") { selectedSessionID = nil }.keyboardShortcut(.cancelAction)
-          }.padding(20)
-          SessionInspector(store: store, session: session)
-        }.frame(width: 460, height: 500).background(GlassBackground())
+    VStack(spacing: 0) {
+      VStack(alignment: .leading, spacing: 12) {
+        Text("Today").font(IntervalTheme.heading).foregroundStyle(.primary)
+        HStack {
+          Text("\(Int(sessions.reduce(0) { $0 + $1.activeDuration } / 60))m focus")
+          Spacer()
+          Text("\(sessions.filter { $0.outcome == .completed }.count) completed")
+        }.font(IntervalTheme.body).monospacedDigit().foregroundStyle(.secondary)
       }
-    }
-  }
+      .padding(20).frame(maxWidth: .infinity, alignment: .leading)
 
-  private var dateNavigation: some View {
-    VStack(spacing: 8) {
-      HStack {
-        Button {
-          moveDay(-1)
-        } label: {
-          Image(systemName: "chevron.left")
-        }
-        .buttonStyle(IntervalIconButton()).help("Previous day").accessibilityLabel("Previous day")
-        Button {
-          showsDatePicker.toggle()
-        } label: {
-          Text(
-            calendar.isDate(selectedDay, inSameDayAs: store.calendarNow)
-              ? "Today" : selectedDay.formatted(.dateTime.month(.abbreviated).day())
-          )
-          .font(IntervalTheme.heading).frame(maxWidth: .infinity)
-        }.buttonStyle(.plain)
-          .popover(isPresented: $showsDatePicker) {
-            VStack {
-              DatePicker(
-                "Date", selection: Binding(get: { selectedDay }, set: selectDay),
-                displayedComponents: .date
-              )
-              .datePickerStyle(.graphical).labelsHidden()
-              Button("Today") {
-                selectDay(store.now)
-                showsDatePicker = false
-              }
-            }.padding()
+      ThemedSplitView(isVertical: false, minimumFirst: 180, minimumSecond: 140) {
+        VStack(alignment: .leading, spacing: 12) {
+          Text("To-dos").font(IntervalTheme.heading).foregroundStyle(.primary)
+            .padding(.horizontal, 20).padding(.top, 16)
+          ScrollView {
+            TodoList(store: store)
+              .padding(.horizontal, 20).padding(.bottom, 20)
+              .frame(maxWidth: .infinity, alignment: .leading)
           }
-        Button {
-          moveDay(1)
-        } label: {
-          Image(systemName: "chevron.right")
         }
-        .buttonStyle(IntervalIconButton()).help("Next day").accessibilityLabel("Next day")
-      }
-      HStack(spacing: 3) {
-        ForEach(weekDates, id: \.self) { day in
-          Button {
-            selectDay(day)
-          } label: {
-            VStack(spacing: 3) {
-              Text(day.formatted(.dateTime.weekday(.narrow))).foregroundStyle(.secondary)
-              Text(day.formatted(.dateTime.day())).font(IntervalTheme.heading)
-            }.font(IntervalTheme.body).frame(maxWidth: .infinity).padding(.vertical, 6)
-              .background(
-                calendar.isDate(day, inSameDayAs: selectedDay)
-                  ? Color.accentColor.opacity(0.2) : Color.primary.opacity(0.035),
-                in: RoundedRectangle(cornerRadius: 7)
-              )
-              .overlay {
-                RoundedRectangle(cornerRadius: 7).strokeBorder(
-                  calendar.isDate(day, inSameDayAs: selectedDay) ? Color.accentColor : .clear)
-              }
-          }.buttonStyle(.plain).accessibilityLabel(day.formatted(date: .complete, time: .omitted))
-            .accessibilityAddTraits(
-              calendar.isDate(day, inSameDayAs: selectedDay) ? .isSelected : [])
+        .frame(minHeight: 180, idealHeight: 280, maxHeight: .infinity).clipped()
+      } second: {
+        VStack(alignment: .leading, spacing: 12) {
+          Text("Upcoming reminders").font(IntervalTheme.heading).foregroundStyle(.primary)
+            .padding(.horizontal, 20).padding(.top, 16)
+          ScrollView {
+            UpcomingReminders(store: store, showsHeading: false, maximumCount: nil)
+              .padding(.horizontal, 20).padding(.bottom, 20)
+              .frame(maxWidth: .infinity, alignment: .leading)
+          }
         }
+        .frame(minHeight: 140, idealHeight: 220, maxHeight: .infinity).clipped()
       }
-    }
-  }
-
-  private var weekDates: [Date] {
-    let start = calendar.dateInterval(of: .weekOfYear, for: selectedDay)?.start ?? selectedDay
-    return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
-  }
-  private func selectDay(_ date: Date) {
-    selectedDay = date
-    selectedSessionID = nil
-    store.calendarService.show(month: date)
-  }
-  private func moveDay(_ delta: Int) {
-    if let date = calendar.date(byAdding: .day, value: delta, to: selectedDay) { selectDay(date) }
+    }.frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
 }
