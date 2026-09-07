@@ -6,6 +6,7 @@ struct FocusControls: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   var compact = false
   var showsDial = true
+  var isNotch = false
   @State private var confirmingAbandon = false
   @State private var confirmingBreak = false
   private var active: Bool { store.timer.status == .running }
@@ -17,33 +18,40 @@ struct FocusControls: View {
   var body: some View {
     GeometryReader { geometry in
       ScrollView {
-        VStack(spacing: 12) {
+        VStack(spacing: isNotch ? 8 : 12) {
           if !compact { SessionIdentity(store: store) }
-          Spacer(minLength: 8)
+          if !isNotch { Spacer(minLength: 8) }
           if store.timer.kind == .focus && showsDial {
             FocusDial(
               remaining: store.remaining, accent: accent,
               diameter: compact ? 150 : min(250, max(180, geometry.size.height - 400)))
-          } else if store.timer.kind != .focus {
+          } else if store.timer.kind != .focus && !isNotch {
             Text(store.breakEnded ? "Break ended" : "Taking a break")
               .font(.title3).foregroundStyle(store.breakEnded ? .primary : .secondary)
           }
-          Text(store.timerText)
-            .font(.system(size: 36, weight: .regular)).monospacedDigit()
-            .lineLimit(1).minimumScaleFactor(0.65)
-          if !store.breakEnded { timeControls }
-          intervalActions
-          Spacer(minLength: 8)
-          if let message = store.inAppNotification ?? store.recoveryMessage {
+          HStack {
+            if isNotch && !store.breakEnded { adjustmentButton(direction: -1) }
+            Text(store.timerText)
+              .font(.system(size: 36, weight: .regular)).monospacedDigit()
+              .lineLimit(1).minimumScaleFactor(0.65)
+              .frame(maxWidth: isNotch ? .infinity : nil)
+            if isNotch && !store.breakEnded { adjustmentButton(direction: 1) }
+          }
+          if !store.breakEnded && !isNotch { timeControls }
+          if !isNotch || store.timer.status != .ready { intervalActions }
+          if !isNotch { Spacer(minLength: 8) }
+          if !isNotch, let message = store.inAppNotification ?? store.recoveryMessage {
             Text(message).font(IntervalTheme.body).foregroundStyle(.secondary)
           }
           if let error = store.audioError {
             Label(error, systemImage: "speaker.slash").font(IntervalTheme.body).foregroundStyle(
               .orange)
           }
-        }.padding(20).frame(maxWidth: .infinity).frame(minHeight: geometry.size.height)
-          .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.timer.kind)
-          .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.breakEnded)
+        }.padding(isNotch ? 0 : 20).frame(maxWidth: .infinity).frame(
+          minHeight: geometry.size.height
+        )
+        .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.timer.kind)
+        .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.breakEnded)
       }
     }
     .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -52,7 +60,8 @@ struct FocusControls: View {
           Text(store.timer.kind == .focus ? "Start session" : "Start break")
             .font(IntervalTheme.heading).frame(maxWidth: .infinity).padding(.vertical, 9)
         }.buttonStyle(.borderedProminent).tint(accent).controlSize(.large)
-          .clipShape(Capsule()).padding(.horizontal, 24).padding(.bottom, 20)
+          .clipShape(Capsule()).padding(.horizontal, isNotch ? 0 : 24).padding(
+            .bottom, isNotch ? 0 : 20)
       }
     }
     .alert("Start a break now?", isPresented: $confirmingBreak) {
@@ -75,14 +84,16 @@ struct FocusControls: View {
         Button {
           if active { confirmingBreak = true } else { store.startBreakNow() }
         } label: {
-          Label("Break", systemImage: "cup.and.saucer")
-        }.help("Start a break now").foregroundStyle(store.data.settings.breakColor.color)
+          Text("Take a break")
+        }.buttonStyle(IntervalPrimaryButton()).help("Start a break now")
+          .foregroundStyle(store.data.settings.breakColor.color)
       } else if active || store.breakEnded {
         Button {
           store.endBreak()
         } label: {
-          Label("Return to focus", systemImage: "arrow.uturn.backward")
-        }.help("Return to focus").foregroundStyle(store.data.settings.focusColor.color)
+          Text("Resume focus")
+        }.buttonStyle(IntervalPrimaryButton()).help("Resume focus")
+          .foregroundStyle(store.data.settings.focusColor.color)
       }
       Button {
         confirmingAbandon = true

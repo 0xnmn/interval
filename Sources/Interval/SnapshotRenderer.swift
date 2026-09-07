@@ -64,6 +64,7 @@ struct SnapshotRequest {
         title: "Polish launch narrative", categoryID: deepWork.id, categoryName: deepWork.name)
     }
     if scene == "dashboard-running" || scene == "menu" || scene == "time-options"
+      || scene == "notch-running"
       || scene == "time-options-minus" || scene == "history-running" || scene == "history-previous"
     {
       timer.status = .running
@@ -77,7 +78,9 @@ struct SnapshotRequest {
         deadline: fixtureNow.addingTimeInterval(240), title: "Polish launch narrative",
         categoryID: deepWork.id, categoryName: deepWork.name)
     }
-    if scene == "dashboard-overtime" || scene.hasPrefix("menu-overtime") {
+    if scene == "dashboard-overtime" || scene.hasPrefix("menu-overtime")
+      || scene == "notch-overtime"
+    {
       let overtime: TimeInterval =
         scene == "menu-overtime-hours" ? 16509 : scene == "menu-overtime-days" ? 183845 : 85
       timer = TimerState(
@@ -220,7 +223,7 @@ struct SnapshotRequest {
       size = SessionCompletionController.toastSize
       view = AnyView(SessionCompletionToast(later: {}, reflect: {}))
     case "notch-compact", "notch-expanded", "notch-fallback", "notch-todos", "notch-reminders",
-      "notch-reflection":
+      "notch-reflection", "notch-running", "notch-overtime":
       let geometry =
         request.scene == "notch-fallback"
         ? NotchGeometry.fallback

@@ -16,7 +16,7 @@ struct QuickPanelTests {
       #expect(frame.maxY == screen.maxY)
       #expect(screen.contains(frame))
     }
-    #expect(geometry.frame(expanded: true, in: screen).height == 392)
+    #expect(geometry.frame(expanded: true, in: screen).height == 212)
     #expect(NotchGeometry.fallback.compactSize.height == 32)
   }
 
@@ -76,6 +76,10 @@ struct QuickPanelTests {
         windowNumber: panel.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0,
         userData: nil))
     panel.contentView?.mouseEntered(with: event)
+    try await Task.sleep(for: .milliseconds(60))
+    let inFlight = panel.frame
+    controller.update(store: store)
+    #expect(panel.frame == inFlight)
     for _ in 0..<40 {
       if panel.frame.width == NotchGeometry.expandedSize.width { break }
       try await Task.sleep(for: .milliseconds(50))
@@ -105,6 +109,36 @@ struct QuickPanelTests {
     store.data.settings.notchEnabled = false
     controller.update(store: store)
     #expect(!panel.isVisible)
+  }
+
+  @Test func endedBreakKeepsNotchExpandedUntilFocusResumes() async throws {
+    let store = makeStore()
+    defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }
+    store.data = SnapshotRenderer.fixture(scene: "dashboard-overtime")
+    let controller = NotchController()
+    defer { controller.close() }
+    let original = Set(NSApp.windows.map(\.windowNumber))
+    controller.update(store: store)
+    let panel = try #require(
+      NSApp.windows.first { !original.contains($0.windowNumber) && $0.isVisible })
+    try await Task.sleep(for: .milliseconds(400))
+    let expandedFrame = panel.frame
+    #expect(expandedFrame.width == NotchGeometry.expandedSize.width)
+    panel.cancelOperation(nil)
+    let exit = try #require(
+      NSEvent.enterExitEvent(
+        with: .mouseExited, location: .zero, modifierFlags: [], timestamp: 0,
+        windowNumber: panel.windowNumber, context: nil, eventNumber: 1, trackingNumber: 0,
+        userData: nil))
+    panel.contentView?.mouseExited(with: exit)
+    try await Task.sleep(for: .milliseconds(850))
+    controller.update(store: store)
+    #expect(panel.frame == expandedFrame)
+    store.endBreak()
+    controller.update(store: store)
+    panel.cancelOperation(nil)
+    try await Task.sleep(for: .milliseconds(400))
+    #expect(panel.frame.height < expandedFrame.height)
   }
 
   private func makeStore() -> AppStore {

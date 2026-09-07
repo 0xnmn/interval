@@ -12,6 +12,8 @@ final class NotchController: NSObject {
   private var host: NSHostingView<NotchRootView>?
   private var expanded = false
   private var collapseTask: Task<Void, Never>?
+  private var targetFrame: NSRect?
+  private var transitionID = UUID()
 
   override init() {
     super.init()
@@ -34,8 +36,9 @@ final class NotchController: NSObject {
       reposition(animated: false)
       panel?.orderFrontRegardless()
     } else if expanded {
-      reposition(animated: false)
+      reposition(animated: true)
     }
+    if store.breakEnded { expand() }
   }
 
   func close() {
@@ -48,6 +51,8 @@ final class NotchController: NSObject {
     host = nil
     store = nil
     expanded = false
+    targetFrame = nil
+    transitionID = UUID()
   }
 
   private func makePanel(store: AppStore) {
@@ -69,6 +74,8 @@ final class NotchController: NSObject {
     panel.onEscape = { [weak self] in self?.collapse() }
 
     let trackingView = NotchTrackingView()
+    trackingView.wantsLayer = true
+    trackingView.layer?.masksToBounds = true
     trackingView.onEnter = { [weak self] in self?.expand() }
     trackingView.onExit = { [weak self] in self?.scheduleCollapse() }
     trackingView.onActivate = { [weak self] in self?.expand() }
@@ -123,10 +130,10 @@ final class NotchController: NSObject {
   private func collapse() {
     collapseTask?.cancel()
     collapseTask = nil
-    guard expanded else { return }
+    guard expanded, store?.breakEnded != true else { return }
     expanded = false
     panel?.resignKey()
-    refreshRoot()
+    // Keep expanded content in place until the shrinking panel has finished clipping it.
     reposition(animated: true)
   }
 
@@ -144,15 +151,25 @@ final class NotchController: NSObject {
     let frame = geometry.frame(
       expanded: expanded, in: screen.frame,
       reflection: store?.completionSessionID != nil)
-    if panel.frame == frame { return }
+    // Timer ticks must not interrupt an in-flight transition with an unanimated setFrame.
+    if targetFrame == frame { return }
+    targetFrame = frame
+    let id = UUID()
+    transitionID = id
     if animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
       NSAnimationContext.runAnimationGroup { context in
-        context.duration = 0.18
+        context.duration = 0.28
         context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         panel.animator().setFrame(frame, display: true)
+      } completionHandler: { [weak self] in
+        MainActor.assumeIsolated {
+          guard let self, self.transitionID == id else { return }
+          self.refreshRoot()
+        }
       }
     } else {
       panel.setFrame(frame, display: true)
+      refreshRoot()
     }
   }
 
@@ -184,8 +201,8 @@ final class NotchController: NSObject {
 
 struct NotchGeometry: Equatable {
   static let fallback = NotchGeometry(hasHardwareNotch: false, cutoutWidth: 0, topInset: 0)
-  static let expandedSize = NSSize(width: 420, height: 360)
-  static let reflectionHeight: CGFloat = 480
+  static let expandedSize = NSSize(width: 420, height: 180)
+  static let reflectionHeight: CGFloat = 240
 
   let hasHardwareNotch: Bool
   let cutoutWidth: CGFloat
@@ -262,7 +279,7 @@ struct NotchRootView: View {
     if expanded {
       VStack(spacing: 0) {
         Color.black.frame(height: geometry.topInset)
-        VStack(spacing: 18) {
+        VStack(spacing: 8) {
           HStack {
             Image(systemName: store.timer.kind == .focus ? "timer" : "cup.and.saucer")
               .foregroundStyle(accent)
@@ -291,7 +308,8 @@ struct NotchRootView: View {
             Button(action: collapse) {
               Image(systemName: "chevron.up").font(IntervalTheme.icon).frame(width: 32, height: 32)
             }.buttonStyle(.plain).foregroundStyle(.secondary).help("Collapse").accessibilityLabel(
-              "Collapse")
+              "Collapse"
+            ).disabled(store.breakEnded)
           }
           if let id = store.completionSessionID {
             ScrollView { ReflectionView(store: store, sessionID: id) }
@@ -300,9 +318,9 @@ struct NotchRootView: View {
           } else if page == 2 {
             ScrollView { UpcomingReminders(store: store) }
           } else {
-            FocusControls(store: store, compact: true, showsDial: false)
+            FocusControls(store: store, compact: true, showsDial: false, isNotch: true)
           }
-        }.padding(22)
+        }.padding(.horizontal, 20).padding(.vertical, 12)
           .animation(reduceMotion ? nil : IntervalMotion.selection, value: page)
           .frame(
             width: NotchGeometry.expandedSize.width,
@@ -312,6 +330,10 @@ struct NotchRootView: View {
       .background(.black)
       .environment(\.colorScheme, .dark)
       .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 24, bottomTrailingRadius: 24))
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+      .onChange(of: store.breakEnded) { _, ended in
+        if ended { page = 0 }
+      }
     } else {
       Button(action: expand) { compact }.buttonStyle(.plain)
     }

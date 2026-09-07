@@ -48,8 +48,9 @@ struct LiveTimerBar: View {
         Button {
           store.showFocus()
         } label: {
-          Label("Review focus", systemImage: "square.and.pencil")
+          Text("Review focus")
         }
+        .buttonStyle(IntervalPrimaryButton())
         .help("Review completed focus")
       } else {
         Text(store.timerText).font(.title2.weight(.medium)).monospacedDigit()
@@ -57,24 +58,27 @@ struct LiveTimerBar: View {
           .accessibilityLabel("Live \(store.timer.kind.title) timer")
           .accessibilityValue(spokenDuration(store.displayedTime))
         if store.timer.status == .ready {
-          Button(action: store.startSession) { Label("Start", systemImage: "play.fill") }
+          Button(action: store.startSession) { Text("Start") }
+            .buttonStyle(IntervalPrimaryButton())
             .foregroundStyle(accent).help("Start interval")
         } else if store.timer.status == .running || store.breakEnded {
           if store.timer.kind == .focus {
             Button {
               confirmingBreak = true
             } label: {
-              Label("Break", systemImage: "cup.and.saucer")
+              Text("Take a break")
             }
+            .buttonStyle(IntervalPrimaryButton())
             .foregroundStyle(store.data.settings.breakColor.color).help("Start a break")
           } else {
             Button {
               store.endBreak()
             } label: {
-              Label("Return to focus", systemImage: "arrow.uturn.backward")
+              Text("Resume focus")
             }
+            .buttonStyle(IntervalPrimaryButton())
             .foregroundStyle(store.data.settings.focusColor.color).help(
-              "End break · Return to focus")
+              "Resume focus")
           }
           Button {
             confirmingAbandon = true
