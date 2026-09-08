@@ -329,11 +329,6 @@ struct NotchRootView: View {
   var headsUp: NotchHeadsUp? = nil
   @State var page = 0
 
-  private var accent: Color {
-    (store.timer.kind == .focus ? store.data.settings.focusColor : store.data.settings.breakColor)
-      .foregroundColor
-  }
-
   var body: some View {
     if expanded {
       VStack(spacing: 0) {
@@ -342,9 +337,9 @@ struct NotchRootView: View {
           HStack {
             Image(
               systemName: headsUp?.symbol
-                ?? (store.timer.kind == .focus ? "timer" : "cup.and.saucer")
+                ?? (store.timer.kind == .focus ? "timer" : "figure.mind.and.body")
             )
-            .foregroundStyle(accent)
+            .foregroundStyle(.primary)
             Text(
               headsUp != nil
                 ? headsUp!.statusTitle
@@ -410,9 +405,9 @@ struct NotchRootView: View {
   private var compact: some View {
     HStack(spacing: 0) {
       if geometry.hasHardwareNotch {
-        Image(systemName: store.timer.kind == .focus ? "timer" : "cup.and.saucer")
+        Image(systemName: store.timer.kind == .focus ? "timer" : "figure.mind.and.body")
           .font(.system(size: 15, weight: .medium))
-          .foregroundStyle(accent).frame(width: 88)
+          .foregroundStyle(.primary).frame(width: 88)
         Color.clear.frame(width: geometry.cutoutWidth)
         Text(store.completionSessionID == nil ? store.timerText : "Reflect")
           .font(.system(size: 13, weight: .medium)).monospacedDigit()

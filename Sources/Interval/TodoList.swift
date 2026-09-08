@@ -29,10 +29,10 @@ struct TodoList: View {
           )
           .help("Return: new item · ↑/↓: move · Backspace on empty: delete")
           .contextMenu {
-            Button(todo.isCompleted ? "Mark incomplete" : "Mark complete") {
+            Button(todo.isCompleted ? "Mark Incomplete" : "Mark Complete") {
               store.toggleTodo(todo.id)
             }
-            Button("Delete to-do", role: .destructive) { delete(todo.id) }
+            Button("Delete To-Do", role: .destructive) { delete(todo.id) }
           }
           .accessibilityAction(named: "Delete to-do") { delete(todo.id) }
         }.padding(.vertical, 5)

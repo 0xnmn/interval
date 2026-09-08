@@ -105,3 +105,11 @@ This section supersedes the historical workflow descriptions above. Independent 
 Reviewer suggestions conflicting with explicit product choices were rejected: retain Others, Extend, secondary Take break icons, the persistent blank checklist row, and optional journal copy without extra labels. A proposed timeline/footer overlap was checked against the native scroll layout rather than treating a clipped scroll viewport as an unreachable control.
 
 Review limits: captures and automated native UI checks do not establish real Calendar authorization, browser-microphone detection, physical multi-display behavior, VoiceOver completeness, or the subjective quality of audible playback. These remain explicit acceptance checks, not implied passes.
+
+## System accent and two-pane dashboard
+
+The dial and shared controls now use the system accent. Native macOS 26 interactive Liquid Glass is shared across icon, selection, and primary buttons, with opaque accessibility fallbacks. Break actions use a neutral rest symbol; the main break view gives the countdown prominence without a clock dial. Text actions use Title Case.
+
+The right sidebar pages horizontally between Overview and Calendar, with persistent bottom navigation. Overview keeps the resizable checklist, reminders, and upcoming timed events today; Calendar reuses DayTimeline. Calendar access has a Settings action rather than an unexplained empty pane. Persisted legacy phase colors remain readable but are no longer exposed as competing theme controls.
+
+Native UI coverage verifies second-page positioning and returning to Overview; event coverage excludes ended/all-day events and protects today's events from Stats date navigation.

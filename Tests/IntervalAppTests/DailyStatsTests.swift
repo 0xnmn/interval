@@ -7,6 +7,40 @@ import Testing
 
 @MainActor @Suite("Daily Stats")
 struct DailyStatsTests {
+  @Test func overviewShowsCurrentAndUpcomingTimedEventsOnly() {
+    let now = Calendar.current.date(
+      bySettingHour: 12, minute: 0, second: 0, of: SnapshotRenderer.fixtureNow)!
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let service = CalendarService(fixtureEvents: [
+      CalendarEventSnapshot(
+        id: "past", title: "Finished", start: now.addingTimeInterval(-7200),
+        end: now.addingTimeInterval(-3600), allDay: false, calendarName: "Work"),
+      CalendarEventSnapshot(
+        id: "current", title: "In progress", start: now.addingTimeInterval(-600),
+        end: now.addingTimeInterval(600), allDay: false, calendarName: "Work"),
+      CalendarEventSnapshot(
+        id: "next", title: "Later", start: now.addingTimeInterval(3600),
+        end: now.addingTimeInterval(7200), allDay: false, calendarName: "Work"),
+      CalendarEventSnapshot(
+        id: "all-day", title: "Holiday", start: Calendar.current.startOfDay(for: now),
+        end: now.addingTimeInterval(43200), allDay: true, calendarName: "Work"),
+    ])
+    let store = AppStore(
+      persistence: JSONStore(fileURL: directory.appendingPathComponent("state.json")),
+      calendarService: service, runtimeEnabled: false)
+    store.now = now
+    service.configure(enabled: true, selectedCalendarIDs: ["Work"])
+    _ = service.hasEvent(at: now)
+    #expect(FocusDayPanel(store: store).upcomingEvents.map(\.id) == ["current", "next"])
+    service.show(month: now.addingTimeInterval(-86400 * 60))
+    #expect(FocusDayPanel(store: store).upcomingEvents.map(\.id) == ["current", "next"])
+    #expect(
+      DayTimeline(
+        store: store, selectedSessionID: .constant(nil), date: now, sessionFilter: { _ in false }
+      ).sessions.isEmpty)
+  }
+
   private func loadFixture(_ store: AppStore) {
     store.data = SnapshotRenderer.fixture(scene: "history")
     store.now = Calendar.current.date(

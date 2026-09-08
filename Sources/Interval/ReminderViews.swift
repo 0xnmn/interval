@@ -40,6 +40,7 @@ struct RemindersView: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity).background(GlassBackground())
+    .buttonStyle(.glass)
     .navigationTitle("Reminders")
     .alert(
       "Delete \(deleting?.title ?? "reminder")?",
@@ -113,10 +114,10 @@ struct RemindersView: View {
         Button {
           store.previewReminder(reminder.id)
         } label: {
-          Label("Preview reminder", systemImage: "eye")
+          Label("Preview Reminder", systemImage: "eye")
         }.buttonStyle(IntervalIconButton()).help("Preview reminder")
         Menu {
-          Button("Delete reminder…", role: .destructive) { deleting = reminder }
+          Button("Delete Reminder…", role: .destructive) { deleting = reminder }
         } label: {
           Image(systemName: "ellipsis").font(IntervalTheme.icon).frame(
             width: 36, height: 36)
@@ -181,7 +182,7 @@ struct RemindersView: View {
 
   private var addMenu: some View {
     Menu {
-      Button("New reminder") { selection = store.addReminder() }
+      Button("New Reminder") { selection = store.addReminder() }
       Divider()
       ForEach(Reminder.templates(startingAt: store.now)) { template in
         Button("\(template.emoji) \(template.title)") {
@@ -203,10 +204,10 @@ struct RemindersView: View {
       Button {
         selection = store.addReminder()
       } label: {
-        Label("New reminder", systemImage: "plus")
+        Label("New Reminder", systemImage: "plus")
           .frame(maxWidth: .infinity)
       }
-      .buttonStyle(.borderedProminent)
+      .buttonStyle(.glassProminent)
 
       Text("Start from a template").font(.system(size: 14)).foregroundStyle(.secondary)
       ForEach(Reminder.templates(startingAt: store.now)) { template in
@@ -334,7 +335,7 @@ private struct ReminderEditor: View {
             .accessibilityValue("\(Int(binding(\.intervalSeconds).wrappedValue / 60)) minutes")
             Menu {
               ForEach([10, 20, 30, 60], id: \.self) { minutes in
-                Button("\(minutes) minutes") {
+                Button("\(minutes) Minutes") {
                   binding(\.intervalSeconds).wrappedValue = TimeInterval(minutes * 60)
                 }
               }
@@ -402,7 +403,7 @@ private struct ReminderEditor: View {
                 previewSound = sound
                 sound?.play()
               } label: {
-                Label("Preview sound", systemImage: "speaker.wave.2")
+                Label("Preview Sound", systemImage: "speaker.wave.2")
               }.buttonStyle(IntervalIconButton())
                 .help("Preview reminder sound")
             }
@@ -654,7 +655,7 @@ struct ReminderTakeoverView: View {
     return VStack(spacing: 12) {
       if isPreview {
         Button(action: skip) {
-          Label("Close preview", systemImage: "xmark")
+          Label("Close Preview", systemImage: "xmark")
         }
         .buttonStyle(ReminderGlassButtonStyle())
       } else {
@@ -662,13 +663,13 @@ struct ReminderTakeoverView: View {
           Button {
             extend(60)
           } label: {
-            Label("Extend 1 min", systemImage: "clock.arrow.circlepath")
+            Label("Extend 1 Min", systemImage: "clock.arrow.circlepath")
           }.help("Extend reminder by 1 minute")
             .accessibilityLabel("Extend reminder by 1 minute")
           Button {
             extend(5 * 60)
           } label: {
-            Label("Extend 5 min", systemImage: "clock.arrow.circlepath")
+            Label("Extend 5 Min", systemImage: "clock.arrow.circlepath")
           }.help("Extend reminder by 5 minutes")
             .accessibilityLabel("Extend reminder by 5 minutes")
           Button(action: skip) {
@@ -707,6 +708,7 @@ private struct ReminderGlassButtonStyle: ButtonStyle {
   @Environment(\.isEnabled) private var isEnabled
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+  @Environment(\.colorSchemeContrast) private var contrast
   @State private var hovering = false
 
   func makeBody(configuration: Configuration) -> some View {
@@ -716,7 +718,7 @@ private struct ReminderGlassButtonStyle: ButtonStyle {
       .frame(minWidth: 80)
       .padding(.horizontal, 20).padding(.vertical, 12)
       .background(Color(white: 0.2).opacity(reduceTransparency ? 1 : 0), in: Capsule())
-      .glassEffect(.regular.tint(.white.opacity(0.08)), in: Capsule())
+      .modifier(ReminderInteractiveGlass(opaque: reduceTransparency || contrast == .increased))
       .overlay(
         Capsule().fill(.white.opacity(configuration.isPressed ? 0.18 : hovering ? 0.1 : 0))
           .allowsHitTesting(false)
@@ -727,5 +729,17 @@ private struct ReminderGlassButtonStyle: ButtonStyle {
       .animation(reduceMotion ? nil : IntervalMotion.selection, value: hovering)
       .animation(reduceMotion ? nil : IntervalMotion.selection, value: configuration.isPressed)
       .onHover { hovering = $0 }
+  }
+}
+
+private struct ReminderInteractiveGlass: ViewModifier {
+  let opaque: Bool
+
+  @ViewBuilder func body(content: Content) -> some View {
+    if opaque {
+      content.background(Color(white: 0.2), in: Capsule())
+    } else {
+      content.glassEffect(.regular.tint(.white.opacity(0.08)).interactive(), in: Capsule())
+    }
   }
 }

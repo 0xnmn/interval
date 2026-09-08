@@ -24,10 +24,10 @@ struct SessionIdentity: View {
             }
           }
           Divider()
-          Button("Manage categories…") { managingCategories = true }
+          Button("Manage Categories…") { managingCategories = true }
         } label: {
           HStack(spacing: 8) {
-            Circle().fill(store.data.settings.focusColor.color).frame(width: 6, height: 6)
+            Circle().fill(Color.accentColor).frame(width: 6, height: 6)
             Text(store.timer.categoryName ?? "Category").lineLimit(1)
           }
         }.menuStyle(.borderlessButton).fixedSize().padding(.horizontal, 12).padding(.vertical, 5)
@@ -72,6 +72,7 @@ struct CategoryManager: View {
         }
       }
     }.padding(24).frame(width: 400, height: 350)
+      .buttonStyle(.glass)
       .background(GlassBackground())
       .alert(
         "Delete category?",

@@ -146,7 +146,7 @@ struct SnapshotRequest {
       settings.breakColor = .orange
     }
     if scene == "history" || scene == "calendar-settings" || scene == "history-no-selection"
-      || scene == "dashboard-calendar"
+      || scene == "dashboard-calendar" || scene == "sidebar-calendar"
     {
       settings.calendarIntegrationEnabled = true
       settings.selectedCalendarIDs = ["Work", "Personal"]
@@ -218,7 +218,9 @@ struct SnapshotRequest {
     let view: AnyView
     if request.scene == "focus-countdown" { store.now = fixtureNow.addingTimeInterval(67) }
     if request.scene == "focus-countdown-next" { store.now = fixtureNow.addingTimeInterval(68) }
-    if request.scene == "dashboard-calendar" || request.scene.hasPrefix("history") {
+    if request.scene == "dashboard-calendar" || request.scene == "sidebar-calendar"
+      || request.scene.hasPrefix("history")
+    {
       store.calendarService.configure(
         enabled: store.data.settings.calendarIntegrationEnabled,
         selectedCalendarIDs: store.data.settings.selectedCalendarIDs)
@@ -392,6 +394,9 @@ struct SnapshotRequest {
       }
       size = NSSize(width: 880, height: 680)
       view = AnyView(MainView(store: store))
+    case "sidebar-calendar":
+      size = NSSize(width: 400, height: 680)
+      view = AnyView(FocusDayPanel(store: store, initialPage: 1).background(GlassBackground()))
     case "focus-compact":
       store.selection = .focus
       size = NSSize(width: 780, height: 620)

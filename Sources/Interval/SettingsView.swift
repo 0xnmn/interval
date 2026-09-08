@@ -76,6 +76,7 @@ struct SettingsView: View {
     }
     .frame(width: 560, height: 450)
     .tint(.accentColor)
+    .buttonStyle(.glass)
     .onAppear(perform: consumeRequestedTab)
     .onChange(of: store.requestedSettingsTab) { _, _ in consumeRequestedTab() }
     .task {
@@ -102,10 +103,6 @@ struct SettingsView: View {
               .labelsHidden()
               .accessibilityValue(cadenceDescription)
           }
-        }
-        SettingsSection("Colors") {
-          phaseColorPicker("Focus color", selection: phaseColorSetting(\.focusColor))
-          phaseColorPicker("Break color", selection: phaseColorSetting(\.breakColor))
         }
       }
     case 1:
@@ -152,7 +149,7 @@ struct SettingsView: View {
             Label(
               "Notifications are off for Interval. Timer endings will still appear in the app.",
               systemImage: "bell.slash")
-            Button("Open notification settings") {
+            Button("Open Notification Settings") {
               NSWorkspace.shared.open(
                 URL(
                   string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!
@@ -163,7 +160,7 @@ struct SettingsView: View {
               "Allow notifications for timer endings, the optional one-minute heads-up, and overdue break reminders."
             )
             .font(.system(size: 13)).foregroundStyle(.secondary)
-            Button("Allow notifications") { requestNotificationAccess() }
+            Button("Allow Notifications") { requestNotificationAccess() }
           }
         }
       }
@@ -219,34 +216,6 @@ struct SettingsView: View {
         value[keyPath: keyPath] = $0
         store.updateSettings(value)
       })
-  }
-  private func phaseColorSetting(_ keyPath: WritableKeyPath<IntervalSettings, PhaseColor>)
-    -> Binding<
-      PhaseColor
-    >
-  {
-    Binding(
-      get: { store.data.settings[keyPath: keyPath] },
-      set: {
-        var value = store.data.settings
-        value[keyPath: keyPath] = $0
-        store.updateSettings(value)
-      })
-  }
-  private func phaseColorPicker(_ title: String, selection: Binding<PhaseColor>) -> some View {
-    SettingsRow(title) {
-      Picker(title, selection: selection) {
-        ForEach(PhaseColor.allCases, id: \.rawValue) { phaseColor in
-          Label {
-            Text(phaseColor.title)
-          } icon: {
-            Circle().fill(phaseColor.color).frame(width: 8, height: 8)
-          }
-          .tag(phaseColor)
-        }
-      }
-      .labelsHidden()
-    }
   }
   private func minuteRow(_ title: String, value: Binding<Int>, range: ClosedRange<Int>)
     -> some View
@@ -406,7 +375,7 @@ private struct GeneralSettingsView: View {
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
         }
-        Button("Export data…", action: exportData)
+        Button("Export Data…", action: exportData)
         if let exportMessage {
           Text(exportMessage).font(.system(size: 13)).foregroundStyle(.secondary)
         }
@@ -486,7 +455,7 @@ private struct UpdatesSettingsView: View {
             Text("Download automatically").frame(maxWidth: .infinity, alignment: .leading)
           }
           .toggleStyle(SwitchToggleStyle(tint: .accentColor)).controlSize(.small)
-          Button("Check now") { store.updates.checkNow() }
+          Button("Check Now") { store.updates.checkNow() }
         }
       }
     }
@@ -502,8 +471,8 @@ private struct CalendarSettingsView: View {
         case .notDetermined:
           Text("Allow calendar access to skip reminders during timed calendar events.")
             .font(.system(size: 13)).foregroundStyle(.secondary)
-          Button("Allow calendar access") { Task { await store.enableCalendarIntegration() } }
-            .buttonStyle(.borderedProminent)
+          Button("Allow Calendar Access") { Task { await store.enableCalendarIntegration() } }
+            .buttonStyle(.glassProminent)
           Text(
             "macOS calls this Full Access. Interval only reads selected calendars and never changes events."
           )
@@ -568,7 +537,7 @@ private struct CalendarSettingsView: View {
   @ViewBuilder private func accessUnavailable(_ message: String) -> some View {
     Label(message, systemImage: "calendar.badge.exclamationmark")
       .font(.system(size: 13)).foregroundStyle(.secondary)
-    Button("Open Calendar privacy settings") {
+    Button("Open Calendar Privacy Settings") {
       NSWorkspace.shared.open(
         URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!)
     }

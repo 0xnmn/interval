@@ -70,6 +70,7 @@ struct MainView: View {
       }
     }
     .font(IntervalTheme.body)
+    .buttonStyle(.glass)
     .frame(
       minWidth: 780, maxWidth: .infinity,
       minHeight: 620, maxHeight: .infinity
@@ -84,7 +85,7 @@ struct MainView: View {
     ) { action in
       Button("Cancel", role: .cancel) {}
       if action == .takeBreak {
-        Button("Start break") { store.startBreakNow() }
+        Button("Start Break") { store.startBreakNow() }
       } else {
         Button("Abandon", role: .destructive) { store.abandon() }
       }
@@ -150,7 +151,7 @@ struct HistoryView: View {
                 .dateTime.weekday(.abbreviated).month(.abbreviated).day().year()),
               systemImage: "calendar")
           }
-          .buttonStyle(.bordered).popover(isPresented: $showsDatePicker) {
+          .buttonStyle(.glass).popover(isPresented: $showsDatePicker) {
             DatePicker("Date", selection: dateSelection, displayedComponents: .date)
               .datePickerStyle(.graphical).labelsHidden().padding()
           }
@@ -160,7 +161,7 @@ struct HistoryView: View {
             Image(systemName: "chevron.right")
           }
           .buttonStyle(IntervalIconButton()).help("Next day").accessibilityLabel("Next day")
-          Button("Today") { selectDay(store.now) }.buttonStyle(.bordered)
+          Button("Today") { selectDay(store.now) }.buttonStyle(.glass)
             .disabled(calendar.isDate(selectedDay, inSameDayAs: store.now))
         }
         HStack(spacing: 6) {
@@ -203,7 +204,7 @@ struct HistoryView: View {
                 Label(calendarStatus, systemImage: "calendar.badge.exclamationmark")
                   .font(IntervalTheme.body).foregroundStyle(.secondary).frame(
                     maxWidth: .infinity, alignment: .leading)
-                Button("Calendar settings…") {
+                Button("Calendar Settings…") {
                   store.requestedSettingsTab = 2
                   openSettings()
                 }.buttonStyle(.link)
@@ -301,7 +302,7 @@ struct HistoryView: View {
                 .secondary)
             }
             ProgressView(value: stat.duration, total: max(focusDuration, 1))
-              .tint(store.data.settings.focusColor.color)
+              .tint(.accentColor)
           }
         }
       }
@@ -514,7 +515,7 @@ struct ReflectionView: View {
   private var action: some View {
     Button(
       store.breakEnded
-        ? "Resume focus" : store.timer.status == .ready ? "Start break" : "Continue break"
+        ? "Resume Focus" : store.timer.status == .ready ? "Start Break" : "Continue Break"
     ) {
       store.continueAfterReflection()
     }
@@ -668,12 +669,14 @@ struct MenuBarView: View {
             .padding(.horizontal, 12).frame(height: 44)
         }
       }
-    }.font(IntervalTheme.body).frame(width: 600, height: 480).tint(IntervalTheme.accent)
-      .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.completionSessionID)
-      .accessibilityElement(children: .contain)
-      .accessibilityLabel(
-        "\(store.breakEnded ? "Break ended" : store.timer.kind.title), \(spokenDuration(store.displayedTime)) \(store.breakEnded ? "overtime" : "remaining")"
-      )
+    }.font(IntervalTheme.body).buttonStyle(.glass).frame(width: 600, height: 480).tint(
+      IntervalTheme.accent
+    )
+    .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.completionSessionID)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel(
+      "\(store.breakEnded ? "Break ended" : store.timer.kind.title), \(spokenDuration(store.displayedTime)) \(store.breakEnded ? "overtime" : "remaining")"
+    )
   }
   @ViewBuilder private var reminderActions: some View {
     if let reminder = activeReminder {
@@ -681,10 +684,10 @@ struct MenuBarView: View {
         Text(reminder.title).font(IntervalTheme.heading)
         HStack {
           if store.previewReminderID == reminder.id {
-            Button("Close preview") { store.dismissReminder(reminder.id) }
+            Button("Close Preview") { store.dismissReminder(reminder.id) }
           } else {
             extendMenu(reminder)
-            Button(skipDelay > 0 ? "Skip available in \(skipDelay)s" : "Skip") {
+            Button(skipDelay > 0 ? "Skip Available in \(skipDelay)s" : "Skip") {
               store.dismissReminder(reminder.id)
             }.disabled(skipDelay > 0)
           }
@@ -716,7 +719,7 @@ struct MenuBarView: View {
   private func extendMenu(_ reminder: Reminder) -> some View {
     Menu("Extend") {
       ForEach([5, 10, 15], id: \.self) { minutes in
-        Button("\(minutes) minutes") {
+        Button("\(minutes) Minutes") {
           store.snoozeReminder(reminder.id, seconds: Double(minutes * 60))
         }
       }

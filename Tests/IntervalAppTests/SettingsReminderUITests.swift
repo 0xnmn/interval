@@ -68,6 +68,24 @@ struct SettingsReminderUITests {
     #expect(abs(rows.arrangedSubviews[0].frame.height - 250) < 1)
   }
 
+  @Test func dashboardCalendarPaneScrollsIntoView() async throws {
+    let store = try makeStore()
+    defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }
+    let harness = try await NativeViewHarness(
+      rootView: AnyView(FocusDayPanel(store: store, initialPage: 1)))
+    defer { harness.close() }
+    await harness.pump()
+    let pager = try #require(
+      harness.descendants.compactMap { $0 as? NSScrollView }.first {
+        ($0.documentView?.bounds.width ?? 0) > $0.contentView.bounds.width * 1.5
+      })
+    #expect(pager.contentView.bounds.minX > pager.contentView.bounds.width * 0.9)
+    pager.contentView.scroll(to: .zero)
+    pager.reflectScrolledClipView(pager.contentView)
+    await harness.pump()
+    #expect(pager.contentView.bounds.minX == 0)
+  }
+
   @Test func settingsSidebarArrowDownSelectsSound() async throws {
     let store = try makeStore()
     defer { try? FileManager.default.removeItem(at: store.storageURL.deletingLastPathComponent()) }

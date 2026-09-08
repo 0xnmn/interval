@@ -279,8 +279,7 @@ struct DayTimeline: View {
   }
 
   private func sessionColor(_ session: SessionRecord) -> Color {
-    session.kind == .focus
-      ? store.data.settings.focusColor.color : store.data.settings.breakColor.color
+    .accentColor
   }
 
   private func sessionAccessibilityLabel(_ session: SessionRecord) -> String {

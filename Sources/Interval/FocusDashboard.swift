@@ -10,10 +10,7 @@ struct FocusControls: View {
   @State private var confirmingAbandon = false
   @State private var confirmingBreak = false
   private var active: Bool { store.timer.status == .running }
-  private var accent: Color {
-    (store.timer.kind == .focus ? store.data.settings.focusColor : store.data.settings.breakColor)
-      .color
-  }
+  private var accent: Color { .accentColor }
 
   var body: some View {
     GeometryReader { geometry in
@@ -26,13 +23,20 @@ struct FocusControls: View {
               remaining: store.remaining, accent: accent,
               diameter: compact ? 150 : min(250, max(180, geometry.size.height - 400)))
           } else if store.timer.kind != .focus && !isNotch {
-            Text(store.breakEnded ? "Break ended" : "Taking a break")
-              .font(.title3).foregroundStyle(store.breakEnded ? .primary : .secondary)
+            Image(systemName: "figure.mind.and.body")
+              .font(.system(size: compact ? 28 : 40, weight: .light))
+              .foregroundStyle(.secondary).padding(.bottom, 8)
+            Text(store.breakEnded ? "Break Ended" : "Taking a Break")
+              .font(.title2.weight(.medium)).foregroundStyle(.primary)
           }
           HStack {
             if isNotch && !store.breakEnded { adjustmentButton(direction: -1) }
             Text(store.timerText)
-              .font(.system(size: 36, weight: .regular)).monospacedDigit()
+              .font(
+                .system(
+                  size: store.timer.kind != .focus && !compact && !isNotch ? 56 : 36,
+                  weight: .regular)
+              ).monospacedDigit()
               .lineLimit(1).minimumScaleFactor(0.65)
               .frame(maxWidth: isNotch ? .infinity : nil)
               .accessibilityLabel(
@@ -44,8 +48,12 @@ struct FocusControls: View {
                   ? "Extra break time. Resume focus when you’re ready." : "Time remaining")
             if isNotch && !store.breakEnded { adjustmentButton(direction: 1) }
           }
-          if !store.breakEnded && !isNotch { timeControls }
-          if !isNotch || store.timer.status != .ready { intervalActions }
+          if !store.breakEnded && !isNotch {
+            timeControls.frame(maxWidth: store.timer.kind == .focus ? .infinity : 300)
+          }
+          if !isNotch || store.timer.status != .ready {
+            intervalActions.padding(.top, store.timer.kind != .focus && !isNotch ? 12 : 0)
+          }
           if !isNotch { Spacer(minLength: 8) }
           if !isNotch, let message = store.inAppNotification ?? store.recoveryMessage {
             Text(message).font(IntervalTheme.body).foregroundStyle(.secondary)
@@ -64,7 +72,7 @@ struct FocusControls: View {
     .safeAreaInset(edge: .bottom, spacing: 0) {
       if store.timer.status == .ready && store.timer.kind == .focus {
         Button(action: store.startSession) {
-          Text("Start session")
+          Text("Start Session")
             .font(IntervalTheme.heading).frame(maxWidth: .infinity).padding(.vertical, 9)
         }.buttonStyle(IntervalPrimaryButton())
           .help(
@@ -74,18 +82,18 @@ struct FocusControls: View {
             .bottom, isNotch ? 0 : 20)
       } else if store.timer.status == .ready {
         Button(action: store.startSession) {
-          Text("Start break")
+          Text("Start Break")
         }.buttonStyle(IntervalPrimaryButton()).help("Start break · ⌘⇧S")
       }
     }
     .alert("Start a break now?", isPresented: $confirmingBreak) {
-      Button("Keep focusing", role: .cancel) {}
-      Button("Start break") { store.startBreakNow() }
+      Button("Keep Focusing", role: .cancel) {}
+      Button("Start Break") { store.startBreakNow() }
     } message: {
       Text("This unfinished focus session will be saved as abandoned. Your focus time is kept.")
     }
     .alert(store.abandonTitle, isPresented: $confirmingAbandon) {
-      Button("Keep going", role: .cancel) {}
+      Button("Keep Going", role: .cancel) {}
       Button("Abandon", role: .destructive, action: store.abandon)
     } message: {
       Text("Elapsed time will remain in Stats.")
@@ -98,16 +106,14 @@ struct FocusControls: View {
         Button {
           if active { confirmingBreak = true } else { store.startBreakNow() }
         } label: {
-          Label("Take a break", systemImage: "cup.and.saucer")
+          Label("Take a Break", systemImage: "figure.mind.and.body")
         }.buttonStyle(IntervalIconButton()).help("Start a break now")
-          .foregroundStyle(store.data.settings.breakColor.foregroundColor)
       } else if active || store.breakEnded {
         Button {
           store.endBreak()
         } label: {
-          Text("Resume focus")
+          Text("Resume Focus")
         }.buttonStyle(IntervalPrimaryButton()).help("Resume focus")
-          .foregroundStyle(store.data.settings.focusColor.foregroundColor)
       }
       if active || store.breakEnded {
         Button {
@@ -254,10 +260,15 @@ private struct ClockSector: Shape {
 
 struct FocusDayPanel: View {
   @Bindable var store: AppStore
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.openSettings) private var openSettings
+  @State private var page: Int?
+  @State private var selectedSessionID: UUID?
   private let calendar = Calendar.autoupdatingCurrent
 
-  init(store: AppStore) {
+  init(store: AppStore, initialPage: Int = 0) {
     self.store = store
+    _page = State(initialValue: initialPage)
   }
 
   var sessions: [SessionRecord] {
@@ -266,6 +277,86 @@ struct FocusDayPanel: View {
     }
   }
   var body: some View {
+    ScrollViewReader { proxy in
+      VStack(spacing: 0) {
+        GeometryReader { geometry in
+          ScrollView(.horizontal) {
+            HStack(spacing: 0) {
+              overview.frame(width: geometry.size.width, height: geometry.size.height).id(0)
+              calendarPage.frame(width: geometry.size.width, height: geometry.size.height).id(1)
+            }.scrollTargetLayout()
+          }
+          .scrollTargetBehavior(.paging)
+          .scrollPosition(id: $page)
+          .scrollIndicators(.hidden)
+        }
+        HStack(spacing: 10) {
+          ForEach(0..<2) { index in
+            Button {
+              withAnimation(reduceMotion ? nil : IntervalMotion.selection) {
+                page = index
+                proxy.scrollTo(index, anchor: .leading)
+              }
+            } label: {
+              Label(
+                index == 0 ? "Overview" : "Calendar",
+                systemImage: index == 0 ? "square.grid.2x2" : "calendar"
+              )
+              .font(IntervalTheme.body).padding(.horizontal, 14).padding(.vertical, 9)
+            }
+            .buttonStyle(IntervalSelectionButton(selected: (page ?? 0) == index))
+            .accessibilityAddTraits((page ?? 0) == index ? .isSelected : [])
+          }
+        }.padding(12)
+      }.frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task {
+          await Task.yield()
+          proxy.scrollTo(page ?? 0, anchor: .leading)
+        }
+    }
+  }
+
+  var upcomingEvents: [CalendarEventSnapshot] {
+    store.calendarService.todayEvents.filter { !$0.allDay && $0.end > store.calendarNow }
+      .sorted { $0.start < $1.start }
+  }
+
+  private var calendarUnavailable: Bool {
+    !store.data.settings.calendarIntegrationEnabled
+      || store.calendarService.authorizationState != .fullAccess
+      || store.data.settings.selectedCalendarIDs.isEmpty
+  }
+
+  private var calendarAccess: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Text("Connect a calendar to see your events.").font(IntervalTheme.body).foregroundStyle(
+        .secondary)
+      Button("Calendar Settings…") {
+        store.requestedSettingsTab = 2
+        openSettings()
+      }.buttonStyle(IntervalPrimaryButton())
+    }
+  }
+
+  private var calendarPage: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      VStack(alignment: .leading, spacing: 6) {
+        Text("Today’s Calendar").font(IntervalTheme.heading)
+        Text(store.calendarNow.formatted(date: .complete, time: .omitted))
+          .font(IntervalTheme.body).foregroundStyle(.secondary)
+      }.padding(.horizontal, 20).padding(.top, 20)
+      if calendarUnavailable {
+        calendarAccess.padding(.horizontal, 20)
+        Spacer()
+      } else {
+        DayTimeline(
+          store: store, selectedSessionID: $selectedSessionID, date: store.calendarNow,
+          sessionFilter: { _ in false })
+      }
+    }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+  }
+
+  private var overview: some View {
     VStack(spacing: 0) {
       VStack(alignment: .leading, spacing: 12) {
         Text("Today").font(IntervalTheme.heading).foregroundStyle(.primary)
@@ -277,7 +368,7 @@ struct FocusDayPanel: View {
       }
       .padding(20).frame(maxWidth: .infinity, alignment: .leading)
 
-      ThemedSplitView(isVertical: false, minimumFirst: 180, minimumSecond: 140) {
+      ThemedSplitView(isVertical: false, minimumFirst: 140, minimumSecond: 230) {
         VStack(alignment: .leading, spacing: 12) {
           Text("To-dos").font(IntervalTheme.heading).foregroundStyle(.primary)
             .padding(.horizontal, 20).padding(.top, 16)
@@ -287,18 +378,35 @@ struct FocusDayPanel: View {
               .frame(maxWidth: .infinity, alignment: .leading)
           }
         }
-        .frame(minHeight: 180, idealHeight: 280, maxHeight: .infinity).clipped()
+        .frame(minHeight: 140, idealHeight: 240, maxHeight: .infinity).clipped()
       } second: {
-        VStack(alignment: .leading, spacing: 12) {
-          Text("Upcoming reminders").font(IntervalTheme.heading).foregroundStyle(.primary)
-            .padding(.horizontal, 20).padding(.top, 16)
-          ScrollView {
-            UpcomingReminders(store: store, showsHeading: false, maximumCount: nil)
-              .padding(.horizontal, 20).padding(.bottom, 20)
-              .frame(maxWidth: .infinity, alignment: .leading)
-          }
+        ScrollView {
+          VStack(alignment: .leading, spacing: 24) {
+            UpcomingReminders(store: store, maximumCount: nil)
+            VStack(alignment: .leading, spacing: 12) {
+              Text("Upcoming events").font(IntervalTheme.heading)
+              if calendarUnavailable {
+                calendarAccess
+              } else if upcomingEvents.isEmpty {
+                Text("No more events today").font(IntervalTheme.body).foregroundStyle(.secondary)
+              } else {
+                ForEach(upcomingEvents) { event in
+                  HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "calendar").foregroundStyle(.secondary)
+                    Text(event.title).lineLimit(2)
+                    Spacer(minLength: 8)
+                    Text(
+                      event.start <= store.calendarNow
+                        ? "Now" : event.start.formatted(date: .omitted, time: .shortened)
+                    )
+                    .monospacedDigit().foregroundStyle(.secondary)
+                  }.font(IntervalTheme.body)
+                }
+              }
+            }
+          }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(minHeight: 140, idealHeight: 220, maxHeight: .infinity).clipped()
+        .frame(minHeight: 230, idealHeight: 280, maxHeight: .infinity).clipped()
       }
     }.frame(maxWidth: .infinity, maxHeight: .infinity)
   }

@@ -73,7 +73,7 @@ struct TimeAdjustmentChoices: View {
 
   var body: some View {
     ForEach([5, 10, 15], id: \.self) { minutes in
-      Button("\(direction > 0 ? "+" : "−")\(minutes) min") { action(minutes) }
+      Button("\(direction > 0 ? "+" : "−")\(minutes) Min") { action(minutes) }
         .disabled(!canApply(minutes))
         .help("\(actionTitle) by \(minutes) minutes")
         .accessibilityLabel("\(actionTitle) by \(minutes) minutes")
@@ -100,7 +100,7 @@ struct NotchHeadsUpView: View {
           store.adjustHeadsUp(headsUp, minutes: $0)
           dismiss()
         }
-      }.buttonStyle(.bordered).controlSize(.regular)
+      }.buttonStyle(.glass).controlSize(.regular)
     }.frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 }

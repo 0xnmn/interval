@@ -76,29 +76,29 @@ struct IntervalCommands: Commands {
     CommandGroup(after: .newItem) {
       Button(
         store.timer.kind == .focus
-          ? "Start session" : store.timer.status == .ready ? "Start break" : "Resume focus"
+          ? "Start Session" : store.timer.status == .ready ? "Start Break" : "Resume Focus"
       ) {
         if store.timer.status == .ready { store.startSession() } else { store.endBreak() }
       }.keyboardShortcut("s", modifiers: [.command, .shift])
         .disabled(store.timer.kind == .focus && store.timer.status != .ready)
-      Button("Take a break") {
+      Button("Take a Break") {
         if store.timer.status == .ready { store.startBreakNow() } else { confirm(.takeBreak) }
       }.keyboardShortcut("b", modifiers: [.command, .shift])
         .disabled(store.timer.kind != .focus)
       Button("Abandon…") { confirm(.abandon) }
         .keyboardShortcut("x", modifiers: [.command, .shift])
         .disabled(store.timer.status != .running && !store.breakEnded)
-      Menu("Adjust time") {
-        Button("+5 min") { store.adjustCurrentTime(by: 300) }
+      Menu("Adjust Time") {
+        Button("+5 Min") { store.adjustCurrentTime(by: 300) }
           .keyboardShortcut("=", modifiers: [.command, .option])
           .disabled(store.timer.duration >= 3600)
-        Button("−5 min") { store.adjustCurrentTime(by: -300) }
+        Button("−5 Min") { store.adjustCurrentTime(by: -300) }
           .keyboardShortcut("-", modifiers: [.command, .option])
           .disabled(store.remaining <= 60)
         ForEach([10, 15], id: \.self) { minutes in
-          Button("+\(minutes) min") { store.adjustCurrentTime(by: Double(minutes * 60)) }
+          Button("+\(minutes) Min") { store.adjustCurrentTime(by: Double(minutes * 60)) }
             .disabled(store.timer.duration >= 3600)
-          Button("−\(minutes) min") { store.adjustCurrentTime(by: -Double(minutes * 60)) }
+          Button("−\(minutes) Min") { store.adjustCurrentTime(by: -Double(minutes * 60)) }
             .disabled(store.remaining <= 60)
         }
       }.disabled(store.timer.status != .ready && store.timer.status != .running)
@@ -106,12 +106,12 @@ struct IntervalCommands: Commands {
       Button("Focus") { show(.focus) }.keyboardShortcut("1")
       Button("Stats") { show(.history) }.keyboardShortcut("2")
       Button("Reminders") { show(.reminders) }.keyboardShortcut("3")
-      Button("Open notch panel") { store.openNotchFromKeyboard() }
+      Button("Open Notch Panel") { store.openNotchFromKeyboard() }
         .keyboardShortcut("n", modifiers: [.command, .shift])
         .disabled(!store.canOpenNotch)
     }
     CommandGroup(after: .appInfo) {
-      Button("Check for updates…") { store.updates.checkNow() }.disabled(
+      Button("Check for Updates…") { store.updates.checkNow() }.disabled(
         !store.updates.isConfigured)
     }
   }

@@ -205,6 +205,7 @@ struct IntervalSelectionButton: ButtonStyle {
   let selected: Bool
   @Environment(\.isEnabled) private var isEnabled
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.colorSchemeContrast) private var contrast
   private var increaseContrast: Bool { contrast == .increased }
   @State private var hovering = false
@@ -214,6 +215,11 @@ struct IntervalSelectionButton: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     let active = isEnabled && (hovering || configuration.isPressed || selected)
     configuration.label
+      .modifier(
+        InteractiveGlass(
+          shape: RoundedRectangle(cornerRadius: 8),
+          opaque: reduceTransparency || increaseContrast)
+      )
       .background(
         selected
           ? Color.accentColor.opacity(increaseContrast ? 0.3 : 0.2)
@@ -235,6 +241,7 @@ struct IntervalSelectionButton: ButtonStyle {
 struct IntervalIconButton: ButtonStyle {
   @Environment(\.isEnabled) private var isEnabled
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.colorSchemeContrast) private var contrast
   private var increaseContrast: Bool { contrast == .increased }
   @State private var hovering = false
@@ -243,6 +250,11 @@ struct IntervalIconButton: ButtonStyle {
     configuration.label.labelStyle(.iconOnly)
       .font(IntervalTheme.icon)
       .frame(width: 36, height: 36)
+      .modifier(
+        InteractiveGlass(
+          shape: RoundedRectangle(cornerRadius: 9),
+          opaque: reduceTransparency || increaseContrast)
+      )
       .background(
         Color.primary.opacity(
           configuration.isPressed
@@ -293,6 +305,7 @@ private struct NativeGlass: NSViewRepresentable {
 struct IntervalPrimaryButton: ButtonStyle {
   @Environment(\.isEnabled) private var isEnabled
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.colorSchemeContrast) private var contrast
   private var increaseContrast: Bool { contrast == .increased }
   @State private var hovering = false
@@ -301,6 +314,12 @@ struct IntervalPrimaryButton: ButtonStyle {
       .font(.system(size: 14, weight: .semibold))
       .foregroundStyle(Color.primary.opacity(isEnabled ? (increaseContrast ? 1 : 0.9) : 0.45))
       .padding(.horizontal, 14).padding(.vertical, 7)
+      .modifier(
+        InteractiveGlass(
+          shape: RoundedRectangle(cornerRadius: 8),
+          tint: .accentColor,
+          opaque: reduceTransparency || increaseContrast)
+      )
       .background(
         Color.accentColor.opacity(
           configuration.isPressed
@@ -314,5 +333,19 @@ struct IntervalPrimaryButton: ButtonStyle {
       .animation(reduceMotion ? nil : IntervalMotion.selection, value: hovering)
       .animation(reduceMotion ? nil : IntervalMotion.selection, value: configuration.isPressed)
       .onHover { hovering = $0 }
+  }
+}
+
+private struct InteractiveGlass<S: Shape>: ViewModifier {
+  let shape: S
+  var tint: Color? = nil
+  let opaque: Bool
+
+  @ViewBuilder func body(content: Content) -> some View {
+    if opaque {
+      content.background(IntervalTheme.surface, in: shape)
+    } else {
+      content.glassEffect(.regular.tint(tint).interactive(), in: shape)
+    }
   }
 }
