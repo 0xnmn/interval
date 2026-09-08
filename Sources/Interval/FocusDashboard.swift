@@ -157,7 +157,7 @@ struct FocusControls: View {
       .accessibilityLabel(direction > 0 ? "Add 5 minutes" : "Remove 5 minutes")
       .help(
         direction > 0
-          ? "Add 5 minutes · Right-click for more" : "Remove 5 minutes · Right-click for more"
+          ? "+5 minutes · Right-click for more" : "−5 minutes · Right-click for more"
       )
       .contextMenu {
         TimeAdjustmentChoices(direction: direction) { minutes in

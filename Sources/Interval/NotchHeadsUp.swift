@@ -23,8 +23,8 @@ struct NotchHeadsUp: Equatable {
 
   var actionTitle: String {
     switch target {
-    case .focus: "Extend focus"
-    case .reminder: "Extend reminder"
+    case .focus: "Adjust focus"
+    case .reminder: "Adjust reminder"
     }
   }
 }
@@ -75,7 +75,7 @@ struct TimeAdjustmentChoices: View {
     ForEach([5, 10, 15], id: \.self) { minutes in
       Button("\(direction > 0 ? "+" : "−")\(minutes) Min") { action(minutes) }
         .disabled(!canApply(minutes))
-        .help("\(actionTitle) by \(minutes) minutes")
+        .help("\(direction > 0 ? "+" : "−")\(minutes) minutes")
         .accessibilityLabel("\(actionTitle) by \(minutes) minutes")
     }
   }

@@ -96,7 +96,7 @@ enum UserIdleMonitor {
     switch overlay {
     case .warning:
       let panel = NSPanel(
-        contentRect: NSRect(x: 0, y: 0, width: 250, height: 64),
+        contentRect: NSRect(origin: .zero, size: ReminderWarningView.size),
         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
       configure(panel)
       panel.hasShadow = false

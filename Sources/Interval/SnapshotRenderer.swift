@@ -317,7 +317,7 @@ struct SnapshotRequest {
     case "reminder-countdown", "reminder-countdown-paused", "reminder-countdown-light",
       "reminder-countdown-microphone":
       let reminder = store.data.reminders[0]
-      size = NSSize(width: 250, height: 64)
+      size = ReminderWarningView.size
       store.audioInputActivity.update(
         isActive: request.scene == "reminder-countdown-microphone", at: Date())
       view = AnyView(

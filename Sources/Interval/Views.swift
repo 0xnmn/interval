@@ -717,13 +717,13 @@ struct MenuBarView: View {
     return max(0, Int(ceil(5 - store.now.timeIntervalSince(shownAt))))
   }
   private func extendMenu(_ reminder: Reminder) -> some View {
-    Menu("Extend") {
+    Menu("+") {
       ForEach([5, 10, 15], id: \.self) { minutes in
-        Button("\(minutes) Minutes") {
+        Button("+\(minutes) Min") {
           store.snoozeReminder(reminder.id, seconds: Double(minutes * 60))
         }
       }
-    }
+    }.accessibilityLabel("Add time to reminder")
   }
 }
 

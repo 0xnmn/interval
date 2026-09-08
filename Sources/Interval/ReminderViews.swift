@@ -237,7 +237,7 @@ struct RemindersView: View {
     let day =
       Calendar.current.isDate(due, inSameDayAs: store.now)
       ? "" : due.formatted(.dateTime.month(.abbreviated).day()) + " · "
-    return (reminder.snoozedUntil == nil ? "" : "Extended · ") + day + time
+    return day + time
   }
 
   private func meaningfulTitle(_ title: String) -> String {
@@ -441,6 +441,7 @@ private struct ReminderEditor: View {
 }
 
 struct ReminderWarningView: View {
+  static let size = NSSize(width: 250, height: 36)
   let reminder: Reminder
   let overlay: ReminderOverlay
   var audioInputActivity: AudioInputActivity? = nil
@@ -452,14 +453,12 @@ struct ReminderWarningView: View {
   var body: some View {
     TimelineView(.periodic(from: .now, by: 0.5)) { _ in
       HStack(spacing: 8) {
-        Text(reminder.emoji).font(.system(size: 28)).frame(width: 36, height: 36)
-        VStack(alignment: .leading, spacing: 3) {
-          Text(reminder.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
-          Text(warningStatus)
-            .font(.system(size: 14)).foregroundStyle(.secondary).monospacedDigit()
-            .lineLimit(1)
-        }
-        Spacer(minLength: 0)
+        Text(reminder.emoji).font(.system(size: 18)).frame(width: 22)
+        Text(reminder.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
+        Spacer(minLength: 4)
+        Text(warningStatus)
+          .font(.system(size: 12)).foregroundStyle(.secondary).monospacedDigit()
+          .lineLimit(1).fixedSize()
       }
       .foregroundStyle(.primary)
       .padding(.horizontal, 10).padding(.vertical, 7)
@@ -471,9 +470,9 @@ struct ReminderWarningView: View {
   }
 
   var warningStatus: String {
-    if audioInputActivity?.isActive == true { return "Microphone in use" }
-    if warning.paused { return keyboardRecentlyActive ? "Typing" : "Waiting for idle" }
-    return "In \(warning.remaining) sec"
+    if audioInputActivity?.isActive == true { return "Mic On" }
+    if warning.paused { return keyboardRecentlyActive ? "Typing" : "Waiting" }
+    return "\(warning.remaining)s"
   }
 
   private var keyboardRecentlyActive: Bool {
@@ -663,15 +662,15 @@ struct ReminderTakeoverView: View {
           Button {
             extend(60)
           } label: {
-            Label("Extend 1 Min", systemImage: "clock.arrow.circlepath")
-          }.help("Extend reminder by 1 minute")
-            .accessibilityLabel("Extend reminder by 1 minute")
+            Text("+1 Min")
+          }.help("+1 minute")
+            .accessibilityLabel("Add 1 minute to reminder")
           Button {
             extend(5 * 60)
           } label: {
-            Label("Extend 5 Min", systemImage: "clock.arrow.circlepath")
-          }.help("Extend reminder by 5 minutes")
-            .accessibilityLabel("Extend reminder by 5 minutes")
+            Text("+5 Min")
+          }.help("+5 minutes")
+            .accessibilityLabel("Add 5 minutes to reminder")
           Button(action: skip) {
             Label(
               skipRemaining > 0 ? "Skip available in \(skipRemaining)s" : "Skip",
