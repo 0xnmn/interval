@@ -34,6 +34,42 @@ import Testing
     if case .reminder = engine.overlay {} else { Issue.record("expected full reminder") }
   }
 
+  @Test func warningIgnoresMouseButPausesForTyping() {
+    var values = [reminder()]
+    var engine = ReminderEngine()
+    func environment(keyboardIdle: TimeInterval) -> ReminderEnvironment {
+      .init(isUserIdle: false, idleSeconds: 0, keyboardIdleSeconds: keyboardIdle)
+    }
+    _ = engine.tick(reminders: &values, now: zero, environment: environment(keyboardIdle: 30))
+    _ = engine.tick(
+      reminders: &values, now: zero.addingTimeInterval(4),
+      environment: environment(keyboardIdle: 34))
+    #expect(engine.overlay == .warning(reminderID: values[0].id, remaining: 6, isPaused: false))
+    _ = engine.tick(
+      reminders: &values, now: zero.addingTimeInterval(8),
+      environment: environment(keyboardIdle: 0))
+    #expect(engine.overlay == .warning(reminderID: values[0].id, remaining: 6, isPaused: true))
+    _ = engine.tick(
+      reminders: &values, now: zero.addingTimeInterval(14),
+      environment: environment(keyboardIdle: 6))
+    #expect(
+      engine.overlay == .reminder(reminderID: values[0].id, shownAt: zero.addingTimeInterval(14)))
+  }
+
+  @Test func microphoneStillSuppressesKeyboardOnlyWarning() {
+    var values = [reminder()]
+    var engine = ReminderEngine()
+    _ = engine.tick(
+      reminders: &values, now: zero,
+      environment: .init(isUserIdle: false, idleSeconds: 0, keyboardIdleSeconds: 30))
+    #expect(engine.overlay != nil)
+    _ = engine.tick(
+      reminders: &values, now: zero.addingTimeInterval(1),
+      environment: .init(
+        isUserIdle: false, idleSeconds: 0, audioInputIsActive: true, keyboardIdleSeconds: 31))
+    #expect(engine.overlay == nil)
+  }
+
   @Test func snoozeIsRepeatableAndDoesNotMutateAnchor() {
     var values = [reminder()]
     var engine = ReminderEngine()

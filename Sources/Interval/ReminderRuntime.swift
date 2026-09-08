@@ -6,6 +6,12 @@ import QuartzCore
 import SwiftUI
 
 enum UserIdleMonitor {
+  static var keyboardIdleSeconds: TimeInterval {
+    [.keyDown, .keyUp].map { (type: CGEventType) in
+      CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: type)
+    }.min() ?? 0
+  }
+
   static var idleSeconds: TimeInterval {
     let types: [CGEventType] = [
       .keyDown, .keyUp, .mouseMoved, .leftMouseDown, .leftMouseUp,

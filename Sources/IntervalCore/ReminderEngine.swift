@@ -19,10 +19,12 @@ public struct ReminderEnvironment: Equatable, Sendable {
   public var audioInputIsActive: Bool
   /// Idle duration reported by the OS. Prefer this over inferring idle time between samples.
   public var idleSeconds: TimeInterval?
+  /// Keyboard-only idle duration for the final warning; mouse activity must not delay it.
+  public var keyboardIdleSeconds: TimeInterval?
   public init(
     isSessionActive: Bool = true, isUserIdle: Bool = true, focusIsRunningOrPaused: Bool = false,
     calendarHasEvent: Bool = false, idleSeconds: TimeInterval? = nil,
-    audioInputIsActive: Bool = false
+    audioInputIsActive: Bool = false, keyboardIdleSeconds: TimeInterval? = nil
   ) {
     self.isSessionActive = isSessionActive
     self.isUserIdle = isUserIdle
@@ -30,6 +32,7 @@ public struct ReminderEnvironment: Equatable, Sendable {
     self.calendarHasEvent = calendarHasEvent
     self.audioInputIsActive = audioInputIsActive
     self.idleSeconds = idleSeconds
+    self.keyboardIdleSeconds = keyboardIdleSeconds
   }
 }
 
@@ -47,16 +50,17 @@ public struct ReminderEngine: Equatable, Sendable {
     environment: ReminderEnvironment
   ) -> ReminderOverlay? {
     let sampleGap = max(0, now.timeIntervalSince(lastTick ?? now))
+    let warningIdle = environment.keyboardIdleSeconds.map { $0 >= 1 } ?? environment.isUserIdle
     let verifiedIdle: TimeInterval
     if environment.audioInputIsActive {
       verifiedIdle = 0
-    } else if let idle = environment.idleSeconds {
-      verifiedIdle = environment.isUserIdle ? min(sampleGap, max(0, idle)) : 0
+    } else if let idle = environment.keyboardIdleSeconds ?? environment.idleSeconds {
+      verifiedIdle = warningIdle ? min(sampleGap, max(0, idle)) : 0
     } else {
-      verifiedIdle = environment.isUserIdle && priorWasIdle && sampleGap <= 2 ? sampleGap : 0
+      verifiedIdle = warningIdle && priorWasIdle && sampleGap <= 2 ? sampleGap : 0
     }
     lastTick = now
-    priorWasIdle = environment.isUserIdle && !environment.audioInputIsActive
+    priorWasIdle = warningIdle && !environment.audioInputIsActive
     if let visible = overlay,
       !reminders.contains(where: { $0.id == visible.reminderID && $0.isEnabled })
     {
@@ -109,11 +113,11 @@ public struct ReminderEngine: Equatable, Sendable {
         return nil
       }
       idleCountdown = max(0, idleCountdown - verifiedIdle)
-      if idleCountdown <= 0 && !isSuppressed(reminder, environment) && environment.isUserIdle {
+      if idleCountdown <= 0 && !isSuppressed(reminder, environment) && warningIdle {
         overlay = .reminder(reminderID: id, shownAt: now)
       } else {
         overlay = .warning(
-          reminderID: id, remaining: idleCountdown, isPaused: !environment.isUserIdle)
+          reminderID: id, remaining: idleCountdown, isPaused: !warningIdle)
       }
       return overlay
     }
@@ -131,7 +135,7 @@ public struct ReminderEngine: Equatable, Sendable {
     // A newly discovered occurrence always receives its complete warning, including after a small delay.
     idleCountdown = 10
     overlay = .warning(
-      reminderID: candidate.id, remaining: idleCountdown, isPaused: !environment.isUserIdle)
+      reminderID: candidate.id, remaining: idleCountdown, isPaused: !warningIdle)
     return overlay
   }
 

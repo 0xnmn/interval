@@ -710,7 +710,9 @@ final class AppStore {
     let environment = ReminderEnvironment(
       isSessionActive: sessionIsActive, isUserIdle: idleSeconds >= 1,
       focusIsRunningOrPaused: focusBusy, calendarHasEvent: calendarService.hasEvent(at: date),
-      idleSeconds: idleSeconds, audioInputIsActive: audioInputActivity.isActive)
+      idleSeconds: idleSeconds, audioInputIsActive: audioInputActivity.isActive,
+      keyboardIdleSeconds: audioInputActivity.effectiveIdleSeconds(
+        UserIdleMonitor.keyboardIdleSeconds, at: date))
     reconcileReminders(at: date, environment: environment)
     let reminder = reminderOverlay.flatMap { visible in
       data.reminders.first { $0.id == visible.reminderID }
