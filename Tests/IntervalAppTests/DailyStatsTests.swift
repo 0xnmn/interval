@@ -7,6 +7,38 @@ import Testing
 
 @MainActor @Suite("Daily Stats")
 struct DailyStatsTests {
+  @Test func upcomingRemindersHideSkippedOccurrencesWithoutDeletingThem() {
+    let now = SnapshotRenderer.fixtureNow
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let service = CalendarService(fixtureEvents: [
+      CalendarEventSnapshot(
+        id: "meeting", title: "Meeting", start: now,
+        end: now.addingTimeInterval(600), allDay: false, calendarName: "Work")
+    ])
+    let store = AppStore(
+      persistence: JSONStore(fileURL: directory.appendingPathComponent("state.json")),
+      calendarService: service, runtimeEnabled: false)
+    store.now = now
+    service.configure(enabled: true, selectedCalendarIDs: ["Work"])
+    _ = service.hasEvent(at: now)
+    store.data.activeTimer = TimerState(
+      kind: .focus, duration: 1500, status: .running, startedAt: now,
+      deadline: now.addingTimeInterval(1500))
+    store.data.reminders = [
+      Reminder(title: "Focus skipped", suppressDuringCalendar: false, dueAt: now),
+      Reminder(title: "Event skipped", suppressDuringFocus: false, dueAt: now),
+      Reminder(
+        title: "Allowed", suppressDuringFocus: false, suppressDuringCalendar: false, dueAt: now),
+      Reminder(title: "After focus", dueAt: now.addingTimeInterval(1800)),
+    ]
+    #expect(UpcomingReminders(store: store).reminders.map(\.title) == ["Allowed", "After focus"])
+    #expect(store.data.reminders.count == 4)
+    store.data.activeTimer = nil
+    service.configure(enabled: false, selectedCalendarIDs: [])
+    #expect(UpcomingReminders(store: store).reminders.count == 4)
+  }
+
   @Test func overviewShowsCurrentAndUpcomingTimedEventsOnly() {
     let now = Calendar.current.date(
       bySettingHour: 12, minute: 0, second: 0, of: SnapshotRenderer.fixtureNow)!

@@ -172,16 +172,20 @@ struct UpcomingReminders: View {
   @Bindable var store: AppStore
   var showsHeading = true
   var maximumCount: Int? = 3
+  var reminders: [Reminder] {
+    store.data.reminders.filter {
+      $0.isEnabled && $0.effectiveDueAt != nil && !isSkipped($0)
+    }
+    .sorted { $0.effectiveDueAt! < $1.effectiveDueAt! }
+  }
   var body: some View {
-    let reminders = store.data.reminders.filter { $0.isEnabled && $0.effectiveDueAt != nil }
-      .sorted { $0.effectiveDueAt! < $1.effectiveDueAt! }
     let visibleReminders = maximumCount.map { Array(reminders.prefix($0)) } ?? reminders
     return VStack(alignment: .leading, spacing: 14) {
       if showsHeading {
         Text("Upcoming reminders").font(IntervalTheme.heading).foregroundStyle(.primary)
       }
       if reminders.isEmpty {
-        Text("No reminders scheduled").font(IntervalTheme.body).foregroundStyle(.secondary)
+        Text("No upcoming reminders").font(IntervalTheme.body).foregroundStyle(.secondary)
       }
       ForEach(visibleReminders) { reminder in
         HStack(spacing: 10) {
@@ -195,8 +199,7 @@ struct UpcomingReminders: View {
     }
   }
 
-  func reminderStatus(_ reminder: Reminder) -> String {
-    if store.audioInputActivity.isActive { return "Microphone in use" }
+  private func isSkipped(_ reminder: Reminder) -> Bool {
     let due = reminder.effectiveDueAt ?? store.now
     let checkAt = max(store.now, due)
     let focusEnd =
@@ -207,8 +210,12 @@ struct UpcomingReminders: View {
       ? store.calendarService.todayEvents.filter {
         $0.isEligibleForReminderSuppression && $0.start <= checkAt && $0.end > checkAt
       }.map(\.end).max() : nil
-    if let eventEnd, eventEnd >= (focusEnd ?? checkAt) { return "Skipped during event" }
-    if let focusEnd, focusEnd > checkAt { return "Skipped during focus" }
+    return eventEnd != nil || (focusEnd.map { $0 > checkAt } ?? false)
+  }
+
+  func reminderStatus(_ reminder: Reminder) -> String {
+    if store.audioInputActivity.isActive { return "Microphone in use" }
+    let due = reminder.effectiveDueAt ?? store.now
     let remaining = due.timeIntervalSince(store.now)
     return remaining <= 0 ? "When idle" : "In \(durationString(remaining))"
   }
