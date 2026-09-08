@@ -176,7 +176,7 @@ struct DailyStatsTests {
     }
   }
 
-  @Test func unratedIsExplicitAndBreaksNeverCountAsFocusFeedback() {
+  @Test func qualityOmitsUnratedZeroCountsAndBreaks() {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
     let store = AppStore(
@@ -190,7 +190,9 @@ struct DailyStatsTests {
     let view = HistoryView(store: store)
     #expect(view.focusDuration == 3_000)
     #expect(view.completedFocusCount == 2)
-    #expect(view.feedbackStats.first { $0.id == "unrated" }?.count == 2)
-    #expect(view.feedbackStats.first { $0.id == "focused" }?.count == 0)
+    #expect(view.feedbackStats.isEmpty)
+    store.data.sessions[0].feedback = "neutral"
+    #expect(view.feedbackStats.map(\.id) == ["neutral"])
+    #expect(view.feedbackStats.first?.count == 1)
   }
 }

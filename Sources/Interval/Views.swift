@@ -216,16 +216,13 @@ struct HistoryView: View {
                   .font(IntervalTheme.body).foregroundStyle(.secondary)
               } else if !focusSessions.isEmpty {
                 categoryBreakdown
-                feedbackBreakdown
+                if !feedbackStats.isEmpty { feedbackBreakdown }
               }
               if let calendarStatus {
-                Label(calendarStatus, systemImage: "calendar.badge.exclamationmark")
-                  .font(IntervalTheme.body).foregroundStyle(.secondary).frame(
-                    maxWidth: .infinity, alignment: .leading)
                 Button("Calendar Settings…") {
                   store.requestedSettingsTab = 2
                   openSettings()
-                }.buttonStyle(.link)
+                }.buttonStyle(.link).help(calendarStatus)
               }
             }.frame(maxWidth: .infinity, alignment: .leading)
           }
@@ -265,7 +262,7 @@ struct HistoryView: View {
   }
   private var daySummary: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("Focus time").font(IntervalTheme.heading).foregroundStyle(.secondary)
+      Text("Focus Time").font(IntervalTheme.heading).foregroundStyle(.secondary)
       Text(durationString(focusDuration)).font(.largeTitle.weight(.regular)).monospacedDigit()
       if !focusSessions.isEmpty {
         Text("\(completedFocusCount) completed").font(IntervalTheme.body).foregroundStyle(
@@ -307,7 +304,7 @@ struct HistoryView: View {
   }
   private var categoryBreakdown: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("Focus by category").font(IntervalTheme.heading).foregroundStyle(.secondary)
+      Text("Categories").font(IntervalTheme.heading).foregroundStyle(.secondary)
       if focusCategoryStats.isEmpty {
         Text("No focus sessions").font(IntervalTheme.body).foregroundStyle(.secondary)
       } else {
@@ -327,25 +324,18 @@ struct HistoryView: View {
     }
   }
   private var feedbackBreakdown: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text("Focus feedback").font(IntervalTheme.heading).foregroundStyle(.secondary)
-      if focusSessions.isEmpty {
-        Text("No feedback yet").font(IntervalTheme.body).foregroundStyle(.secondary)
-      } else {
-        ForEach(feedbackStats) { stat in
-          VStack(spacing: 4) {
-            HStack {
-              Text(stat.label).font(IntervalTheme.body)
-              Spacer()
-              Text("\(stat.count)").font(IntervalTheme.body.monospacedDigit()).foregroundStyle(
-                .secondary)
-            }
-            ProgressView(value: Double(stat.count), total: Double(max(focusSessions.count, 1)))
-              .tint(stat.count == 0 ? Color.clear : Color.secondary)
-              .accessibilityLabel(stat.label)
-              .accessibilityValue("\(stat.count) of \(focusSessions.count) focus sessions")
-          }
+    VStack(alignment: .leading, spacing: 12) {
+      Text("Focus Quality").font(IntervalTheme.heading).foregroundStyle(.secondary)
+      ForEach(feedbackStats) { stat in
+        HStack {
+          Text(stat.label).font(IntervalTheme.body)
+          Spacer()
+          Text("\(stat.count)").font(IntervalTheme.body.monospacedDigit()).foregroundStyle(
+            .secondary)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(stat.label)
+        .accessibilityValue("\(stat.count) focus sessions")
       }
     }
   }
@@ -360,8 +350,7 @@ struct HistoryView: View {
       FeedbackStat(id: "focused", label: "🎯 Focused", count: counts[.focused]?.count ?? 0),
       FeedbackStat(id: "neutral", label: "😐 Neutral", count: counts[.neutral]?.count ?? 0),
       FeedbackStat(id: "distracted", label: "🫠 Distracted", count: counts[.distracted]?.count ?? 0),
-      FeedbackStat(id: "unrated", label: "— Unrated", count: counts[nil]?.count ?? 0),
-    ]
+    ].filter { $0.count > 0 }
   }
   var focusCategoryStats: [CategoryStat] {
     let grouped = Dictionary(grouping: focusSessions) { $0.categoryID }

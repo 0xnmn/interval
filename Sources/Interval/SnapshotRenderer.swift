@@ -268,9 +268,12 @@ struct SnapshotRequest {
           store: store, expanded: expanded, geometry: geometry, collapse: {},
           page: request.scene == "notch-todos" ? 1 : request.scene == "notch-reminders" ? 2 : 0))
     case "history", "history-disabled", "history-no-selection", "history-running", "history-break",
-      "history-compact", "history-review", "history-empty":
+      "history-compact", "history-review", "history-empty", "history-unrated":
       store.selection = .history
       if request.scene == "history-empty" { store.data.sessions = [] }
+      if request.scene == "history-unrated" {
+        for index in store.data.sessions.indices { store.data.sessions[index].feedback = nil }
+      }
       if request.scene == "history-review" {
         store.completionSessionID = store.data.sessions.first?.id
       }
