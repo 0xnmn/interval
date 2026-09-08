@@ -24,7 +24,7 @@ struct MainView: View {
       GlassBackground()
       GeometryReader { geometry in
         HStack(spacing: 0) {
-          VStack(spacing: 12) {
+          VStack(spacing: 8) {
             ForEach(Destination.allCases) { item in
               Button {
                 store.selection = item
@@ -33,12 +33,9 @@ struct MainView: View {
                   .font(IntervalTheme.icon).frame(width: 36, height: 36)
               }
               .buttonStyle(.plain)
-              .overlay(alignment: .bottom) {
-                if (store.selection ?? .focus) == item {
-                  Circle().fill(Color.accentColor).frame(width: 4, height: 4).offset(y: 3)
-                }
-              }
-              .foregroundStyle((store.selection ?? .focus) == item ? .primary : .secondary)
+              .foregroundStyle(
+                (store.selection ?? .focus) == item ? Color.accentColor : Color.secondary
+              )
               .help(item.rawValue).accessibilityLabel(item.rawValue)
               .accessibilityAddTraits((store.selection ?? .focus) == item ? .isSelected : [])
               .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.selection)
@@ -48,7 +45,7 @@ struct MainView: View {
               Image(systemName: "gearshape").font(IntervalTheme.icon).frame(width: 36, height: 36)
             }.buttonStyle(.plain).help("Settings · ⌘,").accessibilityLabel(
               "Settings")
-          }.padding(.top, 64).padding(.bottom, 20).frame(width: 44)
+          }.padding(.top, 20).padding(.bottom, 20).frame(width: 44)
             .background(IntervalTheme.surface.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(IntervalTheme.border, lineWidth: 1))
             .padding(.horizontal, 8).padding(.bottom, 8)
