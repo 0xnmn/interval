@@ -322,12 +322,14 @@ extension Comparable {
 }
 
 public enum ReminderPresentation: String, Codable, CaseIterable, Sendable {
-  case fullscreen
-  public var title: String { "Full screen" }
+  case fullscreen, overlay
+  public var title: String { self == .fullscreen ? "Full Screen" : "Overlay" }
+  public var minimumDuration: TimeInterval { self == .fullscreen ? 5 : 1 }
 
   public init(from decoder: Decoder) throws {
     let value = try decoder.singleValueContainer().decode(String.self)
     switch value {
+    case Self.overlay.rawValue: self = .overlay
     case Self.fullscreen.rawValue, "floating": self = .fullscreen
     default:
       throw DecodingError.dataCorrupted(
@@ -404,7 +406,7 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
     value.idleDelaySeconds =
       idleDelaySeconds.isFinite ? idleDelaySeconds.clamped(to: 1...3_600) : 10
     value.displaySeconds =
-      displaySeconds.isFinite ? displaySeconds.clamped(to: 5...600) : 10
+      displaySeconds.isFinite ? displaySeconds.clamped(to: presentation.minimumDuration...600) : 10
     return value
   }
 
@@ -450,6 +452,10 @@ public struct Reminder: Identifiable, Codable, Equatable, Sendable {
       Reminder(
         title: "Water", message: "Take a moment to drink some water.", emoji: "💧",
         intervalSeconds: 3_600, displaySeconds: 60, dueAt: date.addingTimeInterval(3_600)),
+      Reminder(
+        title: "Blink", message: "Blink slowly and relax your eyes.", emoji: "👁️",
+        intervalSeconds: 300, displaySeconds: 3, presentation: .overlay,
+        suppressDuringFocus: false, dueAt: date.addingTimeInterval(300)),
     ]
   }
 }

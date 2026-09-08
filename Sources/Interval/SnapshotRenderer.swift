@@ -331,6 +331,13 @@ struct SnapshotRequest {
             isPaused: request.scene == "reminder-countdown-paused"
               || store.audioInputActivity.isActive),
           audioInputActivity: store.audioInputActivity))
+    case "reminder-blink-overlay":
+      size = NSSize(width: 900, height: 650)
+      view = AnyView(
+        ZStack {
+          MainView(store: store)
+          ReminderOverlayView(reminder: Reminder.templates().last!, shownAt: Date())
+        })
     case "reminder-max-emoji":
       size = NSSize(width: 900, height: 650)
       view = AnyView(
@@ -341,11 +348,10 @@ struct SnapshotRequest {
       size =
         request.scene == "reminder-fullscreen-large"
         ? NSSize(width: 1440, height: 960) : NSSize(width: 900, height: 650)
-      let wallpaper =
-        request.scene == "reminder-fullscreen-fallback"
-        ? nil
-        : NSScreen.screens.first
-          .flatMap { ReminderOverlayController.wallpaperImage(for: $0) }
+      var wallpaper: NSImage?
+      if request.scene != "reminder-fullscreen-fallback", let screen = NSScreen.screens.first {
+        wallpaper = await Wallpaper.image(for: screen)
+      }
       view = AnyView(
         ReminderTakeoverView(
           reminder: store.data.reminders[1],

@@ -12,9 +12,31 @@ import Testing
 
   @Test func templatesHaveProductDefaultsAndIndependentIDs() {
     let values = Reminder.templates(startingAt: zero)
-    #expect(values.map(\.intervalSeconds) == [600, 1200, 1800, 3600])
-    #expect(values.map(\.displaySeconds) == [20, 10, 60, 60])
-    #expect(Set(values.map(\.id)).count == 4)
+    #expect(values.map(\.intervalSeconds) == [600, 1200, 1800, 3600, 300])
+    #expect(values.map(\.displaySeconds) == [20, 10, 60, 60, 3])
+    #expect(Set(values.map(\.id)).count == 5)
+  }
+
+  @Test func shortOverlayPersistsAndCompletesAfterThreeSeconds() throws {
+    let blink = Reminder.templates(startingAt: zero).last!
+    #expect(blink.presentation == .overlay)
+    #expect(blink.clamped().displaySeconds == 3)
+    #expect(try JSONDecoder().decode(Reminder.self, from: JSONEncoder().encode(blink)) == blink)
+    var short = blink
+    short.displaySeconds = 0
+    #expect(short.clamped().displaySeconds == 1)
+    short.presentation = .fullscreen
+    #expect(short.clamped().displaySeconds == 5)
+    var values = [blink]
+    var engine = ReminderEngine()
+    _ = engine.tick(reminders: &values, now: zero.addingTimeInterval(290), environment: .init())
+    _ = engine.tick(
+      reminders: &values, now: zero.addingTimeInterval(300), environment: .init(idleSeconds: 10))
+    #expect(
+      engine.overlay == .reminder(reminderID: blink.id, shownAt: zero.addingTimeInterval(300)))
+    _ = engine.tick(reminders: &values, now: zero.addingTimeInterval(303), environment: .init())
+    #expect(engine.overlay == nil)
+    #expect(values[0].effectiveDueAt == zero.addingTimeInterval(600))
   }
 
   @Test func activityPausesCountdownAndActualElapsedResumesIt() {

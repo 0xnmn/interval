@@ -60,20 +60,23 @@ import Testing
     let view = UpcomingReminders(store: store)
     #expect(view.reminderStatus(reminder) == "In 10:00")
     reminder.dueAt = now.addingTimeInterval(60)
-    #expect(view.reminderStatus(reminder) == "Skipped during event")
+    store.data.reminders = [reminder]
+    #expect(view.reminders.isEmpty)
     reminder.suppressDuringCalendar = false
     reminder.suppressDuringFocus = true
     store.data.activeTimer = TimerState(
       kind: .focus, duration: 300, status: .running,
       startedAt: now, deadline: now.addingTimeInterval(300))
-    #expect(view.reminderStatus(reminder) == "Skipped during focus")
+    store.data.reminders = [reminder]
+    #expect(view.reminders.isEmpty)
     reminder.dueAt = now.addingTimeInterval(600)
     #expect(view.reminderStatus(reminder) == "In 10:00")
     reminder.suppressDuringCalendar = true
     reminder.dueAt = now.addingTimeInterval(1000)
-    #expect(view.reminderStatus(reminder) == "Skipped during event")
+    store.data.reminders = [reminder]
+    #expect(view.reminders.isEmpty)
     store.data.activeTimer?.deadline = now.addingTimeInterval(1500)
-    #expect(view.reminderStatus(reminder) == "Skipped during focus")
+    #expect(view.reminders.isEmpty)
   }
 
   @Test func appearanceMigratesAndPersistsWithoutResettingTimer() throws {

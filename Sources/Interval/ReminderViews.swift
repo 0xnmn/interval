@@ -369,13 +369,36 @@ private struct ReminderEditor: View {
         }
 
         editorSection("Display") {
+          Picker("Style", selection: binding(\.presentation)) {
+            ForEach(ReminderPresentation.allCases, id: \.self) { Text($0.title).tag($0) }
+          }
+          Text(
+            binding(\.presentation).wrappedValue == .overlay
+              ? "A small, click-through reminder over your workspace. Closes automatically."
+              : "Covers each display with its wallpaper."
+          )
+          .foregroundStyle(.secondary)
+          if binding(\.presentation).wrappedValue == .fullscreen,
+            Wallpaper.captureAvailability == .permissionRequired
+          {
+            Button("Allow Wallpaper Access…") {
+              CGRequestScreenCaptureAccess()
+              NSWorkspace.shared.open(
+                URL(
+                  string:
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!
+              )
+            }.help(
+              "Screen Recording access lets Interval read each display’s actual wallpaper, including dynamic wallpapers. Only the wallpaper window is captured."
+            )
+          }
           HStack {
             Text("Display for")
             Spacer()
             Text("\(Int(binding(\.displaySeconds).wrappedValue)) sec").monospacedDigit()
             Stepper(
               "Display duration in seconds", value: binding(\.displaySeconds),
-              in: 5...600
+              in: binding(\.presentation).wrappedValue.minimumDuration...600
             )
             .labelsHidden()
           }
@@ -480,6 +503,30 @@ struct ReminderWarningView: View {
       CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown),
       CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyUp)
     ) < 1.5
+  }
+}
+
+struct ReminderOverlayView: View {
+  let reminder: Reminder
+  let shownAt: Date
+
+  var body: some View {
+    VStack(spacing: 10) {
+      Text(reminder.emoji).font(.system(size: min(reminder.emojiSize, 72)))
+      Text(reminder.title).font(.title2.weight(.semibold)).lineLimit(1)
+      if !reminder.message.isEmpty {
+        Text(reminder.message).font(IntervalTheme.body).foregroundStyle(.secondary)
+          .multilineTextAlignment(.center).lineLimit(3)
+      }
+      TimelineView(.periodic(from: .now, by: 1)) { context in
+        Text(
+          "\(max(0, Int(ceil(reminder.displaySeconds - context.date.timeIntervalSince(shownAt)))))s"
+        )
+        .font(IntervalTheme.body).monospacedDigit().foregroundStyle(.secondary)
+      }
+    }.padding(24).frame(width: 360)
+      .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24))
+      .accessibilityElement(children: .combine)
   }
 }
 

@@ -7,6 +7,36 @@ import Testing
 
 @MainActor @Suite("Cursor warning", .serialized)
 struct ReminderOverlayTests {
+  @Test func overlayIsSmallClickThroughAndDoesNotActivate() throws {
+    _ = NSApplication.shared
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = AppStore(
+      persistence: JSONStore(fileURL: directory.appendingPathComponent("data.json")),
+      runtimeEnabled: false)
+    let reminder = Reminder.templates().last!
+    let originalPolicy = NSApp.activationPolicy()
+    let existing = Set(NSApp.windows.map(\.windowNumber))
+    let controller = ReminderOverlayController(wallpaperForScreen: { _ in
+      Issue.record("Overlay must not load wallpaper")
+      return nil
+    })
+    defer { controller.close() }
+    controller.update(
+      .reminder(reminderID: reminder.id, shownAt: Date()), reminder: reminder, store: store)
+    let panels = NSApp.windows.filter { !existing.contains($0.windowNumber) }
+    #expect(panels.count == 1)
+    let panel = try #require(panels.first)
+    #expect(panel.ignoresMouseEvents)
+    #expect(!panel.isKeyWindow)
+    #expect(!panel.isOpaque)
+    #expect(panel.frame.width == 360)
+    #expect(panel.frame.height > 100 && panel.frame.height < 400)
+    #expect(NSApp.activationPolicy() == originalPolicy)
+    controller.close()
+    #expect(!panel.isVisible)
+  }
+
   @Test(arguments: [60.0, 300.0])
   func fullscreenTimeButtonsDeferOnlyThisOccurrence(seconds: TimeInterval) throws {
     _ = NSApplication.shared

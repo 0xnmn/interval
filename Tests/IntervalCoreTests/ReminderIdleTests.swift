@@ -101,7 +101,7 @@ import Testing
       Reminder.self, from: Data("{\"title\":\"Look away\"}".utf8))
     #expect(!legacy.pauseWhenIdle)
     #expect(legacy.idleDelaySeconds == 10)
-    #expect(Reminder.templates().map(\.pauseWhenIdle) == [true, false, false, false])
+    #expect(Reminder.templates().map(\.pauseWhenIdle) == [true, false, false, false, false])
     #expect(reminder(delay: .nan).clamped().idleDelaySeconds == 10)
     #expect(reminder(delay: 0).clamped().idleDelaySeconds == 1)
     #expect(reminder(delay: 4_000).clamped().idleDelaySeconds == 3_600)

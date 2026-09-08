@@ -142,7 +142,7 @@ struct MotionSoundTests {
       #expect(preview !== cue)
     }
     #expect(Destination.reminders.icon == "bell")
-    #expect(ReminderPresentation.fullscreen.title == "Full screen")
+    #expect(ReminderPresentation.fullscreen.title == "Full Screen")
     #expect(NotificationService.completionTitle(for: .focus) == "How did that session feel?")
     #expect(NotificationService.completionTitle(for: .shortBreak) == "Ready to focus?")
     #expect(NotificationService.completionTitle(for: .longBreak) == "Ready to focus?")

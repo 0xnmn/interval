@@ -1,6 +1,5 @@
 import AppKit
 import CoreGraphics
-import CoreImage
 import IntervalCore
 import QuartzCore
 import SwiftUI
@@ -33,7 +32,8 @@ enum UserIdleMonitor {
   private var cursorDisplayLink: CADisplayLink?
   private var previousActivationPolicy: NSApplication.ActivationPolicy?
   private let cursorLocation: () -> NSPoint
-  private let wallpaperForScreen: @MainActor (NSScreen) -> NSImage?
+  private let wallpaperForScreen: (@MainActor (NSScreen) -> NSImage?)?
+  private var wallpaperTasks: [Task<Void, Never>] = []
   private let cueCallback: ((ReminderSound) -> Void)?
   private var cueSound: NSSound?
   private var lastCueOccurrence: CueOccurrence?
@@ -41,9 +41,7 @@ enum UserIdleMonitor {
   init(
     cursorLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation },
     playCue: ((ReminderSound) -> Void)? = nil,
-    wallpaperForScreen: @escaping @MainActor (NSScreen) -> NSImage? = { screen in
-      ReminderOverlayController.wallpaperImage(for: screen)
-    }
+    wallpaperForScreen: (@MainActor (NSScreen) -> NSImage?)? = nil
   ) {
     self.cursorLocation = cursorLocation
     self.wallpaperForScreen = wallpaperForScreen
@@ -55,20 +53,6 @@ enum UserIdleMonitor {
   }
 
   deinit { cursorDisplayLink?.invalidate() }
-
-  static func wallpaperImage(for screen: NSScreen) -> NSImage? {
-    guard let url = NSWorkspace.shared.desktopImageURL(for: screen),
-      let image = CIImage(contentsOf: url), !image.extent.isEmpty
-    else { return nil }
-    // Render the soft backdrop once per display/occurrence, not on every timer tick.
-    let scale = min(1, 1600 / max(image.extent.width, image.extent.height))
-    let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-    let blurred = scaled.clampedToExtent()
-      .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 60])
-      .cropped(to: scaled.extent)
-    guard let rendered = CIContext().createCGImage(blurred, from: scaled.extent) else { return nil }
-    return NSImage(cgImage: rendered, size: scaled.extent.size)
-  }
 
   func update(_ overlay: ReminderOverlay?, reminder: Reminder?, store: AppStore) {
     guard let overlay, let reminder else {
@@ -124,6 +108,31 @@ enum UserIdleMonitor {
     case .reminder(_, let shownAt):
       playCueOnce(reminder.sound, reminderID: reminder.id, shownAt: shownAt)
       let isPreview = store.previewReminderID == reminder.id
+      if reminder.presentation == .overlay {
+        guard
+          let screen = NSScreen.screens.first(where: { $0.frame.contains(cursorLocation()) })
+            ?? NSScreen.main
+        else { return }
+        let host = NSHostingView(
+          rootView: ReminderOverlayView(reminder: reminder, shownAt: shownAt))
+        let size = host.fittingSize
+        let panel = NSPanel(
+          contentRect: NSRect(
+            x: screen.visibleFrame.midX - size.width / 2,
+            y: screen.visibleFrame.midY - size.height / 2, width: size.width, height: size.height),
+          styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        configure(panel)
+        panel.level = .screenSaver
+        panel.collectionBehavior = [
+          .canJoinAllSpaces, .canJoinAllApplications, .fullScreenAuxiliary, .ignoresCycle,
+        ]
+        panel.ignoresMouseEvents = true
+        panel.contentView = host
+        panels = [panel]
+        IntervalMotion.reveal(panel)
+        panel.orderFrontRegardless()
+        return
+      }
       // Foreground apps cannot join another app's native fullscreen Space.
       // Act as an overlay utility only for the takeover, then restore the Dock presence.
       let policy = NSApp.activationPolicy()
@@ -133,8 +142,8 @@ enum UserIdleMonitor {
       let cursor = cursorLocation()
       let cursorScreen =
         NSScreen.screens.first(where: { $0.frame.contains(cursor) }) ?? NSScreen.main
-      // Finish wallpaper processing before any panel starts its entrance.
-      let backgrounds = NSScreen.screens.map { ($0, wallpaperForScreen($0)) }
+      // Injected images stay synchronous; production captures only the desktop backdrop asynchronously.
+      let backgrounds = NSScreen.screens.map { ($0, wallpaperForScreen?($0)) }
       panels = backgrounds.map { screen, wallpaper in
         let rect = screen.frame
         let panel = EscapePanel(
@@ -165,6 +174,14 @@ enum UserIdleMonitor {
             wallpaper: wallpaper, animatesEntrance: !preservesCue, isPreview: isPreview))
         host.safeAreaRegions = []
         panel.contentView = host
+        if wallpaperForScreen == nil {
+          wallpaperTasks.append(
+            Task { [weak host] in
+              let image = await Wallpaper.image(for: screen)
+              guard !Task.isCancelled, let host else { return }
+              host.rootView.wallpaper = image
+            })
+        }
         var shortcut = ReminderSkipShortcut()
         panel.onEscape = {
           if let event = NSApp.currentEvent, event.type == .keyDown, event.isARepeat {
@@ -190,6 +207,8 @@ enum UserIdleMonitor {
   }
 
   func close(preservingCue: Bool = false) {
+    wallpaperTasks.forEach { $0.cancel() }
+    wallpaperTasks.removeAll()
     shownStore = nil
     if !preservingCue {
       cueSound?.stop()

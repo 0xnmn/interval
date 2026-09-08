@@ -113,3 +113,11 @@ The dial and shared controls now use the system accent. Native macOS 26 interact
 The right sidebar pages horizontally between Overview and Calendar, with persistent bottom navigation. Overview keeps the resizable checklist, reminders, and upcoming timed events today; Calendar reuses DayTimeline. Calendar access has a Settings action rather than an unexplained empty pane. Persisted legacy phase colors remain readable but are no longer exposed as competing theme controls.
 
 Native UI coverage verifies second-page positioning and returning to Overview; event coverage excludes ended/all-day events and protects today's events from Stats date navigation.
+
+## Short overlays and per-display wallpaper
+
+Reminders support Full Screen (minimum five seconds) and Overlay (minimum one second). Overlay is a centered, click-through, nonactivating panel on the cursor's display; it leaves the workspace visible and closes automatically. The Blink template defaults to three seconds every five minutes and permits focus-time delivery while retaining calendar/microphone suppression. Existing reminders are unchanged.
+
+Fullscreen wallpaper uses ScreenCaptureKit to capture only the matching display's desktop backdrop window: WallpaperAgent or Dock's below-desktop wallpaper layer. This avoids NSWorkspace's stale DefaultDesktop.heic path on modern macOS. Captures are one-shot, canceled on closure, and never include application windows. Screen Recording access is required for the rendered wallpaper; an explicit editor action opens that permission setting. Without permission or when capture fails, the static wallpaper API remains the fallback.
+
+Validation: 166 tests passed, including short-duration persistence/expiry, click-through nonactivation, and strict wallpaper-window/display matching. Wallpaper-only captures on both connected displays and the fullscreen, overlay, and display editor renders were inspected.
