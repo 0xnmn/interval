@@ -100,7 +100,7 @@ struct NotchHeadsUpView: View {
           store.adjustHeadsUp(headsUp, minutes: $0)
           dismiss()
         }
-      }.buttonStyle(.glass).controlSize(.regular)
+      }.buttonStyle(IntervalOutlineButton()).controlSize(.regular)
     }.frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 }
