@@ -205,35 +205,42 @@ struct IntervalSelectionButton: ButtonStyle {
   let selected: Bool
   @Environment(\.isEnabled) private var isEnabled
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-  @Environment(\.colorSchemeContrast) private var contrast
-  private var increaseContrast: Bool { contrast == .increased }
   @State private var hovering = false
 
   init(selected: Bool = false) { self.selected = selected }
 
   func makeBody(configuration: Configuration) -> some View {
-    let active = isEnabled && (hovering || configuration.isPressed || selected)
+    let active = isEnabled && (hovering || configuration.isPressed)
     configuration.label
-      .modifier(
-        InteractiveGlass(
-          shape: RoundedRectangle(cornerRadius: 8),
-          opaque: reduceTransparency || increaseContrast)
-      )
+      .foregroundStyle(selected ? Color.accentColor : Color.secondary)
       .background(
-        selected
-          ? Color.accentColor.opacity(increaseContrast ? 0.3 : 0.2)
-          : Color.primary.opacity(active ? (configuration.isPressed ? 0.14 : 0.08) : 0),
+        Color.primary.opacity(active ? (configuration.isPressed ? 0.14 : 0.08) : 0),
         in: RoundedRectangle(cornerRadius: 8)
       )
-      .overlay {
-        RoundedRectangle(cornerRadius: 8)
-          .strokeBorder(
-            selected ? Color.accentColor.opacity(increaseContrast ? 0.9 : 0.55) : .clear)
-      }
       .contentShape(RoundedRectangle(cornerRadius: 8))
       .opacity(isEnabled ? 1 : 0.45)
       .animation(reduceMotion ? nil : IntervalMotion.selection, value: active)
+      .animation(reduceMotion ? nil : IntervalMotion.selection, value: selected)
+      .onHover { hovering = $0 }
+  }
+}
+
+struct IntervalOutlineButton: ButtonStyle {
+  @Environment(\.isEnabled) private var isEnabled
+  @State private var hovering = false
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .font(IntervalTheme.body)
+      .foregroundStyle(Color.accentColor)
+      .padding(.horizontal, 14).padding(.vertical, 8)
+      .background(
+        Color.accentColor.opacity(configuration.isPressed ? 0.12 : hovering ? 0.06 : 0),
+        in: RoundedRectangle(cornerRadius: 8)
+      )
+      .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor.opacity(0.6)))
+      .contentShape(RoundedRectangle(cornerRadius: 8))
+      .opacity(isEnabled ? 1 : 0.45)
       .onHover { hovering = $0 }
   }
 }

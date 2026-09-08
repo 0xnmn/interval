@@ -347,14 +347,10 @@ struct FocusDayPanel: View {
   }
 
   private var calendarAccess: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      Text("Connect a calendar to see your events.").font(IntervalTheme.body).foregroundStyle(
-        .secondary)
-      Button("Calendar Settings…") {
-        store.requestedSettingsTab = 2
-        openSettings()
-      }.buttonStyle(IntervalPrimaryButton())
-    }
+    Button("Connect Calendar") {
+      store.requestedSettingsTab = 2
+      openSettings()
+    }.buttonStyle(IntervalOutlineButton())
   }
 
   private var calendarPage: some View {

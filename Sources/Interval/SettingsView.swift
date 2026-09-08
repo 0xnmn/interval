@@ -42,7 +42,8 @@ struct SettingsView: View {
           ForEach(destinations) { destination in
             HStack {
               Label(destination.title, systemImage: destination.systemImage)
-                .foregroundStyle(.primary)
+                .foregroundStyle(
+                  selectedTab == destination.id ? Color.accentColor : Color.secondary)
               Spacer(minLength: 4)
             }
             .font(.system(size: 14))
@@ -51,6 +52,7 @@ struct SettingsView: View {
           }
         }
         .listStyle(.sidebar)
+        .background(SettingsSelectionAppearance())
         .scrollContentBackground(.hidden)
         .accessibilityLabel("Settings pages")
         .frame(width: 140)
@@ -239,6 +241,27 @@ struct SettingsView: View {
         value.soundVolume = $0
         store.updateSettings(value)
       })
+  }
+}
+
+/// Keep native List keyboard navigation and selection semantics without its filled highlight.
+private struct SettingsSelectionAppearance: NSViewRepresentable {
+  func makeNSView(context: Context) -> NSView { NSView() }
+  func updateNSView(_ view: NSView, context: Context) {
+    DispatchQueue.main.async {
+      var ancestor = view.superview
+      func table(in root: NSView) -> NSTableView? {
+        if let table = root as? NSTableView { return table }
+        return root.subviews.lazy.compactMap { table(in: $0) }.first
+      }
+      while let parent = ancestor {
+        if let table = table(in: parent) {
+          table.selectionHighlightStyle = .none
+          return
+        }
+        ancestor = parent.superview
+      }
+    }
   }
 }
 

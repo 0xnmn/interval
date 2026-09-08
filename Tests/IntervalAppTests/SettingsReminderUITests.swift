@@ -99,6 +99,7 @@ struct SettingsReminderUITests {
     await harness.send(keyCode: 125, characters: "\u{f701}")
 
     #expect(sidebar.selectedRow == 1)
+    #expect(sidebar.selectionHighlightStyle == .none)
     #expect(harness.descendants.contains { $0 is NSSlider })
   }
 

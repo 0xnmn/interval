@@ -357,7 +357,6 @@ struct NotchRootView: View {
               } label: {
                 Image(systemName: ["timer", "checklist", "bell"][index])
                   .font(IntervalTheme.icon).frame(width: 32, height: 32)
-                  .foregroundStyle(page == index ? .primary : .secondary)
               }.buttonStyle(IntervalSelectionButton(selected: page == index)).help(
                 ["Timer", "To-dos", "Reminders"][index]
               )
