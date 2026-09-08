@@ -231,7 +231,7 @@ final class AppStore {
     breakEnded ? max(0, now.timeIntervalSince(timer.deadline ?? now)) : remaining
   }
   var timerText: String {
-    breakEnded ? "+" + durationString(floor(displayedTime)) : durationString(remaining)
+    breakEnded ? durationString(floor(displayedTime)) : durationString(remaining)
   }
   var suggestedBreak: TimerKind {
     let cadence = max(1, data.settings.longBreakEvery)
