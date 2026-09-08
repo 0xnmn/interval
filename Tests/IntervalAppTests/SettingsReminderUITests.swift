@@ -193,7 +193,8 @@ struct SettingsReminderUITests {
     let scrollViews = harness.descendants.compactMap { $0 as? NSScrollView }.filter {
       ($0.documentView?.bounds.height ?? 0) > $0.contentView.bounds.height
     }
-    #expect(scrollViews.count >= (surface == "stats" ? 2 : 1))
+    // Stats' compact summary now fits without scrolling; its timeline still overflows.
+    #expect(!scrollViews.isEmpty)
     for scrollView in scrollViews {
       let document = try #require(scrollView.documentView)
       let clip = scrollView.contentView

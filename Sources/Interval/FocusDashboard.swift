@@ -10,13 +10,18 @@ struct FocusControls: View {
   @State private var confirmingAbandon = false
   @State private var confirmingBreak = false
   private var active: Bool { store.timer.status == .running }
+  private var idleBreakAction: Bool {
+    store.timer.kind == .focus && store.timer.status == .ready && !compact && !isNotch
+  }
   private var accent: Color { .accentColor }
 
   var body: some View {
     GeometryReader { geometry in
       ScrollView {
         VStack(spacing: isNotch ? 8 : 12) {
-          if !compact && store.timer.kind == .focus { SessionIdentity(store: store) }
+          if !compact && store.timer.kind == .focus {
+            SessionIdentity(store: store).padding(.trailing, idleBreakAction ? 40 : 0)
+          }
           if !isNotch { Spacer(minLength: 8) }
           if store.timer.kind == .focus && showsDial {
             FocusDial(
@@ -51,7 +56,7 @@ struct FocusControls: View {
           if !store.breakEnded && !isNotch {
             timeControls.frame(maxWidth: store.timer.kind == .focus ? .infinity : 300)
           }
-          if !isNotch || store.timer.status != .ready {
+          if (!isNotch || store.timer.status != .ready) && !idleBreakAction {
             intervalActions.padding(.top, store.timer.kind != .focus && !isNotch ? 12 : 0)
           }
           if !isNotch { Spacer(minLength: 8) }
@@ -67,6 +72,11 @@ struct FocusControls: View {
         )
         .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.timer.kind)
         .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.breakEnded)
+      }
+    }
+    .overlay(alignment: .topTrailing) {
+      if idleBreakAction {
+        intervalActions.padding(.top, 16).padding(.trailing, 16)
       }
     }
     .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -309,9 +319,11 @@ struct FocusDayPanel: View {
                 index == 0 ? "Overview" : "Calendar",
                 systemImage: index == 0 ? "square.grid.2x2" : "calendar"
               )
-              .font(IntervalTheme.body).padding(.horizontal, 14).padding(.vertical, 9)
+              .labelStyle(.iconOnly).font(IntervalTheme.icon).frame(width: 36, height: 36)
             }
             .buttonStyle(IntervalSelectionButton(selected: (page ?? 0) == index))
+            .help(index == 0 ? "Overview" : "Calendar")
+            .accessibilityLabel(index == 0 ? "Overview" : "Calendar")
             .accessibilityAddTraits((page ?? 0) == index ? .isSelected : [])
           }
         }.padding(12)

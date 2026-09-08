@@ -62,7 +62,7 @@ struct MainView: View {
                     .frame(maxWidth: 372).padding(24)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                  FocusView(store: store, topInset: geometry.safeAreaInsets.top)
+                  FocusView(store: store)
                 }
               case .history: HistoryView(store: store)
               case .reminders: RemindersView(store: store)
@@ -122,15 +122,12 @@ struct MainView: View {
 
 struct FocusView: View {
   @Bindable var store: AppStore
-  var topInset: CGFloat = 0
   var body: some View {
     ThemedSplitView(isVertical: true, minimumFirst: 340, maximumFirst: 460, minimumSecond: 340) {
       FocusControls(store: store)
-        .padding(.top, topInset)
         .frame(minWidth: 340, idealWidth: 400, maxWidth: 460, maxHeight: .infinity)
     } second: {
       FocusDayPanel(store: store)
-        .padding(.top, topInset)
         .frame(minWidth: 340, maxWidth: .infinity, maxHeight: .infinity)
     }
   }
