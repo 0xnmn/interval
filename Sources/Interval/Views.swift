@@ -22,51 +22,66 @@ struct MainView: View {
   var body: some View {
     ZStack {
       GlassBackground()
-      HStack(spacing: 0) {
-        VStack(spacing: 12) {
-          ForEach(Destination.allCases) { item in
-            Button {
-              store.selection = item
-            } label: {
-              Image(systemName: item.icon)
-                .font(IntervalTheme.icon).frame(width: 36, height: 36)
-            }
-            .buttonStyle(IntervalSelectionButton(selected: (store.selection ?? .focus) == item))
-            .foregroundStyle((store.selection ?? .focus) == item ? .primary : .secondary)
-            .help(item.rawValue).accessibilityLabel(item.rawValue)
-            .accessibilityAddTraits((store.selection ?? .focus) == item ? .isSelected : [])
-            .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.selection)
-          }
-          Spacer(minLength: 20)
-          SettingsLink {
-            Image(systemName: "gearshape").font(IntervalTheme.icon).frame(width: 36, height: 36)
-          }.buttonStyle(IntervalSelectionButton()).help("Settings · ⌘,").accessibilityLabel(
-            "Settings")
-        }.padding(.vertical, 20).frame(width: 60).foregroundStyle(.secondary)
-        Rectangle().fill(IntervalTheme.border).frame(width: 1)
-        VStack(spacing: 0) {
-          Group {
-            switch store.selection ?? .focus {
-            case .focus:
-              if let id = store.completionSessionID {
-                ReflectionView(store: store, sessionID: id)
-                  .frame(maxWidth: 372).padding(24)
-                  .frame(maxWidth: .infinity, maxHeight: .infinity)
-              } else {
-                FocusView(store: store)
+      GeometryReader { geometry in
+        HStack(spacing: 0) {
+          VStack(spacing: 12) {
+            ForEach(Destination.allCases) { item in
+              Button {
+                store.selection = item
+              } label: {
+                Image(systemName: item.icon)
+                  .font(IntervalTheme.icon).frame(width: 36, height: 36)
               }
-            case .history: HistoryView(store: store)
-            case .reminders: RemindersView(store: store)
+              .buttonStyle(.plain)
+              .overlay(alignment: .bottom) {
+                if (store.selection ?? .focus) == item {
+                  Circle().fill(Color.accentColor).frame(width: 4, height: 4).offset(y: 3)
+                }
+              }
+              .foregroundStyle((store.selection ?? .focus) == item ? .primary : .secondary)
+              .help(item.rawValue).accessibilityLabel(item.rawValue)
+              .accessibilityAddTraits((store.selection ?? .focus) == item ? .isSelected : [])
+              .animation(reduceMotion ? nil : IntervalMotion.selection, value: store.selection)
             }
-          }.frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
+            Spacer(minLength: 20)
+            SettingsLink {
+              Image(systemName: "gearshape").font(IntervalTheme.icon).frame(width: 36, height: 36)
+            }.buttonStyle(.plain).help("Settings · ⌘,").accessibilityLabel(
+              "Settings")
+          }.padding(.top, 64).padding(.bottom, 20).frame(width: 44)
+            .background(IntervalTheme.surface.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(IntervalTheme.border, lineWidth: 1))
+            .padding(.horizontal, 8).padding(.bottom, 8)
+            .padding(.top, geometry.safeAreaInsets.top + 8).foregroundStyle(.secondary)
+          VStack(spacing: 0) {
+            Group {
+              switch store.selection ?? .focus {
+              case .focus:
+                if let id = store.completionSessionID {
+                  ReflectionView(store: store, sessionID: id)
+                    .frame(maxWidth: 372).padding(24)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                  FocusView(store: store, topInset: geometry.safeAreaInsets.top)
+                }
+              case .history: HistoryView(store: store)
+              case .reminders: RemindersView(store: store)
+              }
+            }.padding(
+              .top,
+              (store.selection ?? .focus) == .focus && store.completionSessionID == nil
+                ? 0 : geometry.safeAreaInsets.top
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
             .intervalEntrance()
             .id(store.selection ?? .focus)
             .animation(
               reduceMotion ? nil : IntervalMotion.selection, value: store.completionSessionID)
-          if store.selection == .history || store.selection == .reminders {
-            LiveTimerBar(store: store)
+            if store.selection == .history || store.selection == .reminders {
+              LiveTimerBar(store: store)
+            }
           }
-        }
+        }.ignoresSafeArea(.container, edges: .top)
       }
     }
     .font(IntervalTheme.body)
@@ -107,12 +122,15 @@ struct MainView: View {
 
 struct FocusView: View {
   @Bindable var store: AppStore
+  var topInset: CGFloat = 0
   var body: some View {
     ThemedSplitView(isVertical: true, minimumFirst: 340, maximumFirst: 460, minimumSecond: 340) {
       FocusControls(store: store)
+        .padding(.top, topInset)
         .frame(minWidth: 340, idealWidth: 400, maxWidth: 460, maxHeight: .infinity)
     } second: {
       FocusDayPanel(store: store)
+        .padding(.top, topInset)
         .frame(minWidth: 340, maxWidth: .infinity, maxHeight: .infinity)
     }
   }
